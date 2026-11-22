@@ -1,5 +1,5 @@
 {
-  "functions": { "api/turno.js": { "includeFiles": "herramientas/{categorias,CAMBIOS}.json" }, "api/estado.js": { "includeFiles": "herramientas/{categorias,CAMBIOS}.json" }, "api/doc.js": { "includeFiles": "herramientas/categorias.json" }, "api/herramienta.js": { "includeFiles": "herramientas/**" } },
+  "functions": { "api/publicacion.js": { "includeFiles": "herramientas/fuentes_iniciales.json", "maxDuration": 300 }, "api/metricas.js": { "maxDuration": 300 }, "api/conexion/[proveedor].js": { "maxDuration": 300 }, "api/turno.js": { "includeFiles": "herramientas/{categorias,CAMBIOS}.json" }, "api/estado.js": { "includeFiles": "herramientas/{categorias,CAMBIOS}.json" }, "api/doc.js": { "includeFiles": "herramientas/categorias.json" }, "api/herramienta.js": { "includeFiles": "herramientas/**" } },
   "headers": [ { "source": "/(.*)", "headers": [
     { "key": "X-Frame-Options", "value": "DENY" },
     { "key": "Referrer-Policy", "value": "no-referrer" },

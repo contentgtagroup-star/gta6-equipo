@@ -169,7 +169,7 @@ html{-webkit-text-size-adjust:100%}
             <li><b>Hacer clips:</b> elegí cuántos, tocá <b>CREAR CLIPS</b> y elegí dónde buscar: YouTube o Twitch. Tu compu crea el pedido; si ya está ocupada, espera en cola. La barra muestra la etapa del clip en curso y cuántos ya están listos. Podés pausar después del paso actual y reanudar luego.</li>
             <li><b>Revisar:</b> mirá los <b>Nuevos</b> y poneles de 1 a 5 estrellas. Si está bien, <b>Aprobar</b>. Si está mal, <b>Descartar</b> (se borra en el momento). Las notas orientan los próximos turnos de todo el equipo.</li>
             <li><b>Corregir:</b> tocá <b>Corregir</b>, escribí qué cambiar (por ejemplo “cortá del segundo 2 al 3”) y tocá <b>Enviar</b>. El motor de clips lo corrige solo en unos minutos.</li>
-            <li><b>Publicar:</b> en <b>Aprobados</b>, revisá el título y la descripción (los escribe Claude al hacer el clip), tocá <b>Bajar</b>, subilo a YouTube Shorts, TikTok e Instagram y tocá <b>Ya lo publiqué</b>.</li>
+            <li><b>Publicar:</b> revisá el material y, al aprobar, elegí las redes. En <b>Publicaciones</b> podés preparar sugerencias, editar la cola y conectar las cuentas. Instagram, Facebook y X salen después de aprobar cuando las conexiones están habilitadas; YouTube y TikTok quedan en borrador para terminar de publicar a mano.</li>
             <li><b>Guardar lo bueno:</b> si un clip publicado sirve para más adelante, tocá <b>Guardar en stock</b>. Lo demás se borra solo.</li>
           </ol>
         </div>
@@ -203,6 +203,13 @@ html{-webkit-text-size-adjust:100%}
   <section>
     <header><h2>Biblioteca de clips</h2><div class="filtros" id="filtros" role="group" aria-label="Filtrar"></div></header>
     <div class="lib" id="lib"></div>
+  </section>
+
+  <section id="publicaciones">
+    <header><h2>Publicaciones</h2><button class="tiny" id="pubActualizar">Actualizar</button></header>
+    <div class="row" id="pubTabs" role="group" aria-label="Sección de publicaciones" style="margin:14px 0;flex-wrap:wrap"></div>
+    <p class="small" id="pubEstado" role="status" aria-live="polite"></p>
+    <div id="pubContenido"></div>
   </section>
 
   <section>
@@ -567,13 +574,13 @@ function tarjeta(c){
     c.error ? el('div', {class:'m', style:'color:var(--bad)'}, 'Error: ' + c.error) : null);
   const acc = el('div', {class:'row'});
   if(c.estado==='listo'){
-    acc.append(el('button', {class:'tiny primary', onclick:()=>upd(c,{estado:'aprobado', aprobado_por:S.yo},'Aprobado')}, 'Aprobar'),
+    acc.append(el('button', {class:'tiny primary', onclick:()=>window.aprobarClipPublicacion(c)}, 'Aprobar'),
       el('button', {class:'tiny', onclick:()=>{ S.abiertos[c.id]='corr'; render(); }}, 'Corregir'));
   }
   if(c.estado==='aprobado'){
     acc.append(el('button', {class:'tiny primary', onclick:()=>{ S.abiertos[c.id]='pub'; render(); }}, 'Título y descripción'),
       el('button', {class:'tiny', onclick:()=>bajar(c)}, 'Bajar'),
-      el('button', {class:'tiny', onclick:()=>upd(c,{estado:'publicado', publicado_el:ahora(), publicado_por:S.yo},'Marcado como publicado')}, 'Ya lo publiqué'));
+      c.publicacion_cola ? el('button', {class:'tiny', onclick:()=>{ location.hash='publicaciones'; document.getElementById('publicaciones').scrollIntoView({behavior:'smooth'}); }}, 'Ver cola de publicación') : el('button', {class:'tiny', onclick:()=>upd(c,{estado:'publicado', publicado_el:ahora(), publicado_por:S.yo},'Marcado como publicado')}, 'Ya lo publiqué'));
   }
   if(c.estado==='publicado') acc.append(el('button', {class:'tiny', disabled: !c.video_path && !c.stock, 'aria-pressed':c.stock?'true':'false', onclick:()=>upd(c,{stock:!c.stock})}, c.stock ? 'En stock' : 'Guardar en stock'));
   if(['listo','aprobado','corregir'].includes(c.estado)) acc.append(el('button', {class:'tiny ghost danger', onclick:()=>descartar(c)}, 'Descartar'));
@@ -722,5 +729,6 @@ document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) cargar(
 setInterval(renderEscucha, 60000);
 
 </script>
+<script src="/publicaciones.js"></script>
 </body>
 </html>

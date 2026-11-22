@@ -1,0 +1,398 @@
+[
+ {
+  "url": "https://x.com/gtasix_",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Updates + leaks GTA 6, buen ritmo de noticias",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Nobellgyrl",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Posts de realismo/detalles del mundo con mucho alcance (ej. 374K views)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Belluccistudio_",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Studio de arte/renders y character sheets de GTA VI",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/SourceVI",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "News & updates + recreaciones de ubicaciones de leaks",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/HeistNetworks",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Red de contenido gaming (gameplay/news/comparisons) - modelo de estructura multimarca, India",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://youtube.com/@cjanasyt",
+  "tipo": "perfil",
+  "idioma": "?",
+  "nota": "Canal CJ ANAS YT - contenido a verificar (about no cargo)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "verificar"
+ },
+ {
+  "url": "https://x.com/therealbuni/status/2124494356841201788",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Easter egg: el sombrero de Arthur Morgan (RDR2) tirado en una venta de garaje en GTA 6",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/_alfonsocerda/status/2124265498632429574",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Guia/tip: proteger tu dinero antes de la mision Tourist Trap (plata bajo el piso de Jason, depositar en cajero)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Fauniciusjr/status/2124500210521166005",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Curiosidad/nostalgia: Dross adivino hace 11 anos como seria GTA VI",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/ogivus/status/2124448710637547789",
+  "tipo": "publicacion",
+  "idioma": "RU",
+  "nota": "Meta-broma de Rockstar de 5 anos (casa misteriosa de San Andreas Definitive 2021)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Kiminino72/status/2124437268933050692",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Guia de dinero: como hacer tu primer millon en GTA 6 (carrusel swipe)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/AdnaanJnr/status/2124166547413299358",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Secretos: lugares ocultos que casi nadie encuentra en GTA 6",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Belluccistudio_/status/2124347874448429428",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Arte/edicion visual GTA VI (Bellucci studio)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Kiminino72/status/2124374819986694471",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Misterios: que mas esconde Rockstar en GTA 6",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/RoundtableSpace/status/2124189849284743364",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Carrusel de ropa/drip + easter eggs wearables (sombrero de Arthur Morgan, camisas Vercetti)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/_GTAVI_/status/2124074501671362999",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Comparacion GTA6 vs GTA5 (camion volquete vs tren)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/0xHvdes/status/2123855510222840055",
+  "tipo": "referencia",
+  "idioma": "EN",
+  "nota": "MrBeast sobre como ganar atencion - NO para publicar. Incorporado como estrategia de hooks/descripciones en el brief (seccion 8)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "agregado al brief"
+ },
+ {
+  "url": "https://x.com/Belluccistudio_/status/2124002339417891185",
+  "tipo": "publicacion",
+  "idioma": "EN",
+  "nota": "Arte: 19 character sheets de GTA VI (Bellucci studio)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/RoundtableSpace/status/2124046403915690014",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Muestra secretos del juego",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "YA EN PANEL"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/ElatedVibrantGooseHassanChop-SBb8LHfFQ6X3yFPS",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Que tiene esta caja? (clip lukepillado ~30s)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "YA EN PANEL"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/BitterSolidRhinocerosRaccAttack-ONcBnCCj1-aztRS3",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Encuentro un muerto y su moto (clip lukepillado ~30s)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/CrowdedCarelessGazellePhilosoraptor-qmntyMiPDNk4OdYt",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Empujo mi moto de agua para volver a andar (clip lukepillado ~30s)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/CrepuscularSpikyElkPogChamp-HncG0AbRecLNVm9N",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Clip lukepillado GTA6 ~30s (titulo: uno de Cocodrilo Albino / 10.000 USD / CODIGO EXTRANO / CANGREJO GIGANTE / SALA CON MONSTRUO)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "confirmar titulo"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/SmilingStylishPheasantAliens-iLqgTyaUn9TF2_UI",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Clip lukepillado GTA6 ~30s (titulo: uno de Cocodrilo Albino / 10.000 USD / CODIGO EXTRANO / CANGREJO GIGANTE / SALA CON MONSTRUO)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "confirmar titulo"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/AmazonianGoldenVultureAMPEnergy-Q2xRZDgLWmilTP1k",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Clip lukepillado GTA6 ~30s (titulo: uno de Cocodrilo Albino / 10.000 USD / CODIGO EXTRANO / CANGREJO GIGANTE / SALA CON MONSTRUO)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "confirmar titulo"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/KitschyColorfulCasetteFreakinStinkin-I_ubQQkTY8W6c3dP",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Clip lukepillado GTA6 ~30s (titulo: uno de Cocodrilo Albino / 10.000 USD / CODIGO EXTRANO / CANGREJO GIGANTE / SALA CON MONSTRUO)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "confirmar titulo"
+ },
+ {
+  "url": "https://twitch.tv/lukepillado/clip/LivelyStylishHedgehogStinkyCheese-_u8cYkiW1Qj-KnWx",
+  "tipo": "publicacion",
+  "idioma": "ES",
+  "nota": "Clip lukepillado GTA6 ~30s (titulo: uno de Cocodrilo Albino / 10.000 USD / CODIGO EXTRANO / CANGREJO GIGANTE / SALA CON MONSTRUO)",
+  "activa": false,
+  "automatica": false,
+  "estado_inicial": "confirmar titulo"
+ },
+ {
+  "url": "https://tiktok.com/@gta6only",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "News + leaks, formato limpio (~223K)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://tiktok.com/@gta6_leaks",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Views altisimas (~205K)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://tiktok.com/@gta6alerte",
+  "tipo": "perfil",
+  "idioma": "FR",
+  "nota": "Modelo noticias en tiempo real (~102K)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://tiktok.com/@havoceeditz",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Cuenta de edits, verificar alcance",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://tiktok.com/@raykage.edits",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Cuenta de edits, verificar alcance",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://youtube.com/@LegacyKillaHD",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "El canal de noticias GTA 6 mas puro",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://youtube.com/@MrBossFTW",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "News + analisis de mapa",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://youtube.com/@DigitalCarAddict",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Breakdowns y analisis de trailers",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://youtube.com/@Meda",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Modelo chico viral: 1.5M views con ~1.2K subs",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://youtube.com/@SkorpyV",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Modelo chico viral: 5.1M views en 4 shorts",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://instagram.com/gtaseriesnews",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Coverage GTA VI, cuenta especialista",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://instagram.com/tee_gee_gee",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Creador con coverage GTA VI",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/GTASNEWSLEAKS",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "News + memes GTA 6",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://x.com/Dexerto",
+  "tipo": "perfil",
+  "idioma": "EN",
+  "nota": "Outlet - para timing de noticias grandes",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://streamscharts.com/specials/gta6",
+  "tipo": "feed",
+  "idioma": "EN",
+  "nota": "GTA VI Hub: clips mas vistos y streams top en tiempo real",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://github.com/Th1l1na/gta6-tracker",
+  "tipo": "feed",
+  "idioma": "EN",
+  "nota": "Open source: contenido GTA 6 mas caliente, refresca cada 10 min",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ },
+ {
+  "url": "https://socialblade.com",
+  "tipo": "feed",
+  "idioma": "EN",
+  "nota": "Stats y crecimiento de canales de YouTube (medir modelos)",
+  "activa": true,
+  "automatica": false,
+  "estado_inicial": "nuevo"
+ }
+]

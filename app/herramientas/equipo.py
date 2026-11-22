@@ -388,7 +388,7 @@ def ejecutar_turno(yo, con, exe):
     print(prefijo + texto[-300:], flush=True)
 
 
-HERRAMIENTAS = ('procesar.py', 'recopilar.py', 'radar.py', 'BowlbyOne-Regular.ttf', 'OVERLAY.png', 'categorias.json', 'equipo.py', 'CAMBIOS.json')
+HERRAMIENTAS = ('procesar.py', 'recopilar.py', 'radar.py', 'publicaciones.py', 'BowlbyOne-Regular.ttf', 'OFL.txt', 'OVERLAY.png', 'categorias.json', 'equipo.py', 'CAMBIOS.json')
 
 
 def herramientas_completas():
@@ -699,6 +699,7 @@ def main():
         s = sp.add_parser(n); s.add_argument('col'); s.add_argument('id'); s.add_argument('--json'); s.add_argument('--archivo')
     b = sp.add_parser('borrar'); b.add_argument('col'); b.add_argument('id')
     u = sp.add_parser('subir'); u.add_argument('archivo')
+    pm = sp.add_parser('publicacion-subir'); pm.add_argument('archivo')
     bv = sp.add_parser('bajar-video'); bv.add_argument('path'); bv.add_argument('destino')
     rv = sp.add_parser('borrar-video'); rv.add_argument('path')
     us = sp.add_parser('usado'); us.add_argument('video_id'); us.add_argument('--desde', type=float, required=True)
@@ -717,6 +718,16 @@ def main():
     cl = sp.add_parser('cargar-links'); cl.add_argument('archivo'); cl.add_argument('--cada', type=int, default=5)
     a = ap.parse_args()
 
+    if a.cmd == 'publicacion-subir':
+        import mimetypes
+        tipo = mimetypes.guess_type(a.archivo)[0]
+        d = pedir('POST', '/api/publicacion', {'op': 'subir_media', 'tipo': tipo, 'peso': os.path.getsize(a.archivo)})
+        with open(a.archivo, 'rb') as f:
+            req = urllib.request.Request(d['url'], data=f.read(), method='PUT', headers={'Content-Type': tipo})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            r.read()
+        print(json.dumps({'path': d['path']}))
+        return
     if a.cmd in ('tomar-link', 'empezar-busqueda', 'cargar-links'):
         comprobar_turno()
 
@@ -1090,6 +1101,10 @@ def main():
                 if time.monotonic() < proxima_revision:
                     if yo:
                         ejecutar_turno(yo, con, exe)
+                        try:
+                            pedir('POST', '/api/publicacion', {'op': 'procesar'})
+                        except (SystemExit, ConflictoError):
+                            pass
                     time.sleep(30)
                     continue
                 if actualizar(forzar=not herramientas_completas()):
@@ -1134,6 +1149,11 @@ def main():
                         except Exception:
                             pass
                     print(texto.strip()[-600:], flush=True)
+                try:
+                    import publicaciones
+                    publicaciones.ejecutar(yo, con, exe)
+                except (SystemExit, ConflictoError):
+                    pass
                 proxima_revision = time.monotonic() + a.cada * 60
             except SystemExit:
                 print('No pude hablar con la app; reintento en la próxima vuelta.', flush=True)

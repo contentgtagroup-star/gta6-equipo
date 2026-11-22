@@ -191,7 +191,7 @@ MODELO_CLAUDE = 'claude-sonnet-5-5'
 
 # Lo que puede usar Claude en turnos y correcciones: solo las herramientas del clipper, nada de red ni shell libre
 PERMISOS_CLAUDE = ','.join(['Read', 'Write', 'Edit', 'Glob', 'Grep'] + [f'Bash({c}:*)' for c in (
-    'python3', 'python', 'py', 'ffmpeg', 'ffprobe', 'yt-dlp', 'mkdir', 'rm', 'ls', 'cat', 'cd', 'cp', 'mv', 'echo', 'head', 'tail', 'wc')])
+    sys.executable, os.path.basename(sys.executable), 'python3', 'python', 'py', 'ffmpeg', 'ffprobe', 'yt-dlp', 'mkdir', 'rm', 'ls', 'cat', 'cd', 'cp', 'mv', 'echo', 'head', 'tail', 'wc')])
 
 
 def grupo_propio():
@@ -708,6 +708,7 @@ def main():
     vt = sp.add_parser('verificar-tramo'); vt.add_argument('video_id'); vt.add_argument('--desde', type=float, required=True)
     vt.add_argument('--hasta', type=float, required=True); vt.add_argument('--clip', required=True)
     uu = sp.add_parser('usados'); uu.add_argument('video_id')
+    lt = sp.add_parser('liberar-tramo'); lt.add_argument('video_id'); lt.add_argument('--clip', required=True)
     sp.add_parser('links'); sp.add_parser('tomar-link'); sp.add_parser('empezar-busqueda'); sp.add_parser('tiempos'); sp.add_parser('referencias')
     lh = sp.add_parser('link-hecho'); lh.add_argument('video_id')
     rr = sp.add_parser('reservar-recop'); rr.add_argument('id'); rr.add_argument('--clips', required=True)
@@ -846,6 +847,16 @@ def main():
                    t.get('estado') == 'reservado' and t['desde'] <= a.desde and t['hasta'] >= a.hasta for t in tramos):
             fail('ese tramo no está reservado para este pedido; elegí otro y reservá antes de bajar.')
         print('Tramo reservado: podés bajar.')
+    elif a.cmd == 'liberar-tramo':
+        yo = pedir('GET', '/api/estado')['yo']
+        pedido_id = os.environ.get('GTA6_TURNO_ID')
+        def liberar(datos):
+            antes = len(datos.get('tramos', []))
+            datos['tramos'] = [t for t in datos.get('tramos', []) if not (
+                t.get('estado') == 'reservado' and t.get('clip') == a.clip and t.get('por') == yo and
+                t.get('pedido_id') == pedido_id)]
+            return {'ok': True, 'liberados': antes - len(datos['tramos'])}
+        print(json.dumps(modificar('usados', a.video_id, liberar)))
     elif a.cmd == 'usados':
         d = get('usados', a.video_id)
         tramos = (d.get('datos') or {}).get('tramos', []) if d.get('existe') else []

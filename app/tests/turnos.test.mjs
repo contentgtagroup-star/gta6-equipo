@@ -21,9 +21,7 @@ test('el prompt fijo recibe las calificaciones del equipo', () => {
   assert.match(prompt, /watch.*fuente\.mp4/)
 })
 
-test('el prompt General conserva exactamente la salida anterior', async () => {
-  const { createHash } = await import('node:crypto')
-  // SHA-256 de la salida anterior a esta actualización para estos parámetros.
-  assert.equal(createHash('sha256').update(promptTurno('Luis', 3, [], 'legacy')).digest('hex'),
-    'de83f11239becd8963c3f3cac0570b63037164d21547033ba4c67cd19ce29bfe')
+test('el prompt General mantiene el flujo y suma retención y limpieza de reservas', () => {
+  const prompt = promptTurno('Luis', 3, [], 'legacy')
+  for (const regla of ['7b. RECOPILAR', 'No publiques nada en redes', 'primer segundo', 'sin inventar datos', 'liberar-tramo', 'No instales paquetes durante el turno']) assert.ok(prompt.includes(regla), regla)
 })

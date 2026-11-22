@@ -1,0 +1,26 @@
+name: Verificar
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts
+        working-directory: app
+      - run: npm test
+        working-directory: app
+      - run: python3 -m py_compile app/herramientas/*.py
+      - run: python3 -m unittest discover -s app/tests -p 'test_*.py'

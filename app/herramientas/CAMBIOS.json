@@ -1,0 +1,192 @@
+{
+ "version": 42,
+ "cambios": [
+  {"v": 42, "fecha": "2026-11-22", "texto": "Arriba de todo del panel está «Referencias para la IA»: pegás links de contenido que funciona (YouTube, Twitch, Kick o posts de X) con una nota opcional, y en cada pedido la IA los mira para aprender qué momentos, temas y ganchos son los mejores. Si tildás «Usarlo también para hacer clips», además entra en la cola. Los pedidos de Twitch ya arrancan aunque YouTube tenga bloqueada la conexión, y la tarjeta del pedido muestra si es de YouTube o de Twitch.", "manual": null},
+  {"v": 41, "fecha": "2026-11-22", "texto": "Clips más rápidos con el mismo video: el análisis de cada video (audio, picos y transcripción) se guarda 24 h, así el segundo clip o un pedido que se reanuda no vuelve a bajar el audio entero. Cada compu anota cuánto tarda cada paso: python3 equipo.py tiempos lo muestra. El campo para pegar links ahora está arriba de todo en el panel.", "manual": null},
+  {"v": 40, "fecha": "2026-11-22", "texto": "En Links del equipo también se pueden pegar posts de X (misterios, easter eggs, momentos virales). Los toma el próximo pedido, sea de YouTube o de Twitch: si el post tiene video lo usa para un clip, y si no, usa el texto como pista de qué buscar.", "manual": null},
+  {"v": 39, "fecha": "2026-11-22", "texto": "Al tocar CREAR CLIPS ahora elegís dónde buscar: BUSCAR POR YOUTUBE o BUSCAR POR TWITCH. Twitch trae los clips y VODs más vistos de GTA VI del día con la API oficial, y también toma los links de Twitch o Kick pegados a mano. Cada pedido usa solo links de la plataforma elegida.", "manual": null},
+  {"v": 38, "fecha": "2026-11-22", "texto": "En Links del equipo hay un campo nuevo para pegar a mano un link de YouTube, Twitch o Kick (VOD o clip) y elegir para quién es. Los links agregados a mano van primeros: el próximo turno los toma antes que los del radar.", "manual": null},
+  {"v": 37, "fecha": "2026-11-22", "texto": "El motor ya acepta links de Twitch y Kick (VODs y clips). Como no tienen subtítulos, el tramo se transcribe con Whisper: se instala solo la primera vez que hace falta (tarda unos minutos y baja el modelo de voz una sola vez). Un error de Twitch o Kick ya no pone en pausa el motor como si YouTube hubiera bloqueado. Para buscar momentos en un stream largo se transcriben solo los 20 minutos con más ruido (picos de volumen) en vez de las horas enteras, y un clip corto de Twitch o Kick se usa entero sin buscar momentos.", "manual": null},
+  {"v": 36, "fecha": "2026-11-21", "texto": "Clips más rápidos: el render tarda unas 4 veces menos (el fondo se calcula a menor resolución, se trabaja a 30 cuadros desde el principio y los filtros usan todos los núcleos) y la descarga de cada tramo unas 2,5 veces menos. El resultado se ve igual.", "manual": null},
+  {"v": 35, "fecha": "2026-11-21", "texto": "Menos bloqueos de YouTube: el radar consulta solo los 25 videos más vistos en vez de todos. Si YouTube igual frena la conexión, el pedido queda en pausa y se reanuda solo unos 45 minutos después, sin repetir clips. Recomendado: instalar el generador de PO Token (está en Actualizar / Preparar mi compu). Además, Reanudar también funciona mientras un pedido se está pausando y cada pedido muestra cuánto tardó cada etapa.", "manual": "Opcional pero recomendado: pegá el prompt de Actualizar en tu asistente para instalar el generador de PO Token."},
+  {"v": 34, "fecha": "2026-11-21", "texto": "Solo se pueden crear clips con las herramientas en la última versión: si tu compu está desactualizada, el panel lo avisa y bloquea CREAR CLIPS hasta que se actualice (con el motor prendido se actualiza solo en unos minutos). Al actualizar se borran solos los restos de versiones anteriores y las carpetas de trabajo viejas para liberar espacio.", "manual": null},
+  {"v": 33, "fecha": "2026-11-21", "texto": "Los clips y correcciones se crean siempre con Claude Sonnet 5.5. Si ese modelo no está disponible en la PC o se terminan los créditos, el mismo pedido sigue con Codex.", "manual": null},
+  {"v": 32, "fecha": "2026-11-21", "texto": "Más seguridad en los turnos: Claude solo puede usar las herramientas del clipper (python, ffmpeg, yt-dlp y archivos), sin acceso libre a la terminal ni a internet. Al cortar o borrar un turno se cierran también los ffmpeg y yt-dlp que quedaban colgados. El panel se refresca cada 8 s solo con pedidos en curso.", "manual": null},
+  {"v": 31, "fecha": "2026-11-21", "texto": "Los pedidos de CREAR CLIPS tienen un tachito para borrarlos de la lista (en cola, pausados, terminados o con error). Cancelar ahora borra el pedido directamente. Un pedido que se está ejecutando primero hay que pausarlo.", "manual": null},
+  {"v": 30, "fecha": "2026-11-21", "texto": "Categorías especializadas para pedidos nuevos: reglas por etapa, evidencia y estructura al guardar, categoría en biblioteca y recetas. General conserva el flujo habitual. Actualizá las herramientas antes de crear pedidos categorizados.", "manual": null},
+  {
+   "v": 29,
+   "fecha": "2026-11-20",
+   "texto": "Cada pedido de CREAR CLIPS se ejecuta en la compu de quien lo pidió. Si esa PC está ocupada o desconectada, el pedido espera allí; otra PC no lo toma. Los pedidos de una misma persona mantienen su orden. El overlay y los subtítulos siguen aplicándose automáticamente a clips nuevos.",
+   "manual": null
+  },
+  {
+   "v": 28,
+   "fecha": "2026-11-20",
+   "texto": "El overlay y los subtítulos se agregan directamente a cada video. El equipo no tiene que bajar el PNG ni hacer pasos manuales; se quitó el botón de descarga para evitar confusiones.",
+   "manual": null
+  },
+  {
+   "v": 27,
+   "fecha": "2026-11-20",
+   "texto": "La revisión visual con watch usa el recorte local del clip en lugar de bajar el stream entero. Así se evita una descarga grande y la creación de clips arranca más rápido.",
+   "manual": null
+  },
+  {
+   "v": 26,
+   "fecha": "2026-11-20",
+   "texto": "El overlay de @gta6.universo se comparte automáticamente con las tres PCs y ahora también se puede bajar en PNG desde el panel para usarlo en otros editores.",
+   "manual": null
+  },
+  {
+   "v": 25,
+   "fecha": "2026-11-20",
+   "texto": "El motor repara automáticamente herramientas incompletas, incluido OVERLAY.png, antes de aceptar pedidos. La app solo asigna pedidos a PCs con esta versión y marca como error un turno que termine sin los clips pedidos. Los pedidos anteriores incompletos se pueden reintentar sin duplicar los clips ya creados.",
+   "manual": null
+  },
+  {
+   "v": 24,
+   "fecha": "2026-11-20",
+   "texto": "Todos los clips nuevos llevan subtítulos. El estilo usa palabras grandes en blanco inclinado con borde negro, centradas sobre el juego, según la referencia del equipo. Si falta transcripción, el render pide elegir otro video o generarla antes de subir.",
+   "manual": null
+  },
+  {
+   "v": 23,
+   "fecha": "2026-11-20",
+   "texto": "Ahora Cuervo, Eze y Luis pueden crear clips a la vez, un pedido por compu. Los pedidos extra quedan en cola. Videos, tramos y recopilaciones se reservan antes de procesarse; si otra compu ya los tomó, el motor elige otro material. El panel muestra cada pedido por separado. El overlay de @gta6.universo sale en todos los clips nuevos y recopilaciones.",
+   "manual": null
+  },
+  {
+   "v": 22,
+   "fecha": "2026-11-20",
+   "texto": "La barra de CREAR CLIPS ahora avanza durante cada clip: preparación, búsqueda, análisis, descarga, render y subida. El porcentaje es estimado por etapas y los clips listos se cuentan al guardarse.",
+   "manual": null
+  },
+  {
+   "v": 21,
+   "fecha": "2026-11-20",
+   "texto": "Codex puede ejecutar pedidos automáticos desde la carpeta de herramientas aunque no sea un repositorio Git. Su entrada estándar se cierra para que no espere texto adicional.",
+   "manual": null
+  },
+  {
+   "v": 20,
+   "fecha": "2026-11-20",
+   "texto": "Corregido el comando de Codex en los pedidos automáticos y correcciones. Usa --approve-for-me, compatible con el CLI instalado, para poder continuar cuando Claude llega al límite de créditos.",
+   "manual": null
+  },
+  {
+   "v": 19,
+   "fecha": "2026-11-20",
+   "texto": "Si Claude muestra que se alcanzó el límite semanal o se agotaron los créditos, el pedido sigue con Codex. Un pedido fallido se puede reintentar sin repetir clips ya hechos. CREAR CLIPS deja pedidos en cola aunque las compus se estén actualizando.",
+   "manual": null
+  },
+  {
+   "v": 18,
+   "fecha": "2026-11-20",
+   "texto": "CREAR CLIPS muestra una barra de 0 a 100% basada en clips terminados. Los pedidos nuevos se pueden pausar y reanudar; la pausa espera al próximo paso seguro y al reanudar se crean solo los clips faltantes. Si Claude se queda sin créditos, el mismo pedido continúa con Codex si está instalado. Las recopilaciones usan el Python de cada PC, también en Windows.",
+   "manual": null
+  },
+  {
+   "v": 17,
+   "fecha": "2026-11-20",
+   "texto": "El motor busca pedidos de CREAR CLIPS cada 30 segundos y los toma antes de revisar correcciones. La actualización de herramientas y la revisión completa siguen cada 3 minutos.",
+   "manual": null
+  },
+  {
+   "v": 16,
+   "fecha": "2026-11-20",
+   "texto": "El motor de clips se inicia en segundo plano al preparar o actualizar cada PC y vuelve a arrancar al iniciar sesión o si se detiene. Se quitó el botón manual de modo escucha. Un pedido sin tomar pasa a otra PC activa a los 8 minutos; si se corta internet al terminar, su resultado se reenvía después.",
+   "manual": "Si tu PC figura inactiva en el panel, tocá Actualizar mi sistema y seguí los pasos. La PC debe estar encendida para crear clips."
+  },
+  {
+   "v": 15,
+   "fecha": "2026-11-20",
+   "texto": "El botón ahora dice CREAR CLIPS. El panel muestra cuántos clips de ese pedido ya llegaron a la biblioteca mientras la compu asignada trabaja sola, y avisa si el pedido tarda en empezar.",
+   "manual": null
+  },
+  {
+   "v": 14,
+   "fecha": "2026-11-20",
+   "texto": "Turnos automáticos: un botón pide clips y la siguiente compu disponible los crea desde el modo escucha, sin copiar prompts. Solo hay un turno activo; las compus y los streamers rotan. El radar prioriza vistas y suma otros idiomas; los clips extranjeros exigen subtítulos en español. Enojo y puteadas ayudan a encontrar momentos. Las recopilaciones usan un id fijo para no duplicarse al reintentar.",
+   "manual": "Dejá prendido el modo escucha en tu compu: python3 equipo.py escuchar (Windows: py equipo.py escuchar). Se actualiza y reinicia solo a esta versión."
+  },
+  {
+   "v": 13,
+   "fecha": "2026-11-20",
+   "texto": "Cada clip se puede calificar de 1 a 5 estrellas. Se guarda una nota por persona y se ve el promedio del equipo. Las notas orientan los próximos turnos de todos, incluso si un clip se descarta. Botón nuevo para actualizar las herramientas de cada compu con un prompt corto. Las recopilaciones ahora llevan subtítulos por momento.",
+   "manual": null
+  },
+  {
+   "v": 12,
+   "fecha": "2026-11-19",
+   "texto": "Nuevo formato principal: recopilaciones de 30 s con 4 momentos (número grande en cada uno y el cartel arriba todo el video). Herramienta nueva recopilar.py; el turno junta de a 4 los clips sueltos y sube la recopilación. 'GTA 6' ya no se parte en dos líneas en el cartel.",
+   "manual": null
+  },
+  {
+   "v": 11,
+   "fecha": "2026-11-19",
+   "texto": "Cartel de título nuevo: letras más grandes, líneas juntas, fondo un poco transparente y colores de GTA VI que rotan solos entre 5 paletas (rosa, violeta, atardecer, noche cian y amarillo). Los clips ya hechos se rehicieron con este formato.",
+   "manual": null
+  },
+  {
+   "v": 10,
+   "fecha": "2026-11-19",
+   "texto": "Los videos de la biblioteca ya no se vuelven a cargar solos: una vez cargados quedan como están (la app solo se redibuja cuando algo cambia).",
+   "manual": null
+  },
+  {
+   "v": 9,
+   "fecha": "2026-11-19",
+   "texto": "Clips con el formato de los shorts de referencia: streamer arriba (mitad), juego abajo y cartel de título blanco con texto negro y palabras en rojo. Alertas: easter eggs, secretos, misterio, aliens, monstruos, terror y realismo se arman siempre (clickbait). El radar busca esos temas y hay radar por cuentas: python3 radar.py cuentas @MatiClipss. El cartel lleva el nombre del streamer (sin arroba).",
+   "manual": null
+  },
+  {
+   "v": 8,
+   "fecha": "2026-11-19",
+   "texto": "Paso a paso más corto: se sacó el paso de entrar con la clave.",
+   "manual": null
+  },
+  {
+   "v": 7,
+   "fecha": "2026-11-19",
+   "texto": "La app ya no muestra el panel de novedades (las novedades siguen saliendo en la terminal al actualizarse).",
+   "manual": null
+  },
+  {
+   "v": 6,
+   "fecha": "2026-11-19",
+   "texto": "Se saca el registro de consumo: la app ya no lo muestra y los turnos y el modo escucha no lo anotan. Arreglada la sección Preparar mi compu, que no cargaba.",
+   "manual": "Si agregaste la línea de estado del consumo en Claude Code, sacala: en ~/.claude/settings.json (Windows: %USERPROFILE%\\.claude\\settings.json) borrá el bloque \"statusLine\" que apunta a consumo_statusline.py."
+  },
+  {
+   "v": 5,
+   "fecha": "2026-11-19",
+   "texto": "Modo escucha de equipo: si el tuyo está apagado, el de otro corrige tus clips en minutos. Una corrección colgada vuelve a la cola a los 20 min.",
+   "manual": null
+  },
+  {
+   "v": 4,
+   "fecha": "2026-11-19",
+   "texto": "Modo escucha sin IA: se deja corriendo en una terminal y solo despierta a Claude (Sonnet) o Codex cuando hay una corrección. Los turnos, en una ventana nueva y con /model sonnet.",
+   "manual": "Cortá el /loop viejo si lo tenías y dejá corriendo en una terminal: python3 equipo.py escuchar (Windows: py equipo.py escuchar)"
+  },
+  {
+   "v": 3,
+   "fecha": "2026-11-19",
+   "texto": "Consumo: cada turno y corrección anota tokens y % del plan semanal. Sección Consumo en la app.",
+   "manual": "Pegá otra vez el prompt de Preparar mi compu (agrega la línea de estado que lee el % semanal de Claude)"
+  },
+  {
+   "v": 2,
+   "fecha": "2026-11-19",
+   "texto": "Links en rotación: 5 por persona, búsqueda nueva cuando quedan 3, ningún link se repite.",
+   "manual": null
+  },
+  {
+   "v": 1,
+   "fecha": "2026-11-19",
+   "texto": "Arranca la app del equipo.",
+   "manual": null
+  }
+ ]
+}

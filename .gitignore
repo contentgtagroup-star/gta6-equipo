@@ -1,0 +1,60 @@
+# Secretos
+app/.env*
+app/herramientas/equipo.json
+app/herramientas/.escucha.lock
+app/herramientas/.vigilar.lock
+app/herramientas/.turno_pendiente.json
+app/herramientas/.turno_pendiente.json.nuevo
+
+# Dependencias y estado de herramientas
+app/node_modules/
+app/.vercel/
+app/supabase/.temp/
+
+# Bytecode Python
+__pycache__/
+*.pyc
+
+# Media pesada
+**/*.mp4
+**/*.mov
+**/*.mkv
+**/*.webm
+**/*.wav
+**/*.mp3
+**/*.part
+
+# Logs de lotes
+*.log
+
+# Placeholders vacíos (no son dirs de trabajo reales)
+clips/
+fuentes/
+
+# Lote de reelaboración: se versionan solo los scripts, los datos quedan en disco
+gta6-trabajo-rehacer/**
+!gta6-trabajo-rehacer/**/
+!gta6-trabajo-rehacer/*.py
+!gta6-trabajo-rehacer/*.sh
+
+# Artefactos sueltos de la raíz (no los usa la app)
+/index.html
+/OVERLAY.jpeg
+
+# Constancia local de bloqueo de YouTube
+app/herramientas/.youtube_bloqueado
+app/herramientas/.whisper
+app/herramientas/.modelos
+app/herramientas/tiempos.jsonl
+
+# Notas internas de trabajo
+/brief-publicacion-trazabilidad.md
+/fuentes-gta6.csv
+/reporte-motor-eze.md
+
+# Credenciales locales de otras herramientas
+.env*
+*.pem
+*.key
+cookies.txt
+cookies-*.txt

@@ -1,0 +1,7 @@
+{
+  "functions": { "api/turno.js": { "includeFiles": "herramientas/{categorias,CAMBIOS}.json" }, "api/estado.js": { "includeFiles": "herramientas/{categorias,CAMBIOS}.json" }, "api/doc.js": { "includeFiles": "herramientas/categorias.json" }, "api/herramienta.js": { "includeFiles": "herramientas/**" } },
+  "headers": [ { "source": "/(.*)", "headers": [
+    { "key": "X-Frame-Options", "value": "DENY" },
+    { "key": "Referrer-Policy", "value": "no-referrer" },
+    { "key": "X-Content-Type-Options", "value": "nosniff" } ] } ]
+}

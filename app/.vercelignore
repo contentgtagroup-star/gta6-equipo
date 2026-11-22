@@ -1,0 +1,15 @@
+.env*
+node_modules/
+supabase/.temp/
+herramientas/equipo.json
+herramientas/.*.lock
+herramientas/.turno_pendiente.json*
+**/__pycache__/**
+**/*.pyc
+**/*.log
+tests/
+docs/
+herramientas/.whisper
+herramientas/.modelos
+herramientas/.youtube_bloqueado
+herramientas/tiempos.jsonl

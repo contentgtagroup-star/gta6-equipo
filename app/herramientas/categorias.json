@@ -1,0 +1,264 @@
+[
+  {
+    "id": "tendencias",
+    "name": "Tendencias",
+    "description": "Temas recientes con fuentes y fecha; sugerencias cuando no haya actualidad verificada.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Noticias, descubrimientos populares, actualizaciones, mecánicas discutidas y cambios relevantes. No llamar tendencia a un tema sin fuentes recientes y señales de atención.",
+    "scriptStructure": [
+      "Hook de actualidad",
+      "Contexto",
+      "Información relevante",
+      "Impacto",
+      "Cierre"
+    ],
+    "tone": "Directo y actual",
+    "visualRequirements": "Mostrar el hecho y su fuente fechada; no confundir vistas del stream con popularidad del tema.",
+    "validationRules": [
+      "actualidad"
+    ],
+    "keywords": [
+      "noticia",
+      "update",
+      "actualización",
+      "nuevo",
+      "today",
+      "hoy"
+    ],
+    "researchQueries": [
+      "GTA 6 noticia",
+      "GTA 6 gameplay update"
+    ]
+  },
+  {
+    "id": "easter-eggs",
+    "name": "Easter Eggs",
+    "description": "Una referencia oculta concreta, mostrada y explicada.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Elegir una referencia a Rockstar, GTA anteriores, cultura, objeto o mensaje oculto. Explicar a qué hace referencia; una mecánica curiosa por sí sola no es un Easter Egg.",
+    "scriptStructure": [
+      "Hook intrigante",
+      "Ubicación o contexto",
+      "Descubrimiento",
+      "Explicación",
+      "Cierre"
+    ],
+    "tone": "Intrigante y preciso",
+    "visualRequirements": "Mantener visible el detalle oculto con el foco y recorte existentes; mostrar la referencia.",
+    "validationRules": [
+      "referencia"
+    ],
+    "keywords": [
+      "easter egg",
+      "reference",
+      "referencia",
+      "mensaje oculto",
+      "guiño"
+    ],
+    "researchQueries": [
+      "GTA 6 easter egg",
+      "GTA 6 gameplay reference"
+    ]
+  },
+  {
+    "id": "misterios",
+    "name": "Misterios",
+    "description": "Preguntas abiertas con evidencia e hipótesis diferenciadas.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Elegir un suceso, lugar, comportamiento extraño o pista sin explicación confirmada. Mostrar evidencia y posibles explicaciones sin afirmar hipótesis como hechos.",
+    "scriptStructure": [
+      "Pregunta intrigante",
+      "Evidencias",
+      "Explicaciones posibles",
+      "Interrogante final"
+    ],
+    "tone": "Suspenso y curiosidad",
+    "visualRequirements": "Mostrar escenas del suceso real; no usar una escena ambiental como prueba de algo que no muestra.",
+    "validationRules": [
+      "pregunta",
+      "explicaciones"
+    ],
+    "keywords": [
+      "mystery",
+      "misterio",
+      "strange",
+      "extraño",
+      "pista",
+      "ghost",
+      "fantasma"
+    ],
+    "researchQueries": [
+      "GTA 6 mystery",
+      "GTA 6 gameplay misterio"
+    ]
+  },
+  {
+    "id": "curiosidades",
+    "name": "Curiosidades",
+    "description": "Un dato sorprendente con demostración concreta.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Un concepto sobre mecánicas, NPCs, física, gráficos, animaciones o interacciones. Evitar introducciones innecesarias.",
+    "scriptStructure": [
+      "Hook llamativo",
+      "Dato",
+      "Demostración o explicación",
+      "Conclusión"
+    ],
+    "tone": "Directo y entretenido",
+    "visualRequirements": "Mostrar la interacción o el detalle que sostiene el dato.",
+    "validationRules": [
+      "dato"
+    ],
+    "keywords": [
+      "detail",
+      "detalle",
+      "physics",
+      "física",
+      "npc",
+      "animación",
+      "realismo"
+    ],
+    "researchQueries": [
+      "GTA 6 detail",
+      "GTA 6 gameplay detalle"
+    ]
+  },
+  {
+    "id": "comparaciones",
+    "name": "Comparaciones",
+    "description": "Dos elementos definidos y una diferencia observable.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Comparar GTA 6 con GTA 5, GTA 4, RDR2, vida real u otro elemento definido, usando el mismo criterio. Priorizar demostración visual.",
+    "scriptStructure": [
+      "Hook comparativo",
+      "Elemento A",
+      "Elemento B",
+      "Diferencia",
+      "Conclusión"
+    ],
+    "tone": "Claro y visual",
+    "visualRequirements": "Mostrar A y B identificados en el material disponible. Usar recortes o secuencia existentes; no inventar pantalla dividida ni assets.",
+    "validationRules": [
+      "elemento_a",
+      "elemento_b",
+      "diferencia"
+    ],
+    "keywords": [
+      "versus",
+      "vs",
+      "compare",
+      "comparación",
+      "gta 5",
+      "gta v",
+      "rdr2"
+    ],
+    "researchQueries": [
+      "GTA 6 versus",
+      "GTA 6 gameplay vs"
+    ]
+  },
+  {
+    "id": "secretos",
+    "name": "Secretos",
+    "description": "Una ubicación, interacción, objeto o mecánica oculta y su utilidad.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Mostrar un descubrimiento que el jugador puede encontrar o utilizar. Distinguirlo de una referencia cultural o guiño (Easter Egg).",
+    "scriptStructure": [
+      "Hook",
+      "Descubrimiento",
+      "Explicación",
+      "Utilidad o resultado"
+    ],
+    "tone": "Intrigante y útil",
+    "visualRequirements": "Mostrar acceso o interacción y resultado; no prometer objetos que no aparecen.",
+    "validationRules": [
+      "descubrimiento",
+      "utilidad"
+    ],
+    "keywords": [
+      "secret",
+      "secreto",
+      "hidden",
+      "oculto",
+      "escondido"
+    ],
+    "researchQueries": [
+      "GTA 6 secret",
+      "GTA 6 gameplay secreto"
+    ]
+  },
+  {
+    "id": "guias",
+    "name": "Guías",
+    "description": "Un objetivo y pasos precisos demostrables.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Enseñar ubicaciones, objetos, vehículos, dinero, desbloqueos o estrategias solo cuando los requisitos y pasos estén documentados. No inventar coordenadas ni mecánicas.",
+    "scriptStructure": [
+      "Objetivo",
+      "Requisitos",
+      "Pasos concretos",
+      "Resultado"
+    ],
+    "tone": "Claro y preciso",
+    "visualRequirements": "Mostrar cada paso esencial en orden con el material real, conservando las indicaciones en pantalla.",
+    "validationRules": [
+      "objetivo",
+      "requisitos",
+      "pasos",
+      "resultado"
+    ],
+    "keywords": [
+      "how to",
+      "cómo",
+      "conseguir",
+      "ubicación",
+      "paso",
+      "guide"
+    ],
+    "researchQueries": [
+      "GTA 6 how to",
+      "GTA 6 gameplay cómo"
+    ]
+  },
+  {
+    "id": "teorias",
+    "name": "Teorías",
+    "description": "Hipótesis razonables separando hechos, indicios y especulación.",
+    "enabled": true,
+    "configurationVersion": 1,
+    "ideaGenerationRules": "Proponer una hipótesis de historia, personajes, conexiones o posibles acontecimientos. Fundamentar en evidencias e incluir alternativas; no anticipar actualizaciones como confirmadas.",
+    "scriptStructure": [
+      "Hipótesis",
+      "Evidencias",
+      "Interpretación",
+      "Alternativas",
+      "Conclusión"
+    ],
+    "tone": "Curioso y condicional",
+    "visualRequirements": "Identificar qué imágenes son indicios y cuáles solo ilustran la interpretación.",
+    "validationRules": [
+      "hipotesis",
+      "interpretacion",
+      "alternativas"
+    ],
+    "keywords": [
+      "theory",
+      "teoría",
+      "podría",
+      "perhaps",
+      "conexión",
+      "hipótesis"
+    ],
+    "researchQueries": [
+      "GTA 6 theory",
+      "GTA 6 gameplay teoría"
+    ]
+  }
+]

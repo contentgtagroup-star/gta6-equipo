@@ -63,7 +63,7 @@ def como_instalar(prog):
     tabla = {
         'yt-dlp': {'Darwin': 'brew install yt-dlp', 'Windows': 'winget install yt-dlp.yt-dlp', 'Linux': 'sudo pacman -S yt-dlp (o pipx install yt-dlp)'},
         'ffmpeg': {'Darwin': 'brew install ffmpeg', 'Windows': 'winget install Gyan.FFmpeg', 'Linux': 'sudo pacman -S ffmpeg'},
-        'faster-whisper': {'Darwin': 'se instala solo la primera vez que haga falta', 'Windows': 'se instala solo la primera vez que haga falta', 'Linux': 'se instala solo la primera vez que haga falta'},
+        'faster-whisper': {'Darwin': 'brew install python@3.12; python3 procesar.py preparar-whisper', 'Windows': 'py procesar.py preparar-whisper', 'Linux': 'python3 procesar.py preparar-whisper (requiere Python 3.12)'},
     }
     return tabla[prog].get(so, tabla[prog]['Linux'])
 
@@ -76,7 +76,7 @@ def revisar(imprimir=True):
         for p in ('yt-dlp', 'ffmpeg'):
             ok = p not in falta and (p != 'ffmpeg' or 'ffprobe' not in falta)
             print(f"{'OK   ' if ok else 'FALTA'} {p}" + ('' if ok else f'  ->  instalalo con: {como_instalar(p)}'))
-        print(f"{'OK   ' if fw else 'OPC. '} faster-whisper" + ('' if fw else '  (para Twitch, Kick y videos sin subtítulos: se instala solo la primera vez que haga falta)'))
+        print(f"{'OK   ' if fw else 'OPC. '} faster-whisper" + ('' if fw else '  (para Twitch, Kick y videos sin subtítulos: ' + como_instalar('faster-whisper') + ')'))
         print(f"{'OK   ' if os.path.exists(FUENTE) else 'FALTA'} BowlbyOne-Regular.ttf junto a este script")
         print(f"{'OK   ' if os.path.exists(OVERLAY) else 'FALTA'} OVERLAY.png junto a este script")
         # generador de PO Token: hace que YouTube bloquee mucho menos las descargas (recomendado por yt-dlp)
@@ -195,7 +195,7 @@ def palabras_youtube(url, carpeta, ini, fin, idioma=''):
 
 
 # faster-whisper vive en su propio entorno (gta6-tools/.whisper) para no tocar el Python de cada compu.
-# Se crea solo la primera vez que hace falta y queda para las siguientes.
+# Se prepara de forma interactiva antes de iniciar los turnos.
 WHISPER_DIR = os.path.join(AQUI, '.whisper')
 # Modelos de voz: gta6-tools/.modelos (se bajan ahí una sola vez; puede ser un enlace a una carpeta que ya los tenga).
 WHISPER_MODELOS = os.path.join(AQUI, '.modelos')
@@ -227,19 +227,39 @@ def _tiene_whisper(py):
         return False
 
 
-def python_whisper(instalar=True):
-    """Python que puede importar faster_whisper: el actual, el de WHISPER_PY o el entorno propio (que se crea si falta)."""
+def python_whisper(instalar=False):
+    """Usa un entorno existente; solo preparar-whisper puede instalar paquetes."""
     propio = os.path.join(WHISPER_DIR, 'Scripts', 'python.exe') if platform.system() == 'Windows' else os.path.join(WHISPER_DIR, 'bin', 'python')
-    for py in (sys.executable, os.environ.get('WHISPER_PY'), propio):
+    partes = ('Scripts', 'python.exe') if os.name == 'nt' else ('bin', 'python')
+    entornos = glob.glob(os.path.join(WHISPER_DIR, 'py*', *partes))
+    for py in (os.environ.get('WHISPER_PY'), *entornos, propio, sys.executable):
         if py and os.path.exists(py) and _tiene_whisper(py):
             return py
     if not instalar:
         return None
-    print('Instalando faster-whisper en gta6-tools/.whisper (solo esta vez, tarda unos minutos)…', flush=True)
+    candidatos = [[p] for p in (os.environ.get('WHISPER_PY'), shutil.which('python3.12'), shutil.which('python3.13'), shutil.which('python3.11'), sys.executable) if p]
+    if os.name == 'nt' and shutil.which('py'):
+        candidatos = [['py', '-3.12'], ['py', '-3.13'], ['py', '-3.11']] + candidatos
+    base = None
+    for candidato in candidatos:
+        try:
+            r = subprocess.run([*candidato, '-c', 'import json, sys; print(json.dumps(list(sys.version_info[:2])))'], capture_output=True, text=True, timeout=15)
+            version = json.loads(r.stdout) if r.returncode == 0 else []
+            if version in ([3, 12], [3, 13], [3, 11]):
+                base = candidato
+                break
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            continue
+    if not base:
+        print('AVISO: instalá Python 3.12 y volvé a correr procesar.py preparar-whisper. No se modifica el Python del sistema.')
+        return None
+    carpeta = os.path.join(WHISPER_DIR, 'py' + ''.join(map(str, version)))
+    propio = os.path.join(carpeta, 'Scripts', 'python.exe') if os.name == 'nt' else os.path.join(carpeta, 'bin', 'python')
+    print('Preparando faster-whisper en un entorno propio con Python ' + '.'.join(map(str, version)) + '…', flush=True)
     try:
         if not os.path.exists(propio):
-            subprocess.run([sys.executable, '-m', 'venv', WHISPER_DIR], check=True, capture_output=True)
-        subprocess.run([propio, '-m', 'pip', 'install', '-q', '-U', 'faster-whisper'], check=True, capture_output=True)
+            subprocess.run([*base, '-m', 'venv', carpeta], check=True, capture_output=True, timeout=120)
+        subprocess.run([propio, '-m', 'pip', 'install', '--only-binary=:all:', 'faster-whisper'], check=True, capture_output=True, timeout=600)
     except Exception as e:
         print(f'AVISO: no se pudo instalar faster-whisper ({e}).')
         return None
@@ -249,6 +269,7 @@ def python_whisper(instalar=True):
 def palabras_whisper(video, tramos=None, modelo='small'):
     py = python_whisper()
     if not py:
+        print('AVISO: falta preparar Whisper. Corré procesar.py preparar-whisper desde Preparar mi compu antes de reanudar el pedido.')
         return None
     r = subprocess.run([py, '-c', WHISPER_SCRIPT, video, WHISPER_MODELOS, json.dumps(tramos or [[0, 0]]), modelo], capture_output=True, text=True)
     if r.returncode != 0:
@@ -1164,6 +1185,7 @@ def registrar_tiempo(cmd, seg, ok, url=''):
 ap = argparse.ArgumentParser()
 sp = ap.add_subparsers(dest='cmd', required=True)
 sp.add_parser('revisar')
+sp.add_parser('preparar-whisper')
 m = sp.add_parser('momentos'); m.add_argument('--url', required=True); m.add_argument('--cuantos', type=int, default=8)
 m.add_argument('--categoria', default=os.environ.get('GTA6_CATEGORIA', ''))
 m.add_argument('--evitar', default='', help='tramos ya usados del video, en segundos o mm:ss: "30-60,1:40-2:10"')
@@ -1177,6 +1199,8 @@ c = sp.add_parser('cortar'); c.add_argument('--dir', required=True); c.add_argum
 p = sp.add_parser('parchar'); p.add_argument('--dir', required=True); p.add_argument('--receta', required=True)
 p.add_argument('--vertical', required=True); p.add_argument('--tramo', required=True, help='segundos del clip final, ej. 0-2.5')
 a = ap.parse_args()
+if a.cmd == 'preparar-whisper':
+    sys.exit(0 if python_whisper(instalar=True) else 1)
 if a.cmd in ('momentos', 'bajar'):
     revisar_pausa()
 if a.cmd == 'bajar':

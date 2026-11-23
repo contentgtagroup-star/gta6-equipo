@@ -3,10 +3,13 @@ import { db, exigir, responder } from '../lib/comun.js'
 import { EQUIPO, ESCUCHA_VIGENTE_MS, VERSION_TURNOS } from '../lib/turnos.js'
 import { categoriaPorId } from '../lib/categorias.js'
 import { promptTurno } from '../lib/prompt_turno.js'
+import { normalizarEnlace, normalizarNota } from '../lib/enlaces.js'
 
 const COL = 'turnos'
 const ID = 'global'
 const ACTIVOS = new Set(['pendiente', 'ejecutando', 'pausa_solicitada', 'pausado'])
+const TOMADO_VENCE = 3 * 60 * 60 * 1000
+const RESERVA_CAIDA_VENCE = 5 * 60 * 1000
 
 function trabajos (datos) {
   return [...(datos.pedido_id ? [datos] : []), ...(datos.pedidos || [])]
@@ -33,6 +36,46 @@ function quitar (datos, referencia) {
 
 function versionEscucha (escuchas, nombre) {
   return Number((escuchas || []).find(x => x.id === nombre)?.datos?.version) || 0
+}
+
+function idsActivos (datos) {
+  return new Set(trabajos(datos).filter(p => ACTIVOS.has(p.estado)).map(p => p.pedido_id))
+}
+
+function motivoNoDisponible (video, activos, ahora) {
+  if (!video) return null
+  const estado = video.estado || 'libre'
+  if (estado === 'libre') return null
+  if (estado === 'hecho') return 'Ese enlace ya se usó para un clip. Pegá otro.'
+  if (estado !== 'tomado') return 'Ese enlace no está disponible para un pedido directo.'
+  if (video.tomado_pedido && activos.has(video.tomado_pedido)) {
+    return 'Ese enlace lo está trabajando otra compu o pedido. Esperá a que termine o pegá otro.'
+  }
+  const vence = video.tomado_pedido ? RESERVA_CAIDA_VENCE : TOMADO_VENCE
+  if (ahora - (video.tomado_el || 0) > vence) return null
+  return 'Ese enlace lo está trabajando otra compu o pedido. Esperá a que termine o pegá otro.'
+}
+
+function directoDe (trabajo) {
+  return trabajo?.video_id
+    ? { id: trabajo.video_id, url: trabajo.video_url, nota: trabajo.nota || '', plataforma: trabajo.video_plataforma }
+    : null
+}
+
+async function leerRadar (sb) {
+  const { data, error } = await sb.from('docs').select('datos').eq('coleccion', 'radar').eq('id', 'actual').maybeSingle()
+  return error ? { error } : { datos: data?.datos || {} }
+}
+
+async function leerUsados (sb, videoId) {
+  const { data, error } = await sb.from('docs').select('datos').eq('coleccion', 'usados').eq('id', videoId).maybeSingle()
+  return error ? { error } : { tramos: data?.datos?.tramos || [] }
+}
+
+// Un tramo reservado de un pedido inactivo y vencido no bloquea el enlace; uno usado sí.
+function tramoVigente (tramo, activos, ahora) {
+  if (tramo?.estado !== 'reservado') return true
+  return (tramo.pedido_id && activos.has(tramo.pedido_id)) || ahora - (tramo.reservado_el || 0) < RESERVA_CAIDA_VENCE
 }
 
 function avisoVersion (version, nombre) {
@@ -113,8 +156,26 @@ export default async function handler (req, res) {
   if (op === 'pedir') {
     const categoria = req.body?.categoria
     try { categoriaPorId(categoria) } catch (e) { return responder(res, 400, { error: e.message }) }
-    const fuente = req.body?.fuente === 'twitch' ? 'twitch' : 'youtube'
-    const cantidad = req.body?.cantidad
+    const fuentePedida = req.body?.fuente === 'twitch' ? 'twitch' : 'youtube'
+    let fuente = fuentePedida
+    let cantidad = req.body?.cantidad
+    let directo = null
+    const pedidoDirecto = ['video_url', 'video_id', 'video_plataforma'].some(k => req.body?.[k] !== undefined)
+    if (pedidoDirecto) {
+      const enlace = normalizarEnlace(req.body?.video_url)
+      if (!enlace) return responder(res, 400, { error: 'El enlace no es de YouTube, Twitch o Kick (video, directo o clip)' })
+      if (req.body?.video_id !== enlace.id) return responder(res, 400, { error: 'El id del video no coincide con el enlace' })
+      if (req.body?.video_plataforma !== enlace.plataforma) return responder(res, 400, { error: 'La plataforma no coincide con el enlace' })
+      if (req.body?.fuente !== undefined && fuentePedida !== enlace.plataforma) {
+        return responder(res, 400, { error: 'La fuente del pedido no coincide con el enlace' })
+      }
+      if (cantidad === undefined) cantidad = 1
+      if (cantidad !== 1) return responder(res, 400, { error: 'El pedido desde un enlace crea un solo clip' })
+      let nota
+      try { nota = normalizarNota(req.body?.nota) } catch (e) { return responder(res, 400, { error: e.message }) }
+      fuente = enlace.plataforma
+      directo = { id: enlace.id, url: enlace.url, plataforma: enlace.plataforma, nota }
+    }
     if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 5) return responder(res, 400, { error: 'Pedido inválido' })
     const { data: escuchas, error: e2 } = await sb.from('docs').select('id,datos').eq('coleccion', 'escucha').in('id', EQUIPO)
     if (e2) return responder(res, 500, { error: e2.message })
@@ -122,15 +183,32 @@ export default async function handler (req, res) {
     const activos = (escuchas || []).filter(x => ahora - x.datos.ultima < ESCUCHA_VIGENTE_MS && x.datos.version >= VERSION_TURNOS).map(x => x.id)
     const { feedback, error: e3 } = await leerFeedback(sb)
     if (e3) return responder(res, 500, { error: e3.message })
+    if (directo) {
+      const { datos: radar, error: er } = await leerRadar(sb)
+      if (er) return responder(res, 500, { error: er.message })
+      const video = (radar.videos || []).find(v => v?.id === directo.id)
+      const motivo = motivoNoDisponible(video, idsActivos(turno), ahora)
+      if (motivo) return responder(res, 409, { error: motivo })
+      const { tramos, error: eu } = await leerUsados(sb, directo.id)
+      if (eu) return responder(res, 500, { error: eu.message })
+      if (tramos.some(t => tramoVigente(t, idsActivos(turno), ahora))) {
+        return responder(res, 409, { error: 'Ese enlace ya se usó para un clip. Pegá otro.' })
+      }
+    }
     const pedido_id = randomUUID()
     let registro = actual
     for (let intento = 0; intento < 8; intento++) {
       const datos = registro?.datos || {}
+      if (directo && trabajos(datos).some(p => p.pedido_id !== pedido_id && ACTIVOS.has(p.estado) && p.video_id === directo.id)) {
+        return responder(res, 409, { error: 'Ya hay un pedido en curso para ese enlace. Esperá a que termine o pegá otro.' })
+      }
       const asignado = activos.includes(yo) && !compuOcupada(datos, yo, null, fuente) && !pedidoAnteriorEnCola(datos, yo) ? yo : null
       const nuevo = { estado: 'pendiente', pedido_id, pedido_por: yo, pedido_el: ahora,
         asignado, asignado_el: ahora, cantidad, pausa_compatible: true, fuente,
         ...(categoria ? { categoria, categoria_version: categoriaPorId(categoria).configurationVersion } : {}),
-        prompt: asignado ? promptTurno(asignado, cantidad, feedback, pedido_id, categoria, fuente) : null }
+        ...(directo ? { video_id: directo.id, video_url: directo.url, video_plataforma: directo.plataforma,
+          ...(directo.nota ? { nota: directo.nota } : {}) } : {}),
+        prompt: asignado ? promptTurno(asignado, cantidad, feedback, pedido_id, categoria, fuente, directo) : null }
       const previos = datos.pedidos || []
       const pedidos = [...previos.filter(p => ACTIVOS.has(p.estado)),
         ...previos.filter(p => !ACTIVOS.has(p.estado)).slice(-12), nuevo]
@@ -161,7 +239,7 @@ export default async function handler (req, res) {
     if (e3) return responder(res, 500, { error: e3.message })
     const nuevo = { ...t, estado: 'pendiente', asignado, asignado_el: ahora, pausa_compatible: true,
       etapa: null, avance: null, avance_base: null, resumen: null, terminado_el: null, run_id: null,
-      prompt: asignado ? promptTurno(asignado, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente) : null }
+      prompt: asignado ? promptTurno(asignado, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente, directoDe(t)) : null }
     const datos = reemplazar(turno, ref, nuevo)
     if (!await guardar(sb, actual, datos)) return responder(res, 409, { error: 'El pedido cambió; probá de nuevo' })
     return responder(res, 200, { ok: true, asignado, pedido_id: t.pedido_id })
@@ -206,7 +284,7 @@ export default async function handler (req, res) {
       if (!pausando && dueño && dueño !== t.asignado) {
         const { feedback, error: e2 } = await leerFeedback(sb)
         if (e2) return responder(res, 500, { error: e2.message })
-        prompt = promptTurno(dueño, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente)
+        prompt = promptTurno(dueño, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente, directoDe(t))
       }
       const datos = pausando
         ? { ...t, estado: t.estado === 'pendiente' ? 'pausado' : 'pausa_solicitada', etapa: t.estado, pausado_el: ahora }
@@ -223,7 +301,13 @@ export default async function handler (req, res) {
   if (op === 'recuperar') {
     const ref = buscar(turno, req.body?.pedido_id)
     const t = ref?.trabajo
-    if (t?.estado !== 'pendiente' || (t.pedido_por && t.pedido_por !== yo) || t.asignado === yo || compuOcupada(turno, yo, t.pedido_id, t.fuente) ||
+    if (t?.estado !== 'pendiente') return responder(res, 409, { error: 'Ese pedido ya no está disponible' })
+    // El dueño es quien lo pidió; en datos anteriores vale la compu asignada. Nunca se toma un pedido ajeno.
+    const dueño = t.pedido_por || t.asignado
+    if (!dueño || dueño !== yo) {
+      return responder(res, 409, { error: dueño ? `Ese pedido es de la compu de ${dueño}; esperá a que retome` : 'Ese pedido no tiene dueño conocido; no se puede tomar desde otra compu' })
+    }
+    if (t.asignado === yo || compuOcupada(turno, yo, t.pedido_id, t.fuente) ||
       (t.asignado && ahora - (t.asignado_el || t.pedido_el || ahora) < ESCUCHA_VIGENTE_MS)) {
       return responder(res, 409, { error: 'El pedido todavía está en la compu asignada' })
     }
@@ -235,7 +319,7 @@ export default async function handler (req, res) {
     const { feedback, error: e3 } = await leerFeedback(sb)
     if (e3) return responder(res, 500, { error: e3.message })
     const nuevo = { ...t, asignado: yo, asignado_el: ahora,
-      prompt: promptTurno(yo, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente) }
+      prompt: promptTurno(yo, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente, directoDe(t)) }
     if (!await guardar(sb, actual, { ...reemplazar(turno, ref, nuevo), ultima_asignacion: yo })) return responder(res, 409, { error: 'El pedido cambió' })
     return responder(res, 200, { ok: true, asignado: yo, pedido_id: t.pedido_id })
   }
@@ -253,7 +337,8 @@ export default async function handler (req, res) {
     const nuevo = { ...t, estado: 'ejecutando', iniciado_el: ahora, latido: ahora,
       avance: 'preparando', avance_base: total, run_id, tiempos: [{ f: 'preparando', t: ahora }] }
     if (!await guardar(sb, actual, reemplazar(turno, ref, nuevo))) return responder(res, 409, { error: 'Otro proceso tomó el turno' })
-    return responder(res, 200, { ok: true, pedido_id: t.pedido_id, run_id, prompt: t.prompt, cantidad: t.cantidad, categoria: t.categoria || null, fuente: t.fuente || 'youtube' })
+    return responder(res, 200, { ok: true, pedido_id: t.pedido_id, run_id, prompt: t.prompt, cantidad: t.cantidad, categoria: t.categoria || null, fuente: t.fuente || 'youtube',
+      ...(t.video_id ? { video_id: t.video_id, video_url: t.video_url, video_plataforma: t.video_plataforma, nota: t.nota || '' } : {}) })
   }
 
   if (op === 'avance') {

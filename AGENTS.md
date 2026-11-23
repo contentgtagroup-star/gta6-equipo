@@ -90,3 +90,19 @@ python3 app/herramientas/procesar.py revisar
 - Límite de peso del panel: `MAX_MB = 14`.
 - Las recetas se guardan en el clip del panel para corregir tramos con `parchar`
   sin rehacer todo.
+
+## Regla de ejecución por persona (confirmada por el usuario el 2026-11-23)
+
+- Todo pedido manual se procesa exclusivamente en la PC de quien lo solicita.
+  Si está apagada u ocupada, el pedido espera a esa misma PC; nunca se deriva
+  al motor de otro integrante, aunque esté libre o venza una reserva.
+- Aplica a crear clips, enlaces directos, correcciones, generación editorial,
+  preparación de material y procesamiento de publicaciones aprobadas. Los datos
+  y la coordinación siguen compartidos en el backend.
+- Las correcciones pertenecen a `corrige_por` (con `responsable` como respaldo
+  para datos anteriores); los trabajos editoriales a `pedido_por`; las
+  publicaciones a `aprobado_por`. No tomar trabajos con dueño desconocido.
+- El rastreo automático de una fuente debe conservar como dueño a quien lo
+  configuró, sin generar trabajos para otra persona por estar conectada.
+- Verificar con tests que una PC no tome pedidos de otra, incluso cuando
+  la PC del solicitante esté desconectada o el trabajo haya vencido.

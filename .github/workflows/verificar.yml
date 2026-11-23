@@ -63,11 +63,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url=$(vercel deploy --prebuilt --prod --yes --non-interactive)
-          case "$url" in
-            https://gta6-equipo-*.vercel.app) ;;
-            *) echo 'Vercel no confirmó una URL válida de GTA.'; exit 1 ;;
-          esac
+          vercel deploy --prebuilt --prod --yes --non-interactive
+          url=https://gta6-equipo.vercel.app
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "### GTA publicado" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"

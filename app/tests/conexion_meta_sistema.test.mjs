@@ -136,3 +136,19 @@ test('renovar relee el secreto de Vercel y reemplaza los accesos cifrados sin du
   const inspeccion = llamadas.filter(x => x.u.pathname.endsWith('/debug_token')).at(-1)
   assert.equal(inspeccion.u.searchParams.get('input_token'), 'token-sistema-rotado')
 })
+test('sin META_AUTH_MODE usa el token del sistema en vez de volver a OAuth', async () => {
+  reset(); delete process.env.META_AUTH_MODE
+  const r = await conectar()
+  assert.equal(r.codigo, 200)
+  assert.equal(r.body.url, undefined)
+  assert.equal(r.headers['Set-Cookie'], undefined)
+  assert.equal(guardada().datos.origen, 'system_user')
+})
+test('META_AUTH_MODE=oauth fuerza el flujo anterior aunque exista el token', async () => {
+  reset(); process.env.META_AUTH_MODE = 'oauth'
+  const r = await conectar()
+  assert.equal(r.codigo, 200)
+  assert.match(r.body.url, /facebook\.com.*\/dialog\/oauth/)
+  assert.equal(llamadas.some(x => x.u.hostname === 'graph.facebook.com'), false)
+  assert.equal(guardada(), undefined)
+})

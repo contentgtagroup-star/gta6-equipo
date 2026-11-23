@@ -9,6 +9,12 @@ const IMPRESCINDIBLES = ['pages_show_list', 'pages_manage_posts', 'instagram_bas
 function falta (nombre) {
   throw errorPublicacion('Falta configurar ' + nombre + ' en Vercel para conectar Meta con usuario del sistema.', 503)
 }
+// Si hay token del sistema, se usa aunque META_AUTH_MODE no esté configurado en Vercel.
+export function usarMetaSistema () {
+  const modo = String(process.env.META_AUTH_MODE || '').trim().toLowerCase()
+  if (modo) return modo === 'system_user'
+  return !!process.env.META_SYSTEM_USER_TOKEN
+}
 function vencido (valor, ahora) {
   const numero = Number(valor)
   return Number.isFinite(numero) && numero > 0 && numero * 1000 <= ahora

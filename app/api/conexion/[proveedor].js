@@ -3,7 +3,7 @@ import { exigir, responder } from '../../lib/comun.js'
 import { leerPub, guardarPub, eventoPub } from '../../lib/publicacion_store.js'
 import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH } from '../../lib/conexiones.js'
 import { errorPublicacion } from '../../lib/publicacion.js'
-import { verificarMetaSistema } from '../../lib/meta_sistema.js'
+import { usarMetaSistema, verificarMetaSistema } from '../../lib/meta_sistema.js'
 
 export default async function handler (req, res) {
   const p = String(req.query.proveedor || '')
@@ -13,7 +13,7 @@ export default async function handler (req, res) {
     if (!['meta', 'google', 'tiktok', 'buffer'].includes(p)) throw errorPublicacion('Conexión desconocida.')
     if (req.method === 'POST') {
       const yo = exigir(req, res); if (!yo) return
-      if (p === 'meta' && process.env.META_AUTH_MODE === 'system_user') {
+      if (p === 'meta' && usarMetaSistema()) {
         const datos = await verificarMetaSistema(yo)
         const actual = await leerPub('conexiones', p)
         await guardarConexion(p, datos, actual)

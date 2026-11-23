@@ -3,6 +3,33 @@ import { leerPub, guardarPub } from './publicacion_store.js'
 import { errorPublicacion, REDES } from './publicacion.js'
 
 export const GRAPH = 'https://graph.facebook.com/' + (process.env.META_GRAPH_VERSION || 'v27.0')
+
+// YouTube puede usar el token renovable que ya tenía gta-publicador, sin app OAuth nueva.
+export function usarYoutubeTokens () {
+  const modo = String(process.env.YOUTUBE_AUTH_MODE || process.env.GOOGLE_AUTH_MODE || '').trim().toLowerCase()
+  if (modo) return modo === 'refresh_token'
+  return !!process.env.YT_REFRESH_TOKEN
+}
+function faltanYoutube () {
+  return ['YT_CLIENT_ID', 'YT_CLIENT_SECRET', 'YT_REFRESH_TOKEN'].filter(k => !process.env[k])
+}
+async function renovarYoutube () {
+  const faltan = faltanYoutube()
+  if (faltan.length) throw errorPublicacion('Falta configurar ' + faltan.join(', ') + ' en Vercel para conectar YouTube.', 503)
+  const body = new URLSearchParams({ grant_type: 'refresh_token', client_id: process.env.YT_CLIENT_ID, client_secret: process.env.YT_CLIENT_SECRET, refresh_token: process.env.YT_REFRESH_TOKEN })
+  const d = await jsonRemoto('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+  if (!d.access_token) throw errorPublicacion('Google no devolvió un acceso válido para YouTube.', 502)
+  return { access_token: d.access_token, expira_el: d.expires_in ? Date.now() + Number(d.expires_in) * 1000 : null }
+}
+export async function verificarYoutubeTokens (por) {
+  const canalId = process.env.YOUTUBE_CHANNEL_ID
+  if (!canalId) throw errorPublicacion('Falta configurar YOUTUBE_CHANNEL_ID en Vercel para conectar YouTube.', 503)
+  const acceso = await renovarYoutube()
+  const canales = await jsonRemoto('https://www.googleapis.com/youtube/v3/channels?part=id,snippet&mine=true', { headers: { Authorization: 'Bearer ' + acceso.access_token } })
+  const canal = (canales.items || []).find(x => String(x.id) === String(canalId))
+  if (!canal) throw errorPublicacion('El token de YouTube no da acceso al canal configurado en YOUTUBE_CHANNEL_ID.', 424)
+  return { ...acceso, channel_id: canal.id, cuenta: canal.snippet?.title || 'YouTube', origen: 'refresh_token', por }
+}
 export function origenApp () {
   const url = process.env.PUBLICACION_ORIGIN
   if (!url || !/^https:\/\/[^/?#]+$/.test(url)) throw errorPublicacion('Falta configurar PUBLICACION_ORIGIN en el servidor.', 503)
@@ -87,13 +114,19 @@ export function configOAuth (p) {
 }
 export async function tokenConexion (proveedor) {
   if (proveedor === 'buffer') {
-    if (!process.env.BUFFER_API_KEY || !process.env.BUFFER_CHANNEL_ID) throw errorPublicacion('Falta conectar X en Buffer y configurar su integración.', 424)
+    const faltan = ['BUFFER_API_KEY', 'BUFFER_CHANNEL_ID'].filter(k => !process.env[k])
+    if (faltan.length) throw errorPublicacion('Falta configurar ' + faltan.join(', ') + ' en Vercel para conectar X con Buffer.', 424)
     return { access_token: process.env.BUFFER_API_KEY, channel_id: process.env.BUFFER_CHANNEL_ID, organization_id: process.env.BUFFER_ORGANIZATION_ID }
   }
   const actual = await leerPub('conexiones', proveedor)
   if (!actual?.datos.sobre) throw errorPublicacion('Conectá la cuenta de ' + proveedor + ' antes de publicar.', 424)
   let t = descifrarConexion(proveedor, actual.datos.sobre)
   if (!t.expira_el || t.expira_el > Date.now() + 120000) return t
+  if (proveedor === 'google' && usarYoutubeTokens()) {
+    t = { ...t, ...(await renovarYoutube()) }
+    await guardarConexion(proveedor, t, actual)
+    return t
+  }
   if (!t.refresh_token || proveedor === 'meta') throw errorPublicacion('La conexión venció. Reconectá la cuenta.', 424)
   if (actual.datos.refrescando_hasta > Date.now()) throw errorPublicacion('La cuenta está renovando su acceso. Volvé a intentar en un momento.', 409)
   const bloqueo = await guardarPub('conexiones', proveedor, { ...actual.datos, refrescando_hasta: Date.now() + 60000 }, actual.version)
@@ -110,13 +143,19 @@ export async function estadosConexiones () {
     const d = await leerPub('conexiones', p)
     cache[p] = d?.datos || {}
     if (p === 'buffer' && process.env.BUFFER_API_KEY && process.env.BUFFER_CHANNEL_ID) cache[p] = { ...cache[p], estado: cache[p].estado || 'sin_verificar' }
+    if (p === 'buffer' && !process.env.BUFFER_API_KEY) cache[p] = { ...cache[p], falta_config: 'BUFFER_API_KEY' }
+    if (p === 'google' && usarYoutubeTokens() && !cache[p].sobre) {
+      const faltan = faltanYoutube()
+      if (!process.env.YOUTUBE_CHANNEL_ID) faltan.push('YOUTUBE_CHANNEL_ID')
+      if (faltan.length) cache[p] = { ...cache[p], falta_config: faltan.join(', ') }
+    }
   }
   return Object.entries(REDES).map(([id, r]) => {
     // Instagram no tiene conexión propia: solo aparece conectada si la página de Meta trajo una cuenta de negocio.
     const d = id === 'instagram' ? (cache.meta?.ig_id ? cache.meta : {}) : (cache[r.proveedor] || {})
     const vencido = d.expira_el && d.expira_el <= Date.now()
     return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '',
-      metodo: d.origen || (d.sobre ? 'oauth' : undefined), permisos: d.permisos || [], faltan_permisos: d.faltan_permisos || [],
+      metodo: d.origen || (d.sobre ? 'oauth' : undefined), permisos: d.permisos || [], faltan_permisos: d.faltan_permisos || [], falta_config: d.falta_config || '',
       ...(id === 'tiktok' ? { entorno: process.env.TIKTOK_ENV === 'sandbox' ? 'sandbox' : 'production' } : {}) }
   })
 }

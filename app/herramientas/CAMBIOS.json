@@ -1,6 +1,7 @@
 {
- "version": 53,
+ "version": 54,
  "cambios": [
+  {"v": 54, "fecha": "2026-11-23", "texto": "YouTube se conecta con el token renovable que ya tenía el equipo (YT_CLIENT_ID, YT_CLIENT_SECRET y YT_REFRESH_TOKEN) sin crear una app OAuth nueva; comprueba el canal y renueva el acceso solo. X y YouTube dicen en el panel qué variable falta en Vercel cuando la conexión no está lista.", "manual": "Cargá BUFFER_API_KEY, YT_CLIENT_ID, YT_CLIENT_SECRET y YT_REFRESH_TOKEN como secretos de Vercel y tocá Conectar en X y YouTube."},
   {"v": 53, "fecha": "2026-11-23", "texto": "El modo System User de Meta se activa aunque no esté configurada la variable META_AUTH_MODE: alcanza con que exista el token en Vercel. Así Conectar no vuelve al OAuth viejo que rechazaba la página.", "manual": null},
   {"v": 52, "fecha": "2026-11-23", "texto": "Meta puede conectarse con el token del usuario del sistema cargado en Vercel, sin pasar por OAuth ni por el chat. Conectar comprueba la app, la vigencia, la página y el Instagram sin publicar nada, guarda el acceso cifrado y el panel indica el método y los permisos de métricas que faltan.", "manual": "Generá el token en Configuración del negocio → Usuarios del sistema con los permisos documentados, guardalo como META_SYSTEM_USER_TOKEN y tocá Reconectar."},
   {"v": 51, "fecha": "2026-11-23", "texto": "La conexión de TikTok informa el motivo de rechazo (credenciales, código vencido, callback o permisos) y registra la etapa sin exponer accesos. El intercambio y la renovación de acceso envían explícitamente el formato requerido por TikTok.", "manual": null},

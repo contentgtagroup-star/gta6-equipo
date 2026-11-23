@@ -20,7 +20,10 @@ por lectura: una migración al panel requiere transferirlos por un canal seguro.
 | `META_AUTH_MODE` | Opcional: `system_user` fuerza el modo sistema; si falta, se activa solo con que exista `META_SYSTEM_USER_TOKEN` |
 | `META_SYSTEM_USER_TOKEN` | Token generado en Configuración del negocio → Usuarios del sistema para la app del panel |
 | `META_GRAPH_VERSION` | Versión Graph habilitada por la app; por defecto v27.0 |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_CHANNEL_ID` | OAuth del canal; habilitar YouTube Data API y YouTube Analytics API |
+| `YOUTUBE_CHANNEL_ID` | ID del canal propio de YouTube |
+| `YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN` | Token renovable ya existente; conecta YouTube sin crear una app OAuth nueva |
+| `YOUTUBE_AUTH_MODE` | Opcional: `oauth` fuerza el flujo con `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Solo para el OAuth alternativo; habilitar YouTube Data API y YouTube Analytics API |
 | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | Login Kit, `video.upload`, `video.list`, `user.info.basic`, `user.info.stats` |
 | `TIKTOK_ENV` | `sandbox` para reutilizar la app de pruebas de GTA; sin definir usa producción |
 | `TIKTOK_SANDBOX_CLIENT_KEY`, `TIKTOK_SANDBOX_CLIENT_SECRET` | Claves de la app sandbox existente; solicita solo `user.info.basic,video.upload` |
@@ -50,6 +53,17 @@ Permisos del usuario del sistema, en la pestaña «Permisos de la app»:
 - Métricas: `pages_read_engagement`, `instagram_manage_insights`,
   `read_insights`. Si faltan, la conexión funciona y el panel enumera cuáles
   faltan junto a la tarjeta de Instagram/Facebook.
+
+X usa `BUFFER_API_KEY` con el canal y la organización ya configurados. El botón
+Conectar solo consulta el canal en Buffer: si la clave falta, la tarjeta dice
+qué variable hace falta y no publica nada.
+
+YouTube reutiliza el token renovable de `gta-publicador`: con `YT_CLIENT_ID`,
+`YT_CLIENT_SECRET` y `YT_REFRESH_TOKEN`, Conectar renueva el acceso, comprueba
+que pertenezca a `YOUTUBE_CHANNEL_ID` y guarda el acceso cifrado. No sube
+videos. Cuando el acceso vence, el panel lo renueva solo con esas mismas
+variables. Para usar un OAuth nuevo en su lugar, configurar
+`YOUTUBE_AUTH_MODE=oauth` junto con `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
 
 TikTok ya se preparó en `gta-publicador` con una app sandbox y un callback de
 GitHub Pages. Para autorizar desde este panel, agregar también

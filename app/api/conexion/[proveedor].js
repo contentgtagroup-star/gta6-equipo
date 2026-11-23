@@ -1,7 +1,7 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 import { exigir, responder } from '../../lib/comun.js'
 import { leerPub, guardarPub, eventoPub } from '../../lib/publicacion_store.js'
-import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH } from '../../lib/conexiones.js'
+import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH, usarYoutubeTokens, verificarYoutubeTokens } from '../../lib/conexiones.js'
 import { errorPublicacion } from '../../lib/publicacion.js'
 import { usarMetaSistema, verificarMetaSistema } from '../../lib/meta_sistema.js'
 
@@ -21,6 +21,13 @@ export default async function handler (req, res) {
         return responder(res, 200, { ok: true, metodo: 'system_user', faltan_permisos: datos.faltan_permisos || [] })
       }
       if (req.body?.op === 'renovar' && p !== 'meta') { await tokenConexion(p); return responder(res, 200, { ok: true }) }
+      if (p === 'google' && usarYoutubeTokens()) {
+        const datos = await verificarYoutubeTokens(yo)
+        const actual = await leerPub('conexiones', p)
+        await guardarConexion(p, datos, actual)
+        await eventoPub('conexion', yo, { proveedor: p, metodo: 'refresh_token' })
+        return responder(res, 200, { ok: true, metodo: 'refresh_token' })
+      }
       if (p === 'buffer') {
         const t = await tokenConexion(p)
         const datos = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { Authorization: 'Bearer ' + t.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { channel(id: ${JSON.stringify(t.channel_id)}) { id name service isDisconnected isLocked } }` }) })

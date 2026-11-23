@@ -1,5 +1,7 @@
 # Equipo GTA 6 — clipper automático
 
+> **Antes de trabajar leé `PTM.md`** (protocolo de trabajo del equipo: ramas, deploy a main, puesta en marcha). Si entrás por primera vez, seguí su sección 0.
+
 Herramienta para convertir streams de GTA 6 en clips verticales de ~30 s
 (1080x1920) listos para Shorts/TikTok/Reels, más un panel web para coordinarse
 en equipo (links, turnos, correcciones, biblioteca de clips).

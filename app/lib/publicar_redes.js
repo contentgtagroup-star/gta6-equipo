@@ -82,16 +82,16 @@ export async function pasoPublicacion (item, checkpoint) {
   }
   if (item.plataforma === 'x') {
     if (item.remoto_id) {
-      const d = await buffer(`query { post(id: ${JSON.stringify(item.remoto_id)}) { id status externalLink sentAt } }`, t)
+      const d = await buffer(`query { post(input: {id: ${JSON.stringify(item.remoto_id)}}) { id status externalLink sentAt } }`, t)
       if (d.post?.sentAt) return { estado: 'publicado', enlace: d.post.externalLink, publicacion_remota: item.remoto_id }
       if (String(d.post?.status).toLowerCase().includes('fail')) throw errorPublicacion('Buffer no pudo publicar en X. Revisá la conexión.', 422)
       return { etapa: 'confirmando' }
     }
-    const canal = (await buffer(`query { channel(id: ${JSON.stringify(t.channel_id)}) { service isDisconnected isLocked } }`, t)).channel
+    const canal = (await buffer(`query { channel(input: {id: ${JSON.stringify(t.channel_id)}}) { service isDisconnected isLocked } }`, t)).channel
     if (!canal || String(canal.service).toLowerCase() !== 'twitter' || canal.isDisconnected || canal.isLocked) throw errorPublicacion('Revisá que el canal de Buffer sea la cuenta de X conectada del equipo.', 424)
-    const assets = item.video_path ? `assets: [{video: {url: ${JSON.stringify(await video(item))}}}]` : item.imagenes?.length ? 'assets: [' + (await imagenes(item)).map(u => '{image: {url: ' + JSON.stringify(u) + '}}').join(',') + ']' : ''
+    const assets = item.video_path ? `assets: [{video: {url: ${JSON.stringify(await video(item))}}}]` : item.imagenes?.length ? 'assets: [' + (await imagenes(item)).map(u => '{image: {url: ' + JSON.stringify(u) + '}}').join(',') + ']' : 'assets: []'
     await checkpoint({ etapa: 'publicando' })
-    const d = await buffer(`mutation { createPost(input: {channelId: ${JSON.stringify(t.channel_id)}, text: ${JSON.stringify(texto)}, schedulingType: automatic, mode: shareNow, ${assets}}) { ... on PostActionSuccess { post { id sentAt externalLink } } ... on MutationError { message } } }`, t)
+    const d = await buffer(`mutation { createPost(input: {channelId: ${JSON.stringify(t.channel_id)}, text: ${JSON.stringify(texto)}, schedulingType: automatic, mode: shareNow, needsApproval: false, ${assets}}) { __typename ... on PostActionSuccess { post { id sentAt externalLink } } } }`, t)
     if (!d.createPost?.post?.id) throw errorPublicacion('Buffer rechazó el contenido o la cuenta de X.', 422)
     return { remoto_id: d.createPost.post.id, enlace: d.createPost.post.externalLink || '', estado: d.createPost.post.sentAt ? 'publicado' : 'procesando', etapa: 'confirmando' }
   }

@@ -55,6 +55,8 @@ test('X verifica el canal y publica por Buffer, sin usar la API de X', async () 
   assert.equal(d.estado, 'publicado')
   const mutation = llamadas.find(l => l.url === 'https://api.buffer.com/' && JSON.parse(l.op.body).query.includes('createPost'))
   assert.match(JSON.parse(mutation.op.body).query, /mode: shareNow/)
+  assert.match(JSON.parse(mutation.op.body).query, /needsApproval: false/)
+  assert.match(JSON.parse(llamadas.find(l => l.url === 'https://api.buffer.com/').op.body).query, /channel\(input:/)
   assert.ok(llamadas.every(l => !new URL(l.url).hostname.endsWith('x.com')))
 })
 test('Facebook espera confirmación sin repetir finish', async () => {

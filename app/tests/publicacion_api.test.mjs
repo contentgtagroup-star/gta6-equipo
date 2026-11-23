@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import handler from '../api/publicacion.js'
 import { procesarPublicaciones } from '../lib/publicacion_worker.js'
 import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
+import { encolarPub, admitirPub } from '../lib/publicacion_store.js'
+import { diaArgentina } from '../lib/programacion.js'
 
 Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: '{"Eze":"clave-de-prueba-suficientemente-larga"}', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 2).toString('base64') })
 const tablas = { docs: [], publicacion_docs: [] }, remotas = []
@@ -14,7 +16,7 @@ globalThis.fetch = async (url, opciones = {}) => {
   const tabla = tablas[u.pathname.split('/').at(-1)]
   assert.ok(tabla, u.pathname)
   const coincide = d => [...u.searchParams].every(([k, v]) => {
-    if (v.startsWith('eq.')) return String(d[k]) === v.slice(3)
+    if (v.startsWith('eq.')) return String(k.startsWith('datos->>') ? d.datos[k.slice(8)] : d[k]) === v.slice(3)
     if (k === 'datos->>estado' && v.startsWith('in.')) return v.slice(4, -1).split(',').includes(d.datos.estado)
     return true
   })
@@ -52,7 +54,63 @@ test('aprobar crea un envío por red y la repetición no duplica la cola', async
   const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola')
   assert.equal(cola.length, 2)
   assert.ok(cola.every(x => x.datos.aprobado_por === 'Eze'))
+  assert.equal(new Set(cola.map(x => x.datos.programado_el)).size, 1)
+  assert.ok(cola[0].datos.programado_el > Date.now())
   assert.equal(remotas.length, 0)
+})
+test('aprobar el short elige las redes conectadas, programa y no duplica', async () => {
+  reset()
+  tablas.docs.push({ coleccion: 'clips', id: 'clip1', version: 1, datos: { estado: 'listo', titulo: 'Un misterio en GTA', video_path: 'Eze/clip.mp4' } })
+  assert.equal((await llamada({ op: 'aprobar_clip', id: 'clip1', version: 1 })).codigo, 422)
+  for (const proveedor of ['google', 'buffer', 'tiktok']) tablas.publicacion_docs.push({ coleccion: 'conexiones', id: proveedor, version: 1, datos: { estado: 'conectada' } })
+  const r = await llamada({ op: 'aprobar_clip', id: 'clip1', version: 1 })
+  assert.equal(r.codigo, 200)
+  assert.ok(r.datos.programado_el > Date.now())
+  const cola = tablas.publicacion_docs.filter(d => d.coleccion === 'cola')
+  assert.deepEqual(cola.map(d => d.datos.plataforma).sort(), ['tiktok', 'x', 'youtube'])
+  assert.equal(new Set(cola.map(d => d.datos.programado_el)).size, 1)
+  assert.equal((await llamada({ op: 'aprobar_clip', id: 'clip1', version: 3 })).codigo, 409)
+  assert.equal(tablas.publicacion_docs.filter(d => d.coleccion === 'cola').length, 3)
+  assert.equal(remotas.length, 0)
+})
+test('aprobaciones concurrentes de dos personas respetan seis shorts y un turno por origen', async () => {
+  reset()
+  // Grupos concurrentes fuerzan conflictos de versión en la agenda compartida.
+  for (let n = 0; n < 14; n += 2) await Promise.all([0, 1].map(i => encolarPub('clip-' + (n + i), sugerencia().datos, i ? 'Cuervo' : 'Eze')))
+  const cola = tablas.publicacion_docs.filter(d => d.coleccion === 'cola'), dias = {}
+  assert.equal(cola.length, 28)
+  for (let n = 0; n < 14; n++) {
+    const destinos = cola.filter(d => d.datos.origen_id === 'clip-' + n)
+    assert.equal(new Set(destinos.map(d => d.datos.programado_el)).size, 1)
+    const dia = diaArgentina(destinos[0].datos.programado_el)
+    dias[dia] = (dias[dia] || 0) + 1
+  }
+  assert.ok(Object.values(dias).every(n => n <= 6))
+  await encolarPub('clip-0', sugerencia().datos, 'Eze')
+  assert.equal(tablas.publicacion_docs.filter(d => d.coleccion === 'cola').length, 28)
+})
+test('un horario vencido se reprograma y el límite real no cuenta dos veces sus redes', async () => {
+  reset()
+  const ahora = Date.parse('2026-11-23T12:00:00-03:00'), dia = diaArgentina(ahora)
+  tablas.publicacion_docs.push({ coleccion: 'conexiones', id: 'programacion-global', version: 1, datos: { reservas: { tarde: { programado_el: ahora - 3600000, dia, franja: 0 }, puntual: { programado_el: ahora - 1000, dia, franja: 1 } }, ejecuciones: {} } })
+  const tarde = await admitirPub('tarde', ahora)
+  assert.equal(tarde.listo, false); assert.ok(tarde.programado_el > ahora)
+  assert.equal((await admitirPub('puntual', ahora)).listo, true)
+  assert.equal((await admitirPub('puntual', ahora + 120000)).listo, true)
+  const agenda = tablas.publicacion_docs.find(d => d.id === 'programacion-global')
+  assert.equal(Object.keys(agenda.datos.ejecuciones[dia]).length, 1)
+  agenda.datos.ejecuciones[dia] = Object.fromEntries(Array.from({ length: 6 }, (_, n) => ['enviado-' + n, ahora]))
+  agenda.datos.reservas.otro = { programado_el: ahora - 1000, dia, franja: 2 }
+  const otro = await admitirPub('otro', ahora)
+  assert.equal(otro.listo, false); assert.equal(otro.dia, '2026-11-24')
+})
+test('el worker espera su horario y mantiene en espera la cola anterior sin agenda', async () => {
+  reset(); process.env.PUBLICACION_ACTIVA = '1'
+  await encolarPub('clip-futuro', sugerencia().datos, 'Eze')
+  tablas.publicacion_docs.push({ coleccion: 'cola', id: 'viejo', version: 1, datos: { estado: 'pendiente', aprobado_por: 'Eze', plataforma: 'x', proximo_el: 1 } })
+  await procesarPublicaciones('Eze')
+  assert.equal(remotas.length, 0)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'viejo').datos.estado, 'pendiente')
 })
 test('no aprueba material sin revisar ni permite publicar imágenes como Short', async () => {
   reset(); const d = sugerencia(); d.datos.media_lista = false; tablas.publicacion_docs.push(d)

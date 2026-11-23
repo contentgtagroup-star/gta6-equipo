@@ -164,13 +164,17 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       const { data: c, error } = await db().from('docs').select('id,datos,version').eq('coleccion', 'clips').eq('id', b.id).maybeSingle()
       if (error || !c || !['listo', 'aprobado'].includes(c.datos.estado)) throw errorPublicacion('El clip no está listo para aprobar.', 409)
       if (b.version !== c.version) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
-      const datos = contenidoValido({ ...c.datos, titulo: String(c.datos.titulo || c.datos.gancho || 'Clip GTA 6').slice(0, 60), descripcion: c.datos.descripcion || 'Un momento de GTA 6.', plataformas: redesValidas(b.plataformas), media: 'reusar' })
+      if (c.datos.publicacion_cola) throw errorPublicacion('El clip ya está aprobado para publicaciones. Revisá su horario en la cola.', 409)
+      const plataformas = b.plataformas === undefined ? (await estadosConexiones()).filter(r => ['conectada', 'token_vencido'].includes(r.estado)).map(r => r.id) : redesValidas(b.plataformas)
+      if (!plataformas.length) throw errorPublicacion('Conectá una red en Publicaciones antes de aprobar el short.', 422)
+      const datos = contenidoValido({ ...c.datos, titulo: String(c.datos.titulo || c.datos.gancho || 'Clip GTA 6').slice(0, 60), descripcion: c.datos.descripcion || 'Un momento de GTA 6.', plataformas, media: 'reusar' })
       if (!datos.video_path) throw errorPublicacion('El clip todavía no tiene video.', 422)
       const snapshot = { ...datos, clip_id: c.id, fuente_url: c.datos.url || '', aprobado_el: Date.now() }
       const aprobacion = { ...c.datos, estado: 'aprobado', aprobado_por: yo, publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: snapshot }
       const { data, error: e } = await db().from('docs').update({ datos: aprobacion, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version).select('version')
       if (e || !data?.length) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
       salida.ids = await encolar('clip-' + c.id, snapshot, yo)
+      salida.programado_el = (await leerPub('cola', salida.ids[0]))?.datos.programado_el
       await db().from('docs').update({ datos: { ...aprobacion, publicacion_encolada: true }, version: c.version + 2 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version + 1)
     } else if (b.op === 'cola_editar' || b.op === 'cola_cancelar' || b.op === 'cola_preparar') {
       const d = await exigirItem('cola', b.id, b.version)
@@ -184,7 +188,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       } else {
         const contenido = contenidoValido({ ...d.datos, ...b.datos, plataformas: [d.datos.plataforma] })
         if (['video_path', 'imagenes', 'recorte', 'instrucciones_media', 'media'].some(k => JSON.stringify(contenido[k] || '') !== JSON.stringify(d.datos[k] || ''))) throw errorPublicacion('El cambio de material necesita preparación y una nueva revisión.', 422)
-        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: 'pendiente', error: '', proximo_el: Date.now() }, d.version)
+        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: 'pendiente', error: '', proximo_el: Math.max(Date.now(), d.datos.programado_el || 0) }, d.version)
       }
       await eventoPub(b.op, yo, { item_id: d.id, aprobado_por: yo })
     } else if (b.op === 'confirmar_manual') {

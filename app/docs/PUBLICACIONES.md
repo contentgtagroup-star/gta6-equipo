@@ -17,7 +17,7 @@ por lectura: una migración al panel requiere transferirlos por un canal seguro.
 | `PUBLICACION_ORIGIN` | Origen HTTPS del panel, sin barra final |
 | `PUBLICACION_CIPHER_KEY` | Clave aleatoria de 32 bytes codificada en base64 para cifrar los tokens guardados |
 | `META_APP_ID`, `META_APP_SECRET`, `META_PAGE_ID` | App Business y página autorizada de Meta |
-| `META_AUTH_MODE` | `system_user` conecta con el token del usuario del sistema en vez del OAuth del panel |
+| `META_AUTH_MODE` | Opcional: `system_user` fuerza el modo sistema; si falta, se activa solo con que exista `META_SYSTEM_USER_TOKEN` |
 | `META_SYSTEM_USER_TOKEN` | Token generado en Configuración del negocio → Usuarios del sistema para la app del panel |
 | `META_GRAPH_VERSION` | Versión Graph habilitada por la app; por defecto v27.0 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_CHANNEL_ID` | OAuth del canal; habilitar YouTube Data API y YouTube Analytics API |
@@ -33,7 +33,7 @@ Registrar cada uno en su proveedor y conectar desde el panel. Buffer usa su clav
 personal de API en el servidor; el botón comprueba su acceso, no pide contraseñas.
 No rotar la clave de cifrado sin migrar antes los tokens existentes o reconectar.
 
-Con `META_AUTH_MODE=system_user`, Meta no pasa por el OAuth del panel. El botón
+Cuando existe `META_SYSTEM_USER_TOKEN` (o `META_AUTH_MODE=system_user`), Meta no pasa por el OAuth del panel. El botón
 Conectar/Reconectar lee `META_SYSTEM_USER_TOKEN` desde Vercel, comprueba con
 `/debug_token` que pertenezca a la app (`META_APP_ID`), que sea de tipo
 `SYSTEM_USER` y que esté vigente; después verifica el acceso a `META_PAGE_ID` y

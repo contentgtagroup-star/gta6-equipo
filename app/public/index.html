@@ -189,8 +189,18 @@ html{-webkit-text-size-adjust:100%}
           <button class="primary" id="btnTurno">CREAR CLIPS</button>
           <button id="btnActualizar">Actualizar mi sistema</button>
           <label style="flex-direction:row;align-items:center;gap:6px;font-size:13px">Clips por turno
-            <select id="cuantos" style="width:auto"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+            <select id="cuantos" style="width:auto"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
           </label>
+        </div>
+        <div class="bloque-link" style="margin-top:14px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+          <h3 style="font-size:14.5px;margin:0 0 4px">Crear clip desde un link</h3>
+          <p class="small dim" style="margin:0 0 10px">Pegá un link de YouTube o Twitch (video, directo o clip) para hacer un clip puntual con tu compu.</p>
+          <form id="clipDirectoForm" class="row" style="gap:8px">
+            <input id="clipDirectoIn" type="url" required placeholder="Pegá un link de YouTube o Twitch (ej. video, directo o clip)" style="flex:3 1 240px">
+            <button class="primary" type="submit" id="btnClipDirecto" style="white-space:nowrap">CREAR CLIP</button>
+            <button type="button" class="ghost" id="btnClipDirectoCola" style="white-space:nowrap">Solo a la cola</button>
+          </form>
+          <div class="small" id="clipDirectoFeedback" style="margin-top:6px" aria-live="polite"></div>
         </div>
         <div class="small" id="escuchaTxt" style="margin-top:10px"></div>
         <div class="small" id="turnoTxt" style="margin-top:8px"></div>
@@ -262,7 +272,7 @@ const FILTROS = [
 const hoy = new Date();
 document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
-const S = {versionActual:29, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
+const S = {versionActual:45, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600); }
@@ -288,7 +298,7 @@ async function cargar(){
     const d = await api('/api/estado');
     const firma = JSON.stringify(d, (k, v) => (k === 'video_url' || k === 'ahora' || k === 'latido') ? undefined : v);
     const igual = firma === S.firma; S.firma = firma;
-    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 29; S.offset = (d.ahora||Date.now()) - Date.now();
+    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 45; S.offset = (d.ahora||Date.now()) - Date.now();
     estado('Conectado · se actualiza solo');
     $('yoTxt').textContent = 'Sos ' + S.yo; $('btnSalir').hidden = false;
     renderTurno();
@@ -626,7 +636,10 @@ function renderRadar(){
 }
 // Links pegados a mano: van primeros en la cola del motor (ver elegir_video en equipo.py)
 function leerLink(txt){
-  let u; try{ u = new URL(txt.trim()); }catch(e){ return null; }
+  let s = (txt || '').trim();
+  if(!s) return null;
+  if(!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  let u; try{ u = new URL(s); }catch(e){ return null; }
   const h = u.hostname.replace(/^(www|m|clips)\./, ''), partes = u.pathname.split('/').filter(Boolean);
   if(h === 'youtu.be' && partes[0]) return {id: partes[0], url: 'https://www.youtube.com/watch?v=' + partes[0], fuente: 'YouTube'};
   if(h === 'youtube.com'){
@@ -637,6 +650,8 @@ function leerLink(txt){
     if(partes[0] === 'videos' && /^\d+$/.test(partes[1]||'')) return {id: 'twitch_v' + partes[1], url: 'https://www.twitch.tv/videos/' + partes[1], fuente: 'Twitch'};
     const clip = partes[1] === 'clip' ? partes[2] : (u.hostname.startsWith('clips.') ? partes[0] : null);
     if(clip) return {id: 'twitch_c' + clip.slice(0, 100), url: 'https://clips.twitch.tv/' + clip, fuente: 'Twitch', canal: partes[1] === 'clip' ? partes[0] : ''};
+    if(partes.length === 1 && !['directory','p','search','settings','downloads','wallet','subscriptions','inventory','messages'].includes(partes[0].toLowerCase()))
+      return {id: 'twitch_live_' + partes[0], url: 'https://www.twitch.tv/' + partes[0], fuente: 'Twitch', canal: partes[0]};
     return null;
   }
   if(['x.com','twitter.com','mobile.twitter.com','fxtwitter.com','vxtwitter.com'].includes(h) && partes[1] === 'status' && /^\d+$/.test(partes[2]||''))
@@ -687,6 +702,84 @@ $('linkForm').addEventListener('submit', async e => {
     await cargar();
   }catch(err){ toast(err.message || 'No se pudo guardar el link'); }
 });
+async function procesarClipDirecto(soloCola){
+  if(!S.yo){ toast('Primero entrá con tu clave'); return; }
+  const miVersion = Number(S.escucha[S.yo]?.version) || 0;
+  if(miVersion < S.versionActual){
+    toast('Tenés que actualizar tu sistema antes de crear clips');
+    return;
+  }
+  const raw = $('clipDirectoIn').value.trim();
+  if(!raw){ toast('Pegá un link primero'); return; }
+  const l = leerLink(raw);
+  if(!l || !['YouTube', 'Twitch', 'Kick'].includes(l.fuente)){
+    toast('Pegá un link válido de YouTube o Twitch (video, directo o clip)');
+    return;
+  }
+  const btn = $('btnClipDirecto');
+  const btnCola = $('btnClipDirectoCola');
+  const fb = $('clipDirectoFeedback');
+  btn.disabled = true;
+  if(btnCola) btnCola.disabled = true;
+  fb.textContent = soloCola ? 'Guardando link en la cola…' : 'Enviando link y preparando turno…';
+
+  try {
+    await guardarDoc('radar', 'actual', datos => {
+      datos.videos = datos.videos || [];
+      const idx = datos.videos.findIndex(v => v.id === l.id);
+      if(idx >= 0){
+        datos.videos[idx].manual = true;
+        datos.videos[idx].para = S.yo;
+        if(datos.videos[idx].estado !== 'tomado') datos.videos[idx].estado = 'libre';
+      } else {
+        datos.videos.unshift({
+          id: l.id,
+          url: l.url,
+          titulo: l.fuente + ' · ' + l.url.replace(/^https:\/\/(www\.)?/, ''),
+          canal: l.canal || '',
+          vistas: 0,
+          vph: 0,
+          idioma: '',
+          alerta: false,
+          para: S.yo,
+          estado: 'libre',
+          manual: true,
+          agregado_por: S.yo,
+          cargado_el: Date.now()
+        });
+      }
+    });
+
+    if(soloCola){
+      $('clipDirectoIn').value = '';
+      fb.innerHTML = '<span style="color:var(--ok)">✓ Link guardado en la cola (' + l.fuente + '). Tu compu lo toma en su próximo turno.</span>';
+      toast('Link guardado en la cola para tu compu');
+      await cargar();
+    } else {
+      const fuente = l.fuente === 'YouTube' ? 'youtube' : 'twitch';
+      const categoria = S.categoria;
+      const r = await api('/api/turno', {
+        op: 'pedir',
+        cantidad: 1,
+        fuente,
+        ...(categoria ? { categoria } : {})
+      });
+      $('clipDirectoIn').value = '';
+      fb.innerHTML = '<span style="color:var(--ok)">✓ Link recibido (' + l.fuente + '). Tu compu va a crear el clip.</span>';
+      toast(r.asignado ? 'Pedido recibido. Tu compu va a crear el clip.' : 'Pedido en cola. Arranca cuando tu compu esté disponible.');
+      await cargar();
+      renderTurno();
+    }
+  } catch(err) {
+    fb.innerHTML = '<span style="color:var(--bad)">' + (err.message || 'No se pudo procesar el link') + '</span>';
+    toast(err.message || 'Error al procesar el link');
+  } finally {
+    btn.disabled = false;
+    if(btnCola) btnCola.disabled = false;
+  }
+}
+$('clipDirectoForm').addEventListener('submit', e => { e.preventDefault(); procesarClipDirecto(false); });
+$('btnClipDirectoCola').addEventListener('click', () => { procesarClipDirecto(true); });
 async function borrarReferencia(id){
   try{ await guardarDoc('fuentes', 'referencias', datos => { datos.items = (datos.items || []).filter(x => x.id !== id); }); toast('Referencia borrada'); await cargar(); }
   catch(err){ toast(err.message || 'No se pudo borrar'); }

@@ -1,6 +1,6 @@
 /* Usa la conexión, componentes y paleta del panel existente. */
 (() => {
-  const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '' }
+  const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '' }
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
   const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', conectada: 'Conectada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
   const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
@@ -47,12 +47,20 @@
   async function cargar(forzar = false) {
     if (!S.clave || P.cargando || P.modal && !forzar) return
     P.cargando = true
+    P.error = ''
+    if (!P.datos) render()
     try {
       const datos = await api('/api/publicacion'), firma = JSON.stringify(datos)
+      const sinDatos = !P.datos
       P.datos = datos
       $('pubEstado').textContent = datos.automatico_activo ? 'Solo se envía material aprobado. YouTube y TikTok quedan en borrador.' : 'Podés preparar y revisar publicaciones. Los envíos automáticos todavía están en espera.'
-      if (firma !== P.firma || forzar) { P.firma = firma; render() }
-    } catch (e) { $('pubEstado').textContent = e.status === 503 ? 'Publicaciones todavía necesita completar la configuración. La biblioteca y el motor de clips siguen disponibles.' : e.message }
+      if (firma !== P.firma || forzar || sinDatos) { P.firma = firma; render() }
+    } catch (e) {
+      P.error = e.message || 'No se pudieron cargar las publicaciones. Probá Actualizar.'
+      P.datos = null
+      $('pubEstado').textContent = P.error
+      render()
+    }
     finally { P.cargando = false }
   }
   function render() {
@@ -60,7 +68,11 @@
     $('pubTabs').replaceChildren(...Object.entries(tabs).map(([id, texto]) => boton(texto, () => { P.tab = id; render() }, 'tiny' + (P.tab === id ? ' primary' : ''))))
     for (const b of $('pubTabs').children) b.setAttribute('aria-pressed', b.textContent === tabs[P.tab] ? 'true' : 'false')
     const box = $('pubContenido'); box.replaceChildren()
-    if (!P.datos) { box.append(el('p', { class: 'small muted' }, 'Entrá con tu clave para ver las publicaciones.')); return }
+    if (!S.clave) { box.append(el('p', { class: 'small muted' }, 'Entrá al panel para ver las publicaciones.')); return }
+    if (!P.datos) {
+      box.append(el('p', { class: 'small muted' }, P.error ? 'Ya estás dentro del panel. No necesitás volver a ingresar tu clave. La biblioteca y el motor de clips siguen disponibles.' : 'Cargando publicaciones…'))
+      return
+    }
     ;({ conexiones, fuentes, sugerencias, cola, actividad, metricas })[P.tab](box)
   }
   function conexiones(box) {
@@ -99,7 +111,7 @@
         el('p', { class: 'small muted' }, f.nota), f.estado_inicial && el('p', { class: 'small muted' }, 'Estado al importar: ' + f.estado_inicial),
         t && el('p', { class: 'small' }, (etiquetas[t.estado] || t.estado) + (t.error ? ': ' + t.error : '')),
         el('div', { class: 'row' }, boton('Editar', () => editarFuente(f)),
-          boton('Generar trabajo', async () => { await post({ op: 'generar', id: f.id }); toast('Trabajo en cola para una compu del equipo'); await cargar(true) }),
+          boton('Generar trabajo', async () => { await post({ op: 'generar', id: f.id }); toast('Trabajo en cola para tu compu'); await cargar(true) }),
           boton('Quitar', async () => { await post({ op: 'fuente_quitar', id: f.id, version: f._version }); await cargar(true) }, 'tiny ghost danger'))))
     }
     if (!P.datos.fuentes.length) box.append(el('p', { class: 'small muted' }, 'Todavía no hay fuentes. Agregá una o importá el CSV del equipo.'))

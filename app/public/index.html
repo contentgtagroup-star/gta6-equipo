@@ -140,29 +140,15 @@ html{-webkit-text-size-adjust:100%}
   </div>
 
   <section id="seccionCrearLink">
-    <h2>Hacer clip desde un link (YouTube / Twitch)</h2>
-    <p class="small dim" style="margin:4px 0 0">Pegá un link de YouTube o Twitch (video, directo o clip) que te parezca interesante para hacer un clip editado con ese material puntual.</p>
+    <h2>Pegá un link</h2>
+    <p class="small dim" style="margin:4px 0 0">ALIMENTAR lo guarda como referencia para la IA. CREAR CLIP hace un short con ese material específico en tu compu (YouTube, Twitch o Kick).</p>
     <form id="clipDirectoForm" class="row" style="margin:10px 0 0;gap:8px">
-      <input id="clipDirectoIn" type="url" required placeholder="Pegá un link de YouTube o Twitch (ej. https://youtube.com/watch?v=... o https://clips.twitch.tv/...)" style="flex:3 1 260px">
+      <input id="clipDirectoIn" type="url" required aria-label="Link del material" placeholder="Pegá un link de YouTube, Twitch, Kick o X" style="flex:3 1 260px">
       <input id="clipDirectoNota" maxlength="200" placeholder="¿Qué momento o idea tiene de interesante? (opcional)" style="flex:2 1 200px">
+      <button type="submit" class="ghost" id="btnAlimentar" style="white-space:nowrap">ALIMENTAR</button>
       <button class="primary" type="submit" id="btnClipDirecto" style="white-space:nowrap">CREAR CLIP</button>
-      <button type="button" class="ghost" id="btnClipDirectoCola" style="white-space:nowrap">Solo a la cola</button>
     </form>
     <div class="small" id="clipDirectoFeedback" style="margin-top:6px" aria-live="polite"></div>
-  </section>
-
-  <section>
-    <details id="refsBox">
-      <summary>Referencias para la IA (<span id="refsCount">0</span>)</summary>
-      <p class="small dim" style="margin:6px 0 0">Links de contenido que el equipo guardó como ejemplo. La IA los consulta en cada pedido para aprender qué momentos, temas y ganchos funcionan mejor.</p>
-      <form id="linkForm" class="row" style="margin:10px 0 0">
-        <input id="linkIn" type="url" required placeholder="Pegá un link de YouTube, Twitch, Kick o X" style="flex:3 1 260px">
-        <input id="linkNota" maxlength="200" placeholder="¿Qué tiene de bueno? (opcional)" style="flex:2 1 200px">
-        <label class="small" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="linkClip" style="width:auto"> Usarlo también para hacer clips</label>
-        <button class="primary" type="submit">Agregar</button>
-      </form>
-      <div id="refs" class="small" style="margin-top:8px"></div>
-    </details>
   </section>
 
   <section>
@@ -276,7 +262,7 @@ const FILTROS = [
 const hoy = new Date();
 document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
-const S = {versionActual:47, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
+const S = {versionActual:48, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600); }
@@ -302,7 +288,7 @@ async function cargar(){
     const d = await api('/api/estado');
     const firma = JSON.stringify(d, (k, v) => (k === 'video_url' || k === 'ahora' || k === 'latido') ? undefined : v);
     const igual = firma === S.firma; S.firma = firma;
-    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 47; S.offset = (d.ahora||Date.now()) - Date.now();
+    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 48; S.offset = (d.ahora||Date.now()) - Date.now();
     estado('Conectado · se actualiza solo');
     $('yoTxt').textContent = 'Sos ' + S.yo; $('btnSalir').hidden = false;
     renderTurno();
@@ -690,33 +676,33 @@ async function guardarDoc(col, id, cambiar){
   }
   throw new Error('Alguien cambió la lista recién: probá de nuevo');
 }
-$('linkForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const l = leerLink($('linkIn').value);
+async function alimentarReferencia(){
+  if(!S.yo){ toast('Primero entrá con tu clave'); return; }
+  if($('btnAlimentar').disabled || $('btnClipDirecto').disabled) return;
+  const l = leerLink($('clipDirectoIn').value);
   if(!l){ toast('Ese link no es de un video de YouTube, Twitch, Kick o un post de X'); return; }
-  const nota = $('linkNota').value.trim(), clip = $('linkClip').checked;
+  const nota = $('clipDirectoNota').value.trim();
+  const fb = $('clipDirectoFeedback');
+  $('btnAlimentar').disabled = true; $('btnClipDirecto').disabled = true;
+  fb.textContent = 'Guardando referencia…';
   try{
     let repetida = false;
     await guardarDoc('fuentes', 'referencias', datos => {
       datos.items = datos.items || [];
+      repetida = false;
       if(datos.items.some(x => x.id === l.id)){ repetida = true; return false; }
       datos.items = [...datos.items, {id: l.id, url: l.url, plataforma: l.fuente, canal: l.canal || '', nota, agregado_por: S.yo, el: Date.now()}].slice(-100);
     });
-    if(clip){
-      await guardarDoc('radar', 'actual', datos => {
-        datos.videos = datos.videos || [];
-        if(datos.videos.some(v => v.id === l.id)) return false;
-        datos.videos.push({id: l.id, url: l.url, titulo: l.fuente + ' · ' + l.url.replace(/^https:\/\/(www\.)?/, ''), canal: l.canal || '', vistas: 0, vph: 0,
-          idioma: '', alerta: false, para: null, estado: 'libre', manual: true, agregado_por: S.yo, cargado_el: Date.now()});
-      });
-    }
-    $('linkIn').value = ''; $('linkNota').value = ''; $('linkClip').checked = false;
-    toast(repetida ? (clip ? 'Ya era referencia; quedó también para clips' : 'Esa referencia ya estaba') : clip ? 'Referencia guardada y en la cola de clips' : 'Referencia guardada: la IA la usa desde el próximo pedido');
+    $('clipDirectoIn').value = ''; $('clipDirectoNota').value = '';
+    fb.textContent = repetida ? 'Ese enlace ya estaba guardado como referencia.' : 'Referencia guardada. La IA la usa desde el próximo pedido.';
+    toast(fb.textContent);
     await cargar();
-  }catch(err){ toast(err.message || 'No se pudo guardar el link'); }
-});
-async function procesarClipDirecto(soloCola){
+  }catch(err){ fb.textContent = err.message || 'No se pudo guardar la referencia'; toast(fb.textContent); }
+  finally { $('btnAlimentar').disabled = false; $('btnClipDirecto').disabled = false; }
+}
+async function procesarClipDirecto(){
   if(!S.yo){ toast('Primero entrá con tu clave'); return; }
+  if($('btnAlimentar').disabled || $('btnClipDirecto').disabled) return;
   const miVersion = Number(S.escucha[S.yo]?.version) || 0;
   if(miVersion < S.versionActual){
     toast('Tenés que actualizar tu sistema antes de crear clips');
@@ -726,62 +712,19 @@ async function procesarClipDirecto(soloCola){
   if(!raw){ toast('Pegá un link primero'); return; }
   const l = leerLink(raw);
   if(!l || !['YouTube', 'Twitch', 'Kick'].includes(l.fuente)){
-    toast('Pegá un link válido de YouTube o Twitch (video, directo o clip)');
+    toast('Para crear un clip usá YouTube, Twitch o Kick. Los posts de X se pueden guardar con ALIMENTAR.');
     return;
   }
   const nota = ($('clipDirectoNota')?.value || '').trim();
   const btn = $('btnClipDirecto');
-  const btnCola = $('btnClipDirectoCola');
+  const btnAlimentar = $('btnAlimentar');
   const fb = $('clipDirectoFeedback');
   const mostrarError = msg => { fb.replaceChildren(el('span', {style:'color:var(--bad)'}, msg)); };
   btn.disabled = true;
-  if(btnCola) btnCola.disabled = true;
-  fb.textContent = soloCola ? 'Guardando link en la cola…' : 'Enviando link y preparando turno…';
+  btnAlimentar.disabled = true;
+  fb.textContent = 'Enviando link y preparando turno…';
 
   try {
-    if(soloCola){
-      let problema = '', repetida = false;
-      await guardarDoc('radar', 'actual', datos => {
-        datos.videos = datos.videos || [];
-        const idx = datos.videos.findIndex(v => v.id === l.id);
-        if(idx >= 0){
-          const previo = datos.videos[idx];
-          if((previo.estado || 'libre') === 'hecho'){ problema = 'usado'; return false; }
-          if(previo.estado === 'tomado'){ problema = 'tomado'; return false; }
-          repetida = true;
-          previo.manual = true;
-          previo.para = S.yo;
-          if(nota) previo.nota = nota;
-        } else {
-          datos.videos.unshift({
-            id: l.id,
-            url: l.url,
-            titulo: l.fuente + ' · ' + l.url.replace(/^https:\/\/(www\.)?/, ''),
-            canal: l.canal || '',
-            vistas: 0,
-            vph: 0,
-            idioma: '',
-            alerta: false,
-            para: S.yo,
-            estado: 'libre',
-            manual: true,
-            agregado_por: S.yo,
-            cargado_el: Date.now(),
-            ...(nota ? {nota} : {})
-          });
-        }
-      });
-      if(problema){
-        const msg = problema === 'usado'
-          ? 'Ese enlace ya se usó para un clip. Pegá otro.'
-          : 'Ese enlace lo está trabajando otra compu o pedido. Esperá a que termine o pegá otro.';
-        mostrarError(msg); toast(msg); return;
-      }
-      $('clipDirectoIn').value = ''; $('clipDirectoNota').value = '';
-      fb.innerHTML = '<span style="color:var(--ok)">✓ ' + (repetida ? 'Ese link ya estaba en la cola' : 'Link guardado en la cola') + ' (' + l.fuente + '). Tu compu lo toma en su próximo turno.</span>';
-      toast(repetida ? 'Ese link ya estaba en la cola' : 'Link guardado en la cola para tu compu');
-      await cargar();
-    } else {
       const fuente = l.fuente === 'YouTube' ? 'youtube' : 'twitch';
       const categoria = S.categoria;
       const r = await api('/api/turno', {
@@ -799,40 +742,24 @@ async function procesarClipDirecto(soloCola){
       toast(r.asignado ? 'Pedido recibido. Tu compu va a crear el clip.' : 'Pedido en cola. Arranca cuando tu compu esté disponible.');
       await cargar();
       renderTurno();
-    }
   } catch(err) {
     mostrarError(err.message || 'No se pudo procesar el link');
     toast(err.message || 'Error al procesar el link');
   } finally {
     btn.disabled = false;
-    if(btnCola) btnCola.disabled = false;
+    btnAlimentar.disabled = false;
   }
 }
-$('clipDirectoForm').addEventListener('submit', e => { e.preventDefault(); procesarClipDirecto(false); });
-$('btnClipDirectoCola').addEventListener('click', () => { procesarClipDirecto(true); });
-async function borrarReferencia(id){
-  try{ await guardarDoc('fuentes', 'referencias', datos => { datos.items = (datos.items || []).filter(x => x.id !== id); }); toast('Referencia borrada'); await cargar(); }
-  catch(err){ toast(err.message || 'No se pudo borrar'); }
-}
-function renderReferencias(){
-  const box = $('refs'); box.replaceChildren();
-  const items = [...(S.referencias || [])].reverse();
-  const contador = $('refsCount'); if(contador) contador.textContent = String(items.length);
-  if(!items.length){ box.append(el('p', {class:'dim', style:'margin:0'}, 'Todavía no hay referencias.')); return; }
-  const ver = items.slice(0, S.verRefs ? 100 : 5);
-  box.append(el('ul', {style:'margin:0;padding-left:18px'}, ver.map(x => el('li', {},
-    el('a', {href:x.url, target:'_blank', rel:'noopener'}, (x.titulo || x.plataforma + ' · ' + x.url.replace(/^https:\/\/(www\.)?/, '')).slice(0, 80)),
-    x.nota ? el('span', {class:'dim'}, ' — ' + x.nota) : null,
-    el('span', {class:'dim'}, ' · ' + (x.agregado_por || '')), ' ',
-    el('button', {class:'tiny ghost', 'aria-label':'Borrar referencia', onclick:()=>borrarReferencia(x.id)}, '✕')))));
-  if(items.length > 5) box.append(el('button', {class:'tiny ghost', onclick:()=>{ S.verRefs = !S.verRefs; renderReferencias(); }}, S.verRefs ? 'Ver menos' : `Ver las ${items.length}`));
-}
+$('clipDirectoForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if(e.submitter?.id === 'btnClipDirecto') procesarClipDirecto(); else alimentarReferencia();
+});
 function renderSetup(){
   const box = $('setup'); box.replaceChildren();
   box.append(el('p', {class:'small muted', style:'margin:0 0 10px'}, 'Elegí tu sistema: se abre el prompt para copiar y pegar en Claude Code.'),
     el('div', {class:'row'}, ['Mac','Windows','Linux'].map(so => el('button', {onclick:()=>{ if(!S.clave){ toast('Primero entrá con tu clave'); return; } abrirPrompt('Preparar ' + so, promptSetup(so)); }}, so))));
 }
-function render(){ renderPeople(); renderTurno(); renderFiltros(); renderLib(); renderRadar(); renderReferencias(); }
+function render(){ renderPeople(); renderTurno(); renderFiltros(); renderLib(); renderRadar(); }
 
 $('btnTurno').addEventListener('click', () => { if(S.yo && !S.pidiendo) elegirFuente(); });
 $('btnActualizar').addEventListener('click', () => { if(S.yo) abrirPrompt('Actualizar mi sistema', promptActualizar()); });

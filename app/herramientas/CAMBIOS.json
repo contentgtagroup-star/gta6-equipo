@@ -1,6 +1,7 @@
 {
- "version": 47,
+ "version": 48,
  "cambios": [
+  {"v": 48, "fecha": "2026-11-23", "texto": "Un solo espacio arriba para pegar material: ALIMENTAR guarda el link como referencia para la IA y CREAR CLIP pide un short con ese enlace específico en tu compu. Las referencias quedan guardadas sin mostrar una lista debajo del formulario.", "manual": null},
   {"v": 47, "fecha": "2026-11-23", "texto": "Cada pedido se procesa en la compu de quien lo solicita: clips, correcciones, sugerencias y preparación de material. Si esa compu está apagada u ocupada, espera allí. El rastreo automático queda ligado a quien lo configuró y los envíos aprobados los avanza su propia compu.", "manual": null},
   {"v": 46, "fecha": "2026-11-23", "texto": "Crear un clip desde un link quedó cerrado: hay un solo formulario, la nota viaja con el pedido y el motor usa exactamente ese enlace, también al esperar en cola, pausar, reanudar o reintentar. Si el link ya se usó, lo está trabajando otro pedido o no es apto, el panel lo dice claro y no toma otro video. El radar y «Solo a la cola» siguen funcionando igual. Cada pedido queda atado a la compu que lo pidió, aunque venza la reserva o esa compu esté apagada.", "manual": null},
   {"v": 45, "fecha": "2026-11-22", "texto": "Espacio en el panel para crear un clip directo desde cualquier link de YouTube o Twitch (video, directo o clip). El enlace entra con máxima prioridad para la compu asignada y genera un pedido para procesar ese clip puntual.", "manual": null},

@@ -89,3 +89,21 @@ test('la respuesta exitosa de TikTok con error.code=ok se acepta y los errores n
     await assert.rejects(jsonRemoto('https://example.test'), e => e.status === 424 && !e.message.includes('token-secreto'))
   } finally { globalThis.fetch = original }
 })
+
+test('los errores OAuth y de perfil de TikTok se explican sin mostrar descripciones privadas', async () => {
+  const original = globalThis.fetch
+  try {
+    for (const [error, esperado] of [
+      ['invalid_client', 'invalid_client'],
+      ['invalid_grant', 'invalid_grant'],
+      [{ code: 'scope_permission_missed', message: 'token-no-mostrar' }, 'scope_permission_missed'],
+      ['texto-secreto-no-mostrar', 'error_no_identificado']
+    ]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({ error, error_description: 'token-no-mostrar' }), { status: 400 })
+      await assert.rejects(jsonRemoto('https://open.tiktokapis.com/v2/oauth/token/'), e =>
+        e.codigoRemoto === esperado && e.remoto === 400 && !e.message.includes('no-mostrar'))
+    }
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'invalid_request', error_description: 'Redirect_uri is not matched; token-no-mostrar' }), { status: 400 })
+    await assert.rejects(jsonRemoto('https://open.tiktokapis.com/v2/oauth/token/'), e => e.codigoRemoto === 'redirect_uri_mismatch' && !e.message.includes('no-mostrar'))
+  } finally { globalThis.fetch = original }
+})

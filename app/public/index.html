@@ -262,7 +262,7 @@ const FILTROS = [
 const hoy = new Date();
 document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
-const S = {versionActual:50, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
+const S = {versionActual:51, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600); }
@@ -288,7 +288,7 @@ async function cargar(){
     const d = await api('/api/estado');
     const firma = JSON.stringify(d, (k, v) => (k === 'video_url' || k === 'ahora' || k === 'latido') ? undefined : v);
     const igual = firma === S.firma; S.firma = firma;
-    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 50; S.offset = (d.ahora||Date.now()) - Date.now();
+    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 51; S.offset = (d.ahora||Date.now()) - Date.now();
     estado('Conectado · se actualiza solo');
     $('yoTxt').textContent = 'Sos ' + S.yo; $('btnSalir').hidden = false;
     renderTurno();

@@ -7,6 +7,7 @@ import { errorPublicacion } from '../../lib/publicacion.js'
 export default async function handler (req, res) {
   const p = String(req.query.proveedor || '')
   res.setHeader('Cache-Control', 'no-store')
+  let etapa = 'iniciar'
   try {
     if (!['meta', 'google', 'tiktok', 'buffer'].includes(p)) throw errorPublicacion('Conexión desconocida.')
     if (req.method === 'POST') {
@@ -38,7 +39,8 @@ export default async function handler (req, res) {
     const c = configOAuth(p), body = new URLSearchParams({ [p === 'tiktok' ? 'client_key' : 'client_id']: c.id, client_secret: c.secret, code: String(req.query.code), redirect_uri: c.callback, grant_type: 'authorization_code' })
     const tokenUrl = new URL(c.token)
     if (p === 'meta') for (const [k, v] of body) tokenUrl.searchParams.set(k, v)
-    let t = await jsonRemoto(p === 'meta' ? tokenUrl : c.token, p === 'meta' ? {} : { method: 'POST', body })
+    etapa = 'intercambiar_codigo'
+    let t = await jsonRemoto(p === 'meta' ? tokenUrl : c.token, p === 'meta' ? {} : { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
     if (!t.access_token) throw errorPublicacion('La red no devolvió un acceso válido.', 502)
     if (p === 'meta') {
       const larga = new URL(GRAPH + '/oauth/access_token')
@@ -56,16 +58,21 @@ export default async function handler (req, res) {
       t.channel_id = canal.id; t.cuenta = canal.snippet.title
     }
     if (p === 'tiktok') {
+      etapa = 'consultar_cuenta'
       const user = await jsonRemoto('https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name', { headers: { Authorization: 'Bearer ' + t.access_token } })
       if (user.error?.code && user.error.code !== 'ok') throw errorPublicacion('TikTok no confirmó la cuenta.', 424)
       t.cuenta = user.data?.user?.display_name || 'TikTok'
     }
+    etapa = 'guardar_conexion'
     const actual = await leerPub('conexiones', p)
     await guardarConexion(p, { ...t, refresh_token: t.refresh_token || undefined, expira_el: t.expires_in ? Date.now() + Number(t.expires_in) * 1000 : null }, actual)
     await eventoPub('conexion', intento.datos.por, { proveedor: p })
     res.setHeader('Set-Cookie', 'gta6_oauth_' + p + '=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/api/conexion')
     res.writeHead(303, { Location: origenApp() + '/#publicaciones' }); res.end()
   } catch (e) {
+    if (p === 'tiktok' && e.remoto) {
+      console.warn('conexion_tiktok_fallida', { etapa, codigo: e.codigoRemoto || 'error_no_identificado', http: e.remoto, referencia: e.referenciaRemota || null })
+    }
     if (req.method === 'GET') { res.setHeader('Content-Type', 'text/plain; charset=utf-8'); return res.status(e.status || 500).send((e.status ? e.message : 'No se pudo completar la conexión.') + '\nVolvé al panel y probá Conectar otra vez.') }
     responder(res, e.status || 500, { error: e.status ? e.message : 'No se pudo completar la conexión.' })
   }

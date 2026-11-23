@@ -1,5 +1,13 @@
 # Configuración de publicaciones
 
+Antes de crear integraciones nuevas, revisar `gta-publicador/` en la raíz de
+GTA6. El repositorio `contentgtagroup-star/gta-publicador` ya tiene los secretos
+de YouTube (`YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`) y Buffer
+(`BUFFER_API_KEY`). Su prueba de solo lectura confirmó ambas conexiones el
+2026-11-23 (Actions 45191704837). Faltar variables en Vercel no significa que
+las apps no existan. Los secretos de GitHub no permiten recuperar sus valores
+por lectura: una migración al panel requiere transferirlos por un canal seguro.
+
 1. Ejecutar `supabase/migrations/202611220001_publicaciones.sql` en el proyecto
    Supabase del equipo. La tabla nueva solo admite acceso del servidor.
 2. Configurar en Vercel, sin subir los valores al repositorio:

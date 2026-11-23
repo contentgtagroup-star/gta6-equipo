@@ -24,12 +24,41 @@ export function descifrarConexion (proveedor, sobre) {
   c.setAAD(Buffer.from(proveedor)); c.setAuthTag(Buffer.from(sobre.tag, 'base64'))
   return JSON.parse(Buffer.concat([c.update(Buffer.from(sobre.texto, 'base64')), c.final()]).toString())
 }
+function detalleTikTok (datos) {
+  let codigo = typeof datos.error === 'string' ? datos.error : datos.error?.code
+  const mensajes = {
+    invalid_client: 'La app rechazó sus credenciales. Revisá que Client Key y Client Secret sean del mismo sandbox.',
+    invalid_grant: 'El código de acceso venció, ya se usó o no coincide con la app o su dirección de retorno. Iniciá una conexión nueva desde el panel.',
+    invalid_request: 'TikTok rechazó el formato o algún parámetro de la solicitud de acceso.',
+    redirect_uri_mismatch: 'La dirección de retorno no coincide con la usada para autorizar. Revisá el callback del panel en Login Kit.',
+    invalid_scope: 'La app no tiene habilitados los permisos solicitados.',
+    unauthorized_client: 'La app no está autorizada para este tipo de conexión.',
+    access_denied: 'La cuenta no autorizó el acceso solicitado.',
+    scope_not_authorized: 'La cuenta no autorizó el permiso necesario para consultar su perfil.',
+    scope_permission_missed: 'Falta un permiso para consultar los datos solicitados.',
+    access_token_invalid: 'TikTok rechazó el acceso de la cuenta. Iniciá una conexión nueva.',
+    rate_limit_exceeded: 'TikTok limitó temporalmente las solicitudes. Esperá antes de volver a conectar.',
+    server_error: 'TikTok tiene un error temporal. Probá más tarde.',
+    temporarily_unavailable: 'TikTok no está disponible temporalmente. Probá más tarde.'
+  }
+  if (codigo === 'invalid_request' && /redirect_?uri/i.test(String(datos.error_description || ''))) codigo = 'redirect_uri_mismatch'
+  if (!Object.hasOwn(mensajes, codigo)) codigo = 'error_no_identificado'
+  const referencia = datos.log_id || datos.error?.log_id
+  return { codigo, mensaje: mensajes[codigo] || 'TikTok rechazó la solicitud; hace falta revisar la configuración de la conexión.',
+    referencia: typeof referencia === 'string' && /^[A-Za-z0-9]{12,80}$/.test(referencia) ? referencia : null }
+}
 export async function jsonRemoto (url, opciones = {}) {
   const r = await fetch(url, { ...opciones, signal: AbortSignal.timeout(45000), redirect: 'error' })
   const d = await r.json().catch(() => ({}))
   if (!r.ok || (d.error && d.error.code !== 'ok' && d.error.code !== 0) || d.errors?.length) {
     const e = errorPublicacion(r.status === 401 || r.status === 403 ? 'La conexión venció o faltan permisos. Reconectá la cuenta.' : 'La plataforma rechazó la operación. Revisá permisos, formato y límites de la cuenta.', r.status === 401 || r.status === 403 ? 424 : 502)
     e.remoto = r.status
+    if (new URL(url).hostname === 'open.tiktokapis.com') {
+      const detalle = detalleTikTok(d)
+      e.message = `TikTok (${detalle.codigo}): ${detalle.mensaje}`
+      e.codigoRemoto = detalle.codigo
+      e.referenciaRemota = detalle.referencia
+    }
     throw e
   }
   return d
@@ -68,7 +97,7 @@ export async function tokenConexion (proveedor) {
   const bloqueo = await guardarPub('conexiones', proveedor, { ...actual.datos, refrescando_hasta: Date.now() + 60000 }, actual.version)
   const c = configOAuth(proveedor)
   const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh_token, client_secret: c.secret, [proveedor === 'tiktok' ? 'client_key' : 'client_id']: c.id })
-  const d = await jsonRemoto(c.token, { method: 'POST', body })
+  const d = await jsonRemoto(c.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
   t = { ...t, ...d, refresh_token: d.refresh_token || t.refresh_token, expira_el: Date.now() + Number(d.expires_in) * 1000 }
   await guardarConexion(proveedor, t, bloqueo)
   return t

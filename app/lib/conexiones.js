@@ -64,7 +64,9 @@ export async function jsonRemoto (url, opciones = {}) {
   return d
 }
 export async function guardarConexion (proveedor, datos, actual) {
-  return guardarPub('conexiones', proveedor, { sobre: cifrarConexion(proveedor, datos), sincronizada_el: Date.now(), estado: 'conectada', cuenta: datos.cuenta || '', expira_el: datos.expira_el || null }, actual?.version || 0)
+  const fila = { sobre: cifrarConexion(proveedor, datos), sincronizada_el: Date.now(), estado: 'conectada', cuenta: datos.cuenta || '', expira_el: datos.expira_el || null }
+  for (const k of ['origen', 'ig_id', 'permisos', 'faltan_permisos']) if (datos[k] !== undefined) fila[k] = datos[k]
+  return guardarPub('conexiones', proveedor, fila, actual?.version || 0)
 }
 export async function marcarConexionVencida (proveedor) {
   const d = await leerPub('conexiones', proveedor)
@@ -110,9 +112,11 @@ export async function estadosConexiones () {
     if (p === 'buffer' && process.env.BUFFER_API_KEY && process.env.BUFFER_CHANNEL_ID) cache[p] = { ...cache[p], estado: cache[p].estado || 'sin_verificar' }
   }
   return Object.entries(REDES).map(([id, r]) => {
-    const d = cache[r.proveedor]
+    // Instagram no tiene conexión propia: solo aparece conectada si la página de Meta trajo una cuenta de negocio.
+    const d = id === 'instagram' ? (cache.meta?.ig_id ? cache.meta : {}) : (cache[r.proveedor] || {})
     const vencido = d.expira_el && d.expira_el <= Date.now()
     return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '',
+      metodo: d.origen || (d.sobre ? 'oauth' : undefined), permisos: d.permisos || [], faltan_permisos: d.faltan_permisos || [],
       ...(id === 'tiktok' ? { entorno: process.env.TIKTOK_ENV === 'sandbox' ? 'sandbox' : 'production' } : {}) }
   })
 }

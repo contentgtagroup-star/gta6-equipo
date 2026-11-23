@@ -3,6 +3,7 @@ import { exigir, responder } from '../../lib/comun.js'
 import { leerPub, guardarPub, eventoPub } from '../../lib/publicacion_store.js'
 import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH } from '../../lib/conexiones.js'
 import { errorPublicacion } from '../../lib/publicacion.js'
+import { verificarMetaSistema } from '../../lib/meta_sistema.js'
 
 export default async function handler (req, res) {
   const p = String(req.query.proveedor || '')
@@ -12,6 +13,13 @@ export default async function handler (req, res) {
     if (!['meta', 'google', 'tiktok', 'buffer'].includes(p)) throw errorPublicacion('Conexión desconocida.')
     if (req.method === 'POST') {
       const yo = exigir(req, res); if (!yo) return
+      if (p === 'meta' && process.env.META_AUTH_MODE === 'system_user') {
+        const datos = await verificarMetaSistema(yo)
+        const actual = await leerPub('conexiones', p)
+        await guardarConexion(p, datos, actual)
+        await eventoPub('conexion', yo, { proveedor: p, metodo: 'system_user' })
+        return responder(res, 200, { ok: true, metodo: 'system_user', faltan_permisos: datos.faltan_permisos || [] })
+      }
       if (req.body?.op === 'renovar' && p !== 'meta') { await tokenConexion(p); return responder(res, 200, { ok: true }) }
       if (p === 'buffer') {
         const t = await tokenConexion(p)

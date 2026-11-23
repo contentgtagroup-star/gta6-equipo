@@ -23,8 +23,55 @@ jobs:
         working-directory: app
       - run: npm test
         working-directory: app
+      - run: node --test .github/scripts/preview.test.mjs
       - run: python3 -m py_compile app/herramientas/*.py
       - run: python3 -m unittest discover -s app/tests -p 'test_*.py'
+  preview:
+    name: Preview del PR
+    needs: pruebas
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: gta6-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    environment:
+      name: gta6-preview-${{ github.event.pull_request.number }}
+      url: ${{ steps.preview.outputs.url }}
+    env:
+      VERCEL_ORG_ID: team_teuRF4rK0UsjEY2iUYw3ES4v
+      VERCEL_PROJECT_ID: prj_54G9WHv8ggngapNEXRDDB0GJ3FTE
+      VERCEL_TOKEN: ${{ secrets.GTADEPLOY }}
+      GTA_PREVIEW_REVIEWER_EMAIL: ${{ secrets.GTA_PREVIEW_REVIEWER_EMAIL }}
+      GH_TOKEN: ${{ github.token }}
+      GTA_PREVIEW_PR: ${{ github.event.pull_request.number }}
+      GTA_PREVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Preparar preview
+        run: |
+          test -n "$VERCEL_TOKEN" || { echo 'Falta configurar GTADEPLOY.'; exit 1; }
+          test -n "$GTA_PREVIEW_REVIEWER_EMAIL" || { echo 'Falta configurar el revisor de previews.'; exit 1; }
+          npm install --global vercel@65.9.0
+          vercel pull --yes --environment=preview --non-interactive
+      - name: Construir preview
+        run: vercel build --non-interactive
+      - name: Publicar preview y dejar el enlace en el PR
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel deploy --prebuilt --target preview --yes --non-interactive --json > "$RUNNER_TEMP/gta6-preview.json"
+          node .github/scripts/preview.mjs "$RUNNER_TEMP/gta6-preview.json"
   desplegar:
     name: Publicar GTA
     needs: pruebas

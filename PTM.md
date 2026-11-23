@@ -74,8 +74,9 @@ Antes de mergear a `main`, **siempre**:
 
 - Deploy = **merge a `main`** (Vercel despliega desde `main`).
 - Implementación: el workflow **Verificar** publica en Vercel después de pasar
-  las pruebas de `main`. Eze puede usar este flujo desde GitHub. La conexión Git
-  nativa de Vercel y los previews por rama siguen pendientes; ver
+  las pruebas de `main`. Los PR de ramas del repo generan previews y actualizan
+  su enlace en GitHub. Eze puede usar estos flujos desde GitHub. La conexión Git
+  nativa de Vercel sigue pendiente; ver
   `app/docs/DESPLIEGUE.md`.
 - Camino: rama propia → **PR** → review del otro dev si cruza su dominio → merge.
 - Merge preferido: **merge commit** o **squash** (historia limpia y revertible). **Nunca `push --force` a `main`.**

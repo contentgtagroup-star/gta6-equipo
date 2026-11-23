@@ -24,10 +24,11 @@ test('las fuentes se normalizan y rechazan red interna, credenciales y protocolo
   for (const url of ['http://x.com/uno', 'https://localhost/test', 'https://127.0.0.1', 'https://x.com@evil.test/', 'https://clave:secreto@x.com/uno', 'file:///tmp/uno', 'https://x.com:999/uno']) assert.throws(() => fuenteValida({ url, tipo: 'perfil' }), url)
 })
 
-test('el ruteo conserva YouTube y TikTok en borrador', () => {
+test('el ruteo conserva YouTube y TikTok en borrador, X a mano, y el resto automático', () => {
   assert.equal(REDES.youtube.modo, 'borrador')
   assert.equal(REDES.tiktok.modo, 'borrador')
-  for (const r of ['instagram', 'facebook', 'x']) assert.equal(REDES[r].modo, 'automatico')
+  assert.equal(REDES.x.modo, 'manual')
+  for (const r of ['instagram', 'facebook']) assert.equal(REDES[r].modo, 'automatico')
 })
 
 test('no acepta videos externos ni mezcla imágenes y video ni destinos inventados', () => {

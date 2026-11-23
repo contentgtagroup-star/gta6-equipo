@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 export const REDES = {
   instagram: { nombre: 'Instagram', cuenta: '@gta6.clipeado', modo: 'automatico', proveedor: 'meta' },
   facebook: { nombre: 'Facebook', cuenta: 'Gta 6 Clipeados', modo: 'automatico', proveedor: 'meta' },
-  x: { nombre: 'X', cuenta: '@Gta6univers0', modo: 'automatico', proveedor: 'buffer' },
+  x: { nombre: 'X', cuenta: '@Gta6univers0', modo: 'manual', proveedor: 'buffer' },
   youtube: { nombre: 'YouTube', cuenta: 'Clips GTA 6', modo: 'borrador', proveedor: 'google' },
   tiktok: { nombre: 'TikTok', cuenta: '@gta6.univers0', modo: 'borrador', proveedor: 'tiktok' }
 }

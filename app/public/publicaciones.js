@@ -2,7 +2,7 @@
 (() => {
   const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '' }
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
-  const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', conectada: 'Conectada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
+  const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', conectada: 'Conectada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', manual: 'Para subir a mano a X', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
   const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
   const num = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'
   const post = cuerpo => api('/api/publicacion', cuerpo)
@@ -23,7 +23,7 @@
     const inputs = Object.entries(redes).map(([id, nombre]) => {
       const input = entrada('', { type: 'checkbox', checked: valor.includes(id), style: 'width:auto' })
       input.dataset.red = id
-      return campo(nombre + (['youtube', 'tiktok'].includes(id) ? ' · borrador' : ' · automático'), input)
+      return campo(nombre + (id === 'x' ? ' · a mano' : ['youtube', 'tiktok'].includes(id) ? ' · borrador' : ' · automático'), input)
     })
     const box = el('div', { class: 'row', style: 'flex-wrap:wrap' }, inputs)
     box.valores = () => [...box.querySelectorAll('input:checked')].map(i => i.dataset.red)
@@ -79,7 +79,7 @@
     const grid = el('div', { class: 'people', style: 'grid-template-columns:repeat(auto-fit,minmax(190px,1fr))' })
     for (const c of P.datos.conexiones) {
       grid.append(el('article', { class: 'person' }, el('h3', {}, c.nombre), el('p', { class: 'small' }, c.cuenta_conectada || c.cuenta),
-        el('p', {}, etiquetas[c.estado] || c.estado), el('p', { class: 'small muted' }, c.modo === 'automatico' ? 'Publica después de aprobar.' : c.id === 'tiktok' ? 'Llega al Inbox: terminás de publicar en TikTok.' : 'Se sube como privado: revisás el Short en YouTube Studio.'),
+        el('p', {}, etiquetas[c.estado] || c.estado), el('p', { class: 'small muted' }, c.modo === 'automatico' ? 'Publica después de aprobar.' : c.modo === 'manual' ? 'Se sube a mano: copiás el texto y el video, y lo publicás en X.' : c.id === 'tiktok' ? 'Llega al Inbox: terminás de publicar en TikTok.' : 'Se sube como privado: revisás el Short en YouTube Studio.'),
         c.entorno === 'sandbox' && el('p', { class: 'small muted' }, 'TikTok sandbox: conexión de prueba, con las cuentas autorizadas en esa app.'),
         c.metodo === 'system_user' && el('p', { class: 'small muted' }, 'Conexión con el usuario del sistema de Meta. Si se renueva el token en Vercel, tocá Reconectar.'),
         c.metodo === 'refresh_token' && el('p', { class: 'small muted' }, 'YouTube usa el token renovable configurado en Vercel. Si se renueva, tocá Reconectar.'),
@@ -190,15 +190,24 @@
     box.append(boton('Procesar próximo envío', async () => { const d = await post({ op: 'procesar' }); toast(d.activo === false ? 'Los envíos automáticos todavía están en espera.' : 'Cola revisada'); await cargar(true) }))
     for (const p of [...P.datos.cola].sort((a, b) => b.creado - a.creado)) {
       const acciones = el('div', { class: 'row' })
-      acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
-      if (['pendiente', 'error'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
-      if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', () => {
+      const confirmar = () => {
         const url = entrada('', { type: 'url', required: true })
         dialogo('Confirmar publicación manual', campo('Link público de la publicación', url), () => post({ op: 'confirmar_manual', id: p.id, version: p._version, url: url.value }), 'Confirmar')
-      }))
+      }
+      acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
+      if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
+      if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
+        if (!p.video_path && !p.imagenes?.length) return toast('Esta publicación no tiene video ni imágenes.')
+        const { urls } = await post({ op: 'vista_media', video_path: p.video_path, imagenes: p.imagenes || [] })
+        urls.forEach(u => window.open(u, '_blank', 'noopener'))
+      }), boton('Ya lo publiqué', confirmar))
+      if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', confirmar))
+      const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
       box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo), el('p', {}, etiquetas[p.estado] || p.estado),
+        p.estado === 'manual' && el('p', { class: 'small muted' }, 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
         el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('p', { class: 'small', style: 'color:var(--bad)' }, p.error),
-        p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), acciones))
+        p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))
+      if (p.estado === 'manual') vista(p, preview)
     }
     if (!P.datos.cola.length) box.append(el('p', { class: 'small muted' }, 'Las publicaciones aprobadas van a aparecer acá.'))
   }
@@ -247,7 +256,7 @@
   }
   window.aprobarClipPublicacion = c => {
     const destinos = checksRedes()
-    dialogo('Aprobar clip', el('div', {}, el('p', {}, c.titulo || c.gancho), el('p', { class: 'small' }, 'Elegí dónde publicarlo. Instagram, Facebook y X se envían automáticamente cuando las conexiones están habilitadas. YouTube y TikTok quedan en borrador.'), destinos), async () => {
+    dialogo('Aprobar clip', el('div', {}, el('p', {}, c.titulo || c.gancho), el('p', { class: 'small' }, 'Elegí dónde publicarlo. Instagram y Facebook se envían automáticamente cuando las conexiones están habilitadas. X queda para subir a mano, y YouTube y TikTok quedan en borrador.'), destinos), async () => {
       await post({ op: 'aprobar_clip', id: c.id, version: c._version, plataformas: destinos.valores() }); toast('Clip aprobado y en cola'); await window.cargar?.()
     }, 'Aprobar y enviar a cola')
   }

@@ -184,14 +184,17 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       } else {
         const contenido = contenidoValido({ ...d.datos, ...b.datos, plataformas: [d.datos.plataforma] })
         if (['video_path', 'imagenes', 'recorte', 'instrucciones_media', 'media'].some(k => JSON.stringify(contenido[k] || '') !== JSON.stringify(d.datos[k] || ''))) throw errorPublicacion('El cambio de material necesita preparación y una nueva revisión.', 422)
-        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: 'pendiente', error: '', proximo_el: Date.now() }, d.version)
+        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: REDES[d.datos.plataforma]?.modo === 'manual' ? 'manual' : 'pendiente', error: '', proximo_el: Date.now() }, d.version)
       }
       await eventoPub(b.op, yo, { item_id: d.id, aprobado_por: yo })
     } else if (b.op === 'confirmar_manual') {
       const d = await exigirItem('cola', b.id, b.version)
-      if (d.datos.estado !== 'borrador' || !['youtube', 'tiktok'].includes(d.datos.plataforma)) throw errorPublicacion('Solo se confirma un borrador ya enviado.', 409)
+      const esBorrador = d.datos.estado === 'borrador' && ['youtube', 'tiktok'].includes(d.datos.plataforma)
+      const esManualX = d.datos.estado === 'manual' && d.datos.plataforma === 'x'
+      if (!esBorrador && !esManualX) throw errorPublicacion('Solo se confirma un borrador o un envío manual.', 409)
+      const hosts = esManualX ? ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'] : ['youtube.com', 'www.youtube.com', 'youtu.be', 'tiktok.com', 'www.tiktok.com']
       const url = new URL(b.url || '')
-      if (url.protocol !== 'https:' || !['youtube.com', 'www.youtube.com', 'youtu.be', 'tiktok.com', 'www.tiktok.com'].includes(url.hostname)) throw errorPublicacion('Pegá el link público de YouTube o TikTok.')
+      if (url.protocol !== 'https:' || !hosts.includes(url.hostname)) throw errorPublicacion(esManualX ? 'Pegá el link público del posteo en X.' : 'Pegá el link público de YouTube o TikTok.')
       await guardarPub('cola', d.id, { ...d.datos, estado: 'publicado', enlace: url.href, confirmado_por: yo, publicado_el: Date.now() }, d.version)
       await eventoPub('publicacion_manual_confirmada', yo, { item_id: d.id, enlace: url.href })
       try { await actualizarClipPublicado(d.datos.clip_id, yo) } catch {}

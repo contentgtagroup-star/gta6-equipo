@@ -206,16 +206,6 @@ html{-webkit-text-size-adjust:100%}
             <select id="cuantos" style="width:auto"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
           </label>
         </div>
-        <div class="bloque-link" style="margin-top:14px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:12px 14px">
-          <h3 style="font-size:14.5px;margin:0 0 4px">Crear clip desde un link</h3>
-          <p class="small dim" style="margin:0 0 10px">Pegá un link de YouTube o Twitch (video, directo o clip) para hacer un clip puntual con tu compu.</p>
-          <form id="clipDirectoForm" class="row" style="gap:8px">
-            <input id="clipDirectoIn" type="url" required placeholder="Pegá un link de YouTube o Twitch (ej. video, directo o clip)" style="flex:3 1 240px">
-            <button class="primary" type="submit" id="btnClipDirecto" style="white-space:nowrap">CREAR CLIP</button>
-            <button type="button" class="ghost" id="btnClipDirectoCola" style="white-space:nowrap">Solo a la cola</button>
-          </form>
-          <div class="small" id="clipDirectoFeedback" style="margin-top:6px" aria-live="polite"></div>
-        </div>
         <div class="small" id="escuchaTxt" style="margin-top:10px"></div>
         <div class="small" id="turnoTxt" style="margin-top:8px"></div>
         <div class="turnos-lista" id="turnosLista"></div>
@@ -286,7 +276,7 @@ const FILTROS = [
 const hoy = new Date();
 document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
-const S = {versionActual:45, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
+const S = {versionActual:46, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600); }
@@ -312,7 +302,7 @@ async function cargar(){
     const d = await api('/api/estado');
     const firma = JSON.stringify(d, (k, v) => (k === 'video_url' || k === 'ahora' || k === 'latido') ? undefined : v);
     const igual = firma === S.firma; S.firma = firma;
-    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 45; S.offset = (d.ahora||Date.now()) - Date.now();
+    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 46; S.offset = (d.ahora||Date.now()) - Date.now();
     estado('Conectado · se actualiza solo');
     $('yoTxt').textContent = 'Sos ' + S.yo; $('btnSalir').hidden = false;
     renderTurno();
@@ -737,44 +727,57 @@ async function procesarClipDirecto(soloCola){
     toast('Pegá un link válido de YouTube o Twitch (video, directo o clip)');
     return;
   }
+  const nota = ($('clipDirectoNota')?.value || '').trim();
   const btn = $('btnClipDirecto');
   const btnCola = $('btnClipDirectoCola');
   const fb = $('clipDirectoFeedback');
+  const mostrarError = msg => { fb.replaceChildren(el('span', {style:'color:var(--bad)'}, msg)); };
   btn.disabled = true;
   if(btnCola) btnCola.disabled = true;
   fb.textContent = soloCola ? 'Guardando link en la cola…' : 'Enviando link y preparando turno…';
 
   try {
-    await guardarDoc('radar', 'actual', datos => {
-      datos.videos = datos.videos || [];
-      const idx = datos.videos.findIndex(v => v.id === l.id);
-      if(idx >= 0){
-        datos.videos[idx].manual = true;
-        datos.videos[idx].para = S.yo;
-        if(datos.videos[idx].estado !== 'tomado') datos.videos[idx].estado = 'libre';
-      } else {
-        datos.videos.unshift({
-          id: l.id,
-          url: l.url,
-          titulo: l.fuente + ' · ' + l.url.replace(/^https:\/\/(www\.)?/, ''),
-          canal: l.canal || '',
-          vistas: 0,
-          vph: 0,
-          idioma: '',
-          alerta: false,
-          para: S.yo,
-          estado: 'libre',
-          manual: true,
-          agregado_por: S.yo,
-          cargado_el: Date.now()
-        });
-      }
-    });
-
     if(soloCola){
-      $('clipDirectoIn').value = '';
-      fb.innerHTML = '<span style="color:var(--ok)">✓ Link guardado en la cola (' + l.fuente + '). Tu compu lo toma en su próximo turno.</span>';
-      toast('Link guardado en la cola para tu compu');
+      let problema = '', repetida = false;
+      await guardarDoc('radar', 'actual', datos => {
+        datos.videos = datos.videos || [];
+        const idx = datos.videos.findIndex(v => v.id === l.id);
+        if(idx >= 0){
+          const previo = datos.videos[idx];
+          if((previo.estado || 'libre') === 'hecho'){ problema = 'usado'; return false; }
+          if(previo.estado === 'tomado'){ problema = 'tomado'; return false; }
+          repetida = true;
+          previo.manual = true;
+          previo.para = S.yo;
+          if(nota) previo.nota = nota;
+        } else {
+          datos.videos.unshift({
+            id: l.id,
+            url: l.url,
+            titulo: l.fuente + ' · ' + l.url.replace(/^https:\/\/(www\.)?/, ''),
+            canal: l.canal || '',
+            vistas: 0,
+            vph: 0,
+            idioma: '',
+            alerta: false,
+            para: S.yo,
+            estado: 'libre',
+            manual: true,
+            agregado_por: S.yo,
+            cargado_el: Date.now(),
+            ...(nota ? {nota} : {})
+          });
+        }
+      });
+      if(problema){
+        const msg = problema === 'usado'
+          ? 'Ese enlace ya se usó para un clip. Pegá otro.'
+          : 'Ese enlace lo está trabajando otra compu o pedido. Esperá a que termine o pegá otro.';
+        mostrarError(msg); toast(msg); return;
+      }
+      $('clipDirectoIn').value = ''; $('clipDirectoNota').value = '';
+      fb.innerHTML = '<span style="color:var(--ok)">✓ ' + (repetida ? 'Ese link ya estaba en la cola' : 'Link guardado en la cola') + ' (' + l.fuente + '). Tu compu lo toma en su próximo turno.</span>';
+      toast(repetida ? 'Ese link ya estaba en la cola' : 'Link guardado en la cola para tu compu');
       await cargar();
     } else {
       const fuente = l.fuente === 'YouTube' ? 'youtube' : 'twitch';
@@ -783,16 +786,20 @@ async function procesarClipDirecto(soloCola){
         op: 'pedir',
         cantidad: 1,
         fuente,
-        ...(categoria ? { categoria } : {})
+        video_url: l.url,
+        video_id: l.id,
+        video_plataforma: fuente,
+        ...(nota ? {nota} : {}),
+        ...(categoria ? {categoria} : {})
       });
-      $('clipDirectoIn').value = '';
-      fb.innerHTML = '<span style="color:var(--ok)">✓ Link recibido (' + l.fuente + '). Tu compu va a crear el clip.</span>';
+      $('clipDirectoIn').value = ''; $('clipDirectoNota').value = '';
+      fb.innerHTML = '<span style="color:var(--ok)">✓ Pedido creado para ese enlace (' + l.fuente + '). Tu compu va a crear el clip.</span>';
       toast(r.asignado ? 'Pedido recibido. Tu compu va a crear el clip.' : 'Pedido en cola. Arranca cuando tu compu esté disponible.');
       await cargar();
       renderTurno();
     }
   } catch(err) {
-    fb.innerHTML = '<span style="color:var(--bad)">' + (err.message || 'No se pudo procesar el link') + '</span>';
+    mostrarError(err.message || 'No se pudo procesar el link');
     toast(err.message || 'Error al procesar el link');
   } finally {
     btn.disabled = false;
@@ -808,6 +815,7 @@ async function borrarReferencia(id){
 function renderReferencias(){
   const box = $('refs'); box.replaceChildren();
   const items = [...(S.referencias || [])].reverse();
+  const contador = $('refsCount'); if(contador) contador.textContent = String(items.length);
   if(!items.length){ box.append(el('p', {class:'dim', style:'margin:0'}, 'Todavía no hay referencias.')); return; }
   const ver = items.slice(0, S.verRefs ? 100 : 5);
   box.append(el('ul', {style:'margin:0;padding-left:18px'}, ver.map(x => el('li', {},

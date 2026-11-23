@@ -135,7 +135,7 @@ def guardar_cierre(cierre):
 def comprobar_turno(pedido_id=None):
     pedido_id = pedido_id or os.environ.get('GTA6_TURNO_ID')
     if not pedido_id:
-        return
+        return None
     d = get('turnos', 'global')
     global_ = (d.get('datos') or {}) if d.get('existe') else {}
     turno = next((t for t in trabajos_turno(global_) if t.get('pedido_id') == pedido_id), None)
@@ -146,6 +146,7 @@ def comprobar_turno(pedido_id=None):
         raise SystemExit(75)
     if turno.get('estado') != 'ejecutando':
         fail('este pedido ya no está en ejecución.')
+    return turno
 
 
 def trabajos_turno(datos):
@@ -686,6 +687,37 @@ def elegir_video(r, yo, activos=None, fuente='youtube'):
     return min(enumerate(libres), key=prioridad)[1] if libres else None
 
 
+def preparar_video_directo(r, directo, yo, fuente, pedido_id, activos):
+    """Reclama únicamente el enlace vinculado al pedido directo; nunca cae al selector general."""
+    vid = str(directo.get('video_id') or '')
+    url = str(directo.get('video_url') or '')
+    if not vid or not url:
+        return None, 'Este pedido directo no tiene un enlace válido; no tomes otro video.'
+    videos = r.setdefault('videos', [])
+    v = next((x for x in videos if x.get('id') == vid), None)
+    if fuente_de({'id': vid, 'url': url}) not in (fuente, 'x'):
+        return None, 'El enlace de este pedido no es de la plataforma indicada; no tomes otro video.'
+    estado = (v or {}).get('estado') or 'libre'
+    if estado == 'hecho':
+        return None, 'Ese enlace ya se usó para un clip; no tomes otro video.'
+    if estado == 'tomado':
+        propio = (v or {}).get('tomado_pedido') == pedido_id
+        ajeno_activo = bool((v or {}).get('tomado_pedido')) and activos is not None and v['tomado_pedido'] in activos
+        vence = RESERVA_CAIDA_VENCE if (v or {}).get('tomado_pedido') else TOMADO_VENCE
+        vencido = ahora_ms() - ((v or {}).get('tomado_el') or 0) > vence
+        if not propio and (ajeno_activo or not vencido):
+            return None, 'Ese enlace lo está trabajando otra compu o pedido; no tomes otro video: esperá o pedí otro enlace.'
+    elif estado != 'libre':
+        return None, 'Ese enlace no está disponible para este pedido; no tomes otro video.'
+    if not v:
+        v = {'id': vid, 'url': url, 'titulo': ('Twitch' if fuente == 'twitch' else 'YouTube') + ' · ' + re.sub(r'^https://(www\.)?', '', url),
+             'canal': '', 'vistas': 0, 'vph': 0, 'idioma': '', 'alerta': False, 'para': yo,
+             'estado': 'tomado', 'manual': True, 'agregado_por': yo, 'cargado_el': ahora_ms()}
+        r['videos'] = [v] + videos
+    v.update(estado='tomado', tomado_por=yo, tomado_pedido=pedido_id, tomado_el=ahora_ms(), manual=True, para=yo, url=url)
+    return v, None
+
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest='cmd', required=True)
@@ -729,7 +761,9 @@ def main():
         print(json.dumps({'path': d['path']}))
         return
     if a.cmd in ('tomar-link', 'empezar-busqueda', 'cargar-links'):
-        comprobar_turno()
+        turno_actual = comprobar_turno()
+    else:
+        turno_actual = None
 
     if a.cmd == 'conectar':
         json.dump({'url': a.url, 'clave': a.clave}, open(CONF, 'w'))
@@ -963,23 +997,45 @@ def main():
         yo = pedir('GET', '/api/estado')['yo']
         activos = pedidos_activos()
         fuente = fuente_turno()
+        pedido_id = os.environ.get('GTA6_TURNO_ID')
+        directo = turno_actual if turno_actual and turno_actual.get('video_id') else None
+        if directo:
+            usados = get('usados', directo['video_id'])
+            tramos = ((usados.get('datos') or {}).get('tramos') or []) if usados.get('existe') else []
+            activos_set = activos or set()
+            def tramo_vigente(t):
+                return (t.get('estado') != 'reservado' or t.get('pedido_id') in activos_set or
+                        ahora_ms() - (t.get('reservado_el') or 0) < RESERVA_CAIDA_VENCE)
+            if any(t.get('pedido_id') != pedido_id and tramo_vigente(t) for t in tramos):
+                print(json.dumps({'link': None, 'directo': True, 'error': 'Ese enlace ya se usó para un clip; no tomes otro video.'}, ensure_ascii=False))
+                return
         def tomar(r):
-            v = elegir_video(r, yo, activos, fuente)
+            error = None
+            if directo:
+                v, error = preparar_video_directo(r, directo, yo, fuente, pedido_id, activos)
+            else:
+                v = elegir_video(r, yo, activos, fuente)
+                if v:
+                    v.update(estado='tomado', tomado_por=yo, tomado_pedido=pedido_id, tomado_el=ahora_ms())
             if v:
-                v.update(estado='tomado', tomado_por=yo, tomado_pedido=os.environ.get('GTA6_TURNO_ID'), tomado_el=ahora_ms())
                 canal = str(v.get('canal') or '').strip()
                 if canal:
                     r['canales_recientes'] = (r.get('canales_recientes') or [])[-2:] + [canal]
                     r.setdefault('ultimo_canal_por', {})[yo] = canal
-            return v, resumen(r, yo, activos, fuente)
-        v, r = modificar('radar', 'actual', tomar)
-        if v:
-            reportar_avance('buscando')
-        if not v:
-            print(json.dumps({'link': None, 'quedan': 0, 'BUSCAR': r['buscar'], 'buscando': r['buscando']}))
-        else:
+            return {'video': v, 'error': error}, resumen(r, yo, activos, fuente)
+        resultado, r = modificar('radar', 'actual', tomar)
+        v = resultado.get('video')
+        if resultado.get('error'):
+            print(json.dumps({'link': None, 'directo': True, 'error': resultado['error'],
+                              'quedan': r['quedan'], 'BUSCAR': False, 'buscando': r['buscando']}, ensure_ascii=False))
+        elif v:
+            if not directo:
+                reportar_avance('buscando')
             print(json.dumps({'link': {k: v.get(k) for k in ('id', 'url', 'titulo', 'canal', 'idioma', 'vistas', 'vph', 'para')},
-                              'quedan': r['quedan'], 'BUSCAR': r['buscar'], 'buscando': r['buscando']}, ensure_ascii=False))
+                              'quedan': r['quedan'], 'BUSCAR': False if directo else r['buscar'], 'buscando': r['buscando'],
+                              **({'directo': True} if directo else {})}, ensure_ascii=False))
+        else:
+            print(json.dumps({'link': None, 'quedan': 0, 'BUSCAR': r['buscar'], 'buscando': r['buscando']}))
     elif a.cmd == 'link-hecho':
         yo = pedir('GET', '/api/estado')['yo']
         def hecho(r):

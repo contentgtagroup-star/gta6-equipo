@@ -269,5 +269,128 @@ class TurnoAutomaticoTest(unittest.TestCase):
         self.assertTrue(reservar('p2', 'c3', 45, 70)['ok'])
 
 
+class PedidoDirectoTest(unittest.TestCase):
+    def ejecutar(self, turno, radar, usados=None, activos=None):
+        salida = io.StringIO()
+        modificar_llamado = []
+        def get(col, id_):
+            if col == 'turnos':
+                return {'existe': True, 'datos': turno}
+            if col == 'usados':
+                return {'existe': usados is not None, 'datos': usados or {}}
+            raise AssertionError(f'lectura inesperada: {col}/{id_}')
+        def modificar(col, clave, fn):
+            modificar_llamado.append((col, clave))
+            self.assertEqual((col, clave), ('radar', 'actual'))
+            return fn(radar)
+        with patch.dict(os.environ, {'GTA6_TURNO_ID': turno['pedido_id']}), \
+             patch('sys.argv', ['equipo.py', 'tomar-link']), \
+             patch.object(equipo, 'get', side_effect=get), \
+             patch.object(equipo, 'pedir', side_effect=lambda m, r, d=None: {'yo': 'Cuervo'} if r == '/api/estado' else {'ok': True}), \
+             patch.object(equipo, 'pedidos_activos', return_value=activos or set()), \
+             patch.object(equipo, 'modificar', side_effect=modificar), contextlib.redirect_stdout(salida):
+            equipo.main()
+        return json.loads(salida.getvalue()), modificar_llamado
+
+    def turno_directo(self, video_id='vid-directo'):
+        return {'estado': 'ejecutando', 'pedido_id': 'p1', 'video_id': video_id,
+                'video_url': 'https://www.youtube.com/watch?v=' + video_id,
+                'video_plataforma': 'youtube'}
+
+    def test_toma_solo_el_enlace_vinculado(self):
+        turno = self.turno_directo()
+        radar = {'videos': [
+            {'id': 'otro', 'url': 'https://www.youtube.com/watch?v=otro', 'estado': 'libre', 'canal': 'B'},
+            {'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'libre', 'canal': 'A'},
+        ]}
+        res, _ = self.ejecutar(turno, radar)
+        self.assertEqual(res['link']['id'], 'vid-directo')
+        self.assertTrue(res['directo'])
+        directo = next(v for v in radar['videos'] if v['id'] == 'vid-directo')
+        otro = next(v for v in radar['videos'] if v['id'] == 'otro')
+        self.assertEqual(directo['estado'], 'tomado')
+        self.assertEqual(directo['tomado_pedido'], 'p1')
+        self.assertEqual(directo['tomado_por'], 'Cuervo')
+        self.assertEqual(otro['estado'], 'libre')
+
+    def test_no_cae_a_otro_video_si_el_suyo_esta_tomado(self):
+        turno = self.turno_directo()
+        radar = {'videos': [
+            {'id': 'otro', 'url': 'https://www.youtube.com/watch?v=otro', 'estado': 'libre'},
+            {'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'tomado',
+             'tomado_por': 'Luis', 'tomado_pedido': 'p-otro', 'tomado_el': equipo.ahora_ms()},
+        ]}
+        res, _ = self.ejecutar(turno, radar, activos={'p-otro'})
+        self.assertIsNone(res['link'])
+        self.assertIn('otra compu o pedido', res['error'])
+        self.assertEqual(next(v for v in radar['videos'] if v['id'] == 'otro')['estado'], 'libre')
+        self.assertEqual(next(v for v in radar['videos'] if v['id'] == 'vid-directo')['tomado_pedido'], 'p-otro')
+
+    def test_reintento_del_mismo_pedido_recupera_su_reserva(self):
+        turno = self.turno_directo()
+        radar = {'videos': [
+            {'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'tomado',
+             'tomado_por': 'Cuervo', 'tomado_pedido': 'p1', 'tomado_el': equipo.ahora_ms()},
+        ]}
+        res, _ = self.ejecutar(turno, radar, activos={'p1'})
+        self.assertEqual(res['link']['id'], 'vid-directo')
+        self.assertEqual(radar['videos'][0]['tomado_pedido'], 'p1')
+
+    def test_rechaza_un_video_ya_hecho(self):
+        turno = self.turno_directo()
+        radar = {'videos': [
+            {'id': 'otro', 'url': 'https://www.youtube.com/watch?v=otro', 'estado': 'libre'},
+            {'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'hecho'},
+        ]}
+        res, _ = self.ejecutar(turno, radar)
+        self.assertIsNone(res['link'])
+        self.assertIn('ya se usó', res['error'])
+        self.assertEqual(next(v for v in radar['videos'] if v['id'] == 'otro')['estado'], 'libre')
+
+    def test_agrega_el_enlace_si_no_estaba_en_radar(self):
+        turno = self.turno_directo()
+        radar = {'videos': [{'id': 'otro', 'url': 'https://www.youtube.com/watch?v=otro', 'estado': 'libre'}]}
+        res, _ = self.ejecutar(turno, radar)
+        self.assertEqual(res['link']['id'], 'vid-directo')
+        self.assertEqual(radar['videos'][0]['id'], 'vid-directo')
+        self.assertEqual(radar['videos'][0]['estado'], 'tomado')
+        self.assertEqual(radar['videos'][0]['tomado_pedido'], 'p1')
+
+    def test_rechaza_un_enlace_usado_por_otro_pedido_sin_tocar_el_radar(self):
+        turno = self.turno_directo()
+        radar = {'videos': [{'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'libre'}]}
+        res, llamados = self.ejecutar(turno, radar, usados={'tramos': [{'pedido_id': 'p-otro', 'clip': 'c1'}]})
+        self.assertIsNone(res['link'])
+        self.assertIn('ya se usó', res['error'])
+        self.assertEqual(llamados, [])
+        self.assertEqual(radar['videos'][0]['estado'], 'libre')
+
+    def test_una_reserva_vencida_ajena_no_bloquea_el_enlace(self):
+        turno = self.turno_directo()
+        radar = {'videos': [{'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'libre'}]}
+        res, _ = self.ejecutar(turno, radar, usados={'tramos': [
+            {'pedido_id': 'p-viejo', 'estado': 'reservado', 'reservado_el': equipo.ahora_ms() - 6 * 60 * 1000}
+        ]})
+        self.assertEqual(res['link']['id'], 'vid-directo')
+
+    def test_una_reserva_de_un_pedido_activo_bloquea_el_enlace(self):
+        turno = self.turno_directo()
+        radar = {'videos': [{'id': 'vid-directo', 'url': 'https://www.youtube.com/watch?v=vid-directo', 'estado': 'libre'}]}
+        res, llamados = self.ejecutar(turno, radar, usados={'tramos': [
+            {'pedido_id': 'p-otro', 'estado': 'reservado', 'reservado_el': equipo.ahora_ms()}
+        ]}, activos={'p-otro'})
+        self.assertIsNone(res['link'])
+        self.assertIn('ya se usó', res['error'])
+        self.assertEqual(llamados, [])
+
+    def test_el_flujo_normal_sigue_eligiendo_del_radar(self):
+        turno = {'estado': 'ejecutando', 'pedido_id': 'p-normal'}
+        radar = {'videos': [{'id': 'libre', 'url': 'https://www.youtube.com/watch?v=libre', 'estado': 'libre', 'canal': 'A'}]}
+        res, _ = self.ejecutar(turno, radar)
+        self.assertEqual(res['link']['id'], 'libre')
+        self.assertNotIn('directo', res)
+        self.assertEqual(radar['videos'][0]['tomado_pedido'], 'p-normal')
+
+
 if __name__ == '__main__':
     unittest.main()

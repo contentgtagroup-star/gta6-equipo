@@ -43,10 +43,11 @@ export async function marcarConexionVencida (proveedor) {
 }
 export function configOAuth (p) {
   const callback = origenApp() + '/api/conexion/' + p
+  const sandboxTikTok = process.env.TIKTOK_ENV === 'sandbox'
   const configs = {
     meta: { id: process.env.META_APP_ID, secret: process.env.META_APP_SECRET, auth: 'https://www.facebook.com/' + (process.env.META_GRAPH_VERSION || 'v27.0') + '/dialog/oauth', token: GRAPH + '/oauth/access_token', scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_manage_insights,read_insights' },
     google: { id: process.env.GOOGLE_CLIENT_ID, secret: process.env.GOOGLE_CLIENT_SECRET, auth: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token', scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly' },
-    tiktok: { id: process.env.TIKTOK_CLIENT_KEY, secret: process.env.TIKTOK_CLIENT_SECRET, auth: 'https://www.tiktok.com/v2/auth/authorize/', token: 'https://open.tiktokapis.com/v2/oauth/token/', scope: 'user.info.basic,user.info.stats,video.upload,video.list' }
+    tiktok: { id: sandboxTikTok ? process.env.TIKTOK_SANDBOX_CLIENT_KEY : process.env.TIKTOK_CLIENT_KEY, secret: sandboxTikTok ? process.env.TIKTOK_SANDBOX_CLIENT_SECRET : process.env.TIKTOK_CLIENT_SECRET, auth: 'https://www.tiktok.com/v2/auth/authorize/', token: 'https://open.tiktokapis.com/v2/oauth/token/', scope: sandboxTikTok ? 'user.info.basic,video.upload' : 'user.info.basic,user.info.stats,video.upload,video.list' }
   }
   const c = configs[p]
   if (!c?.id || !c.secret) throw errorPublicacion('Falta configurar la app de ' + p + ' en el servidor.', 503)
@@ -82,6 +83,7 @@ export async function estadosConexiones () {
   return Object.entries(REDES).map(([id, r]) => {
     const d = cache[r.proveedor]
     const vencido = d.expira_el && d.expira_el <= Date.now()
-    return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '' }
+    return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '',
+      ...(id === 'tiktok' ? { entorno: process.env.TIKTOK_ENV === 'sandbox' ? 'sandbox' : 'production' } : {}) }
   })
 }

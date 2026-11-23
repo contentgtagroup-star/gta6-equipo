@@ -1,6 +1,7 @@
 {
- "version": 49,
+ "version": 50,
  "cambios": [
+  {"v": 50, "fecha": "2026-11-23", "texto": "TikTok permite reutilizar la app sandbox que ya tenía GTA. Usa sus claves separadas y los permisos de prueba existentes; Conexiones indica cuándo se está trabajando en sandbox.", "manual": "Agregar el callback del panel en Login Kit de la app sandbox y autorizar desde Conectar."},
   {"v": 49, "fecha": "2026-11-23", "texto": "Publicaciones usa la misma sesión del panel y ya no vuelve a pedir la clave cuando falla la configuración. Distingue una base pendiente de habilitar de un problema de conexión y permite volver a cargar después de resolverlo.", "manual": null},
   {"v": 48, "fecha": "2026-11-23", "texto": "Un solo espacio arriba para pegar material: ALIMENTAR guarda el link como referencia para la IA y CREAR CLIP pide un short con ese enlace específico en tu compu. Las referencias quedan guardadas sin mostrar una lista debajo del formulario.", "manual": null},
   {"v": 47, "fecha": "2026-11-23", "texto": "Cada pedido se procesa en la compu de quien lo solicita: clips, correcciones, sugerencias y preparación de material. Si esa compu está apagada u ocupada, espera allí. El rastreo automático queda ligado a quien lo configuró y los envíos aprobados los avanza su propia compu.", "manual": null},

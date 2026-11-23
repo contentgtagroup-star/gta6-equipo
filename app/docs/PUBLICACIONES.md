@@ -12,6 +12,8 @@
 | `META_GRAPH_VERSION` | Versión Graph habilitada por la app; por defecto v27.0 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_CHANNEL_ID` | OAuth del canal; habilitar YouTube Data API y YouTube Analytics API |
 | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | Login Kit, `video.upload`, `video.list`, `user.info.basic`, `user.info.stats` |
+| `TIKTOK_ENV` | `sandbox` para reutilizar la app de pruebas de GTA; sin definir usa producción |
+| `TIKTOK_SANDBOX_CLIENT_KEY`, `TIKTOK_SANDBOX_CLIENT_SECRET` | Claves de la app sandbox existente; solicita solo `user.info.basic,video.upload` |
 | `BUFFER_API_KEY`, `BUFFER_CHANNEL_ID`, `BUFFER_ORGANIZATION_ID` | Integración personal de Buffer; canal de X y organización para métricas |
 | `PUBLICACION_ACTIVA` | Dejar sin definir durante la configuración; `1` habilita el procesamiento de los envíos aprobados |
 
@@ -20,6 +22,14 @@ Los callbacks OAuth son `https://ORIGEN/api/conexion/meta`,
 Registrar cada uno en su proveedor y conectar desde el panel. Buffer usa su clave
 personal de API en el servidor; el botón comprueba su acceso, no pide contraseñas.
 No rotar la clave de cifrado sin migrar antes los tokens existentes o reconectar.
+
+TikTok ya se preparó en `gta-publicador` con una app sandbox y un callback de
+GitHub Pages. Para autorizar desde este panel, agregar también
+`https://gta6-equipo.vercel.app/api/conexion/tiktok` en Login Kit de esa misma app.
+Los secretos de GitHub no se pueden descargar; sus refresh tokens no se importan
+ni se rotan durante la configuración del panel. La autorización se hace de nuevo
+desde Conectar usando las claves existentes. Sandbox no equivale a producción
+aprobada; no habilitar envíos automáticos al preparar esta conexión de prueba.
 
 3. Actualizar las herramientas con `equipo.py herramientas`. Para Twitch y Kick,
    preparar Whisper una vez con `procesar.py preparar-whisper`; requiere un

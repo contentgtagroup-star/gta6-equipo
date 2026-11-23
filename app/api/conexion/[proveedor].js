@@ -3,23 +3,25 @@ import { exigir, responder } from '../../lib/comun.js'
 import { leerPub, guardarPub, eventoPub } from '../../lib/publicacion_store.js'
 import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH } from '../../lib/conexiones.js'
 import { errorPublicacion } from '../../lib/publicacion.js'
+import { importarConexiones } from '../../lib/importar_conexiones.js'
 
 export default async function handler (req, res) {
   const p = String(req.query.proveedor || '')
   res.setHeader('Cache-Control', 'no-store')
   let etapa = 'iniciar'
   try {
+    if (p === 'importar') return responder(res, 200, await importarConexiones(req))
     if (!['meta', 'google', 'tiktok', 'buffer'].includes(p)) throw errorPublicacion('Conexión desconocida.')
     if (req.method === 'POST') {
       const yo = exigir(req, res); if (!yo) return
       if (req.body?.op === 'renovar' && p !== 'meta') { await tokenConexion(p); return responder(res, 200, { ok: true }) }
       if (p === 'buffer') {
         const t = await tokenConexion(p)
-        const datos = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { Authorization: 'Bearer ' + t.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { channel(id: ${JSON.stringify(t.channel_id)}) { id name service isDisconnected isLocked } }` }) })
+        const datos = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { Authorization: 'Bearer ' + t.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { channel(input: {id: ${JSON.stringify(t.channel_id)}}) { id name service isDisconnected isLocked } }` }) })
         const canal = datos.data?.channel
         if (!canal || String(canal.service).toLowerCase() !== 'twitter' || canal.isDisconnected || canal.isLocked) throw errorPublicacion('El canal configurado en Buffer no es una cuenta de X conectada y disponible.', 424)
         const actual = await leerPub('conexiones', p)
-        await guardarPub('conexiones', p, { estado: 'conectada', sincronizada_el: Date.now(), cuenta: canal.name }, actual?.version || 0)
+        await guardarConexion(p, { ...t, cuenta: canal.name }, actual)
         return responder(res, 200, { ok: true })
       }
       const c = configOAuth(p), state = randomBytes(32).toString('hex')

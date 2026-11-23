@@ -8,6 +8,23 @@ de YouTube (`YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN`) y Buffer
 las apps no existan. Los secretos de GitHub no permiten recuperar sus valores
 por lectura: una migración al panel requiere transferirlos por un canal seguro.
 
+El puente temporal `POST /api/conexion/importar` recibe únicamente esas dos
+integraciones, valida los canales esperados y cifra los accesos en Supabase.
+Requiere `IMPORTACION_CONEXIONES_TOKEN`, de un solo uso; transferirlo por stdin
+a GitHub Actions, nunca por argumentos, logs ni archivos del repo. Después de
+importar, eliminar ese permiso temporal de GitHub y Vercel. El cliente Desktop
+existente de YouTube renueva con sus datos cifrados, sin crear otro OAuth web.
+
+Al aprobar un short se eligen sus redes conectadas y se reserva un mismo
+horario por short. El límite global es de 6 shorts por día argentino, no seis
+por persona ni por red. Hay seis franjas de 9 a 21 h, con minuto aleatorio y
+al menos una hora entre turnos. Una agenda con control de versión serializa
+aprobaciones y contabiliza las salidas reales. Si un turno vence más de 15
+minutos sin iniciarse, se reprograma sin vaciar atrasados de golpe. Cada PC
+sigue procesando solo los envíos que aprobó su usuario. La cola antigua sin
+`programado_el` queda en espera. YouTube y TikTok conservan el flujo de borrador:
+la agenda prepara el envío, la publicación pública se completa en cada red.
+
 1. Ejecutar `supabase/migrations/202611220001_publicaciones.sql` en el proyecto
    Supabase del equipo. La tabla nueva solo admite acceso del servidor.
 2. Configurar en Vercel, sin subir los valores al repositorio:

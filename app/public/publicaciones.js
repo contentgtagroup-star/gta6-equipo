@@ -1,9 +1,10 @@
 /* Usa la conexión, componentes y paleta del panel existente. */
 (() => {
   const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '' }
+  const aprobando = new Set()
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
   const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', conectada: 'Conectada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
-  const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
+  const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Cordoba', hour12: false }) : 'Todavía no'
   const num = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'
   const post = cuerpo => api('/api/publicacion', cuerpo)
   function boton(texto, accion, clase = 'tiny') {
@@ -53,7 +54,7 @@
       const datos = await api('/api/publicacion'), firma = JSON.stringify(datos)
       const sinDatos = !P.datos
       P.datos = datos
-      $('pubEstado').textContent = datos.automatico_activo ? 'Solo se envía material aprobado. YouTube y TikTok quedan en borrador.' : 'Podés preparar y revisar publicaciones. Los envíos automáticos todavía están en espera.'
+      $('pubEstado').textContent = datos.automatico_activo ? 'Hasta 6 shorts por día para todo el equipo, en horarios aleatorios de Argentina. YouTube y TikTok quedan en borrador.' : 'Podés preparar y revisar publicaciones. Las aprobaciones reservan horario; los envíos automáticos todavía están en espera.'
       if (firma !== P.firma || forzar || sinDatos) { P.firma = firma; render() }
     } catch (e) {
       P.error = e.message || 'No se pudieron cargar las publicaciones. Probá Actualizar.'
@@ -82,8 +83,8 @@
         el('p', {}, etiquetas[c.estado] || c.estado), el('p', { class: 'small muted' }, c.modo === 'automatico' ? 'Publica después de aprobar.' : c.id === 'tiktok' ? 'Llega al Inbox: terminás de publicar en TikTok.' : 'Se sube como privado: revisás el Short en YouTube Studio.'),
         c.entorno === 'sandbox' && el('p', { class: 'small muted' }, 'TikTok sandbox: conexión de prueba, con las cuentas autorizadas en esa app.'),
         el('p', { class: 'small muted' }, 'Última sincronización: ' + fecha(c.sincronizada_el)),
-        boton(c.estado === 'conectada' ? 'Reconectar' : 'Conectar', async () => {
-          const d = await api('/api/conexion/' + c.proveedor, { op: 'iniciar' })
+        boton(c.origen === 'gta-publicador' ? 'Verificar conexión' : c.estado === 'conectada' ? 'Reconectar' : 'Conectar', async () => {
+          const d = await api('/api/conexion/' + c.proveedor, { op: c.origen === 'gta-publicador' ? 'renovar' : 'iniciar' })
           if (d.url) location.assign(d.url); else { toast('Conexión verificada'); await cargar(true) }
         })))
     }
@@ -183,8 +184,9 @@
     if (!P.datos.sugerencias.some(s => s.estado !== 'aprobada')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
   }
   function cola(box) {
+    box.append(el('p', { class: 'small muted' }, 'Máximo 6 shorts por día entre todos, de 9 a 21 h de Argentina. Cada short comparte horario en sus redes. Si tu compu no llega a tiempo, se reserva otro horario; los atrasados no salen todos juntos. YouTube y TikTok requieren completar la publicación en su plataforma.'))
     box.append(boton('Procesar próximo envío', async () => { const d = await post({ op: 'procesar' }); toast(d.activo === false ? 'Los envíos automáticos todavía están en espera.' : 'Cola revisada'); await cargar(true) }))
-    for (const p of [...P.datos.cola].sort((a, b) => b.creado - a.creado)) {
+    for (const p of [...P.datos.cola].sort((a, b) => (a.programado_el || Infinity) - (b.programado_el || Infinity))) {
       const acciones = el('div', { class: 'row' })
       acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
       if (['pendiente', 'error'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
@@ -193,6 +195,7 @@
         dialogo('Confirmar publicación manual', campo('Link público de la publicación', url), () => post({ op: 'confirmar_manual', id: p.id, version: p._version, url: url.value }), 'Confirmar')
       }))
       box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo), el('p', {}, etiquetas[p.estado] || p.estado),
+        el('p', { class: 'small' }, p.programado_el ? 'Programado: ' + fecha(p.programado_el) + ' · Argentina' : 'Sin horario: envío anterior a la programación automática; queda en espera.'),
         el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('p', { class: 'small', style: 'color:var(--bad)' }, p.error),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), acciones))
     }
@@ -241,11 +244,15 @@
     box.append(el('div', { class: 'row' }, campo('Cuenta', red), campo('Ventana', ventana), boton('Sincronizar', () => mostrar(true))), resultado)
     mostrar()
   }
-  window.aprobarClipPublicacion = c => {
-    const destinos = checksRedes()
-    dialogo('Aprobar clip', el('div', {}, el('p', {}, c.titulo || c.gancho), el('p', { class: 'small' }, 'Elegí dónde publicarlo. Instagram, Facebook y X se envían automáticamente cuando las conexiones están habilitadas. YouTube y TikTok quedan en borrador.'), destinos), async () => {
-      await post({ op: 'aprobar_clip', id: c.id, version: c._version, plataformas: destinos.valores() }); toast('Clip aprobado y en cola'); await window.cargar?.()
-    }, 'Aprobar y enviar a cola')
+  window.aprobarClipPublicacion = async c => {
+    if (aprobando.has(c.id)) return
+    aprobando.add(c.id)
+    try {
+      const d = await post({ op: 'aprobar_clip', id: c.id, version: c._version })
+      toast('Short programado: ' + fecha(d.programado_el) + ' · Argentina')
+      await window.cargar?.(); await cargar(true)
+    } catch (e) { toast(e.message || 'No se pudo programar el short.') }
+    finally { aprobando.delete(c.id) }
   }
   $('pubActualizar').addEventListener('click', () => cargar(true))
   render(); cargar()

@@ -64,7 +64,7 @@ export async function jsonRemoto (url, opciones = {}) {
   return d
 }
 export async function guardarConexion (proveedor, datos, actual) {
-  return guardarPub('conexiones', proveedor, { sobre: cifrarConexion(proveedor, datos), sincronizada_el: Date.now(), estado: 'conectada', cuenta: datos.cuenta || '', expira_el: datos.expira_el || null }, actual?.version || 0)
+  return guardarPub('conexiones', proveedor, { sobre: cifrarConexion(proveedor, datos), sincronizada_el: Date.now(), estado: 'conectada', cuenta: datos.cuenta || '', origen: datos.origen || '', expira_el: datos.expira_el || null }, actual?.version || 0)
 }
 export async function marcarConexionVencida (proveedor) {
   const d = await leerPub('conexiones', proveedor)
@@ -85,6 +85,8 @@ export function configOAuth (p) {
 }
 export async function tokenConexion (proveedor) {
   if (proveedor === 'buffer') {
+    const guardada = await leerPub('conexiones', proveedor)
+    if (guardada?.datos.sobre) return descifrarConexion(proveedor, guardada.datos.sobre)
     if (!process.env.BUFFER_API_KEY || !process.env.BUFFER_CHANNEL_ID) throw errorPublicacion('Falta conectar X en Buffer y configurar su integración.', 424)
     return { access_token: process.env.BUFFER_API_KEY, channel_id: process.env.BUFFER_CHANNEL_ID, organization_id: process.env.BUFFER_ORGANIZATION_ID }
   }
@@ -95,7 +97,8 @@ export async function tokenConexion (proveedor) {
   if (!t.refresh_token || proveedor === 'meta') throw errorPublicacion('La conexión venció. Reconectá la cuenta.', 424)
   if (actual.datos.refrescando_hasta > Date.now()) throw errorPublicacion('La cuenta está renovando su acceso. Volvé a intentar en un momento.', 409)
   const bloqueo = await guardarPub('conexiones', proveedor, { ...actual.datos, refrescando_hasta: Date.now() + 60000 }, actual.version)
-  const c = configOAuth(proveedor)
+  const c = proveedor === 'google' && t.client_id && t.client_secret
+    ? { id: t.client_id, secret: t.client_secret, token: 'https://oauth2.googleapis.com/token' } : configOAuth(proveedor)
   const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh_token, client_secret: c.secret, [proveedor === 'tiktok' ? 'client_key' : 'client_id']: c.id })
   const d = await jsonRemoto(c.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
   t = { ...t, ...d, refresh_token: d.refresh_token || t.refresh_token, expira_el: Date.now() + Number(d.expires_in) * 1000 }
@@ -112,7 +115,7 @@ export async function estadosConexiones () {
   return Object.entries(REDES).map(([id, r]) => {
     const d = cache[r.proveedor]
     const vencido = d.expira_el && d.expira_el <= Date.now()
-    return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '',
+    return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '', origen: d.origen || '',
       ...(id === 'tiktok' ? { entorno: process.env.TIKTOK_ENV === 'sandbox' ? 'sandbox' : 'production' } : {}) }
   })
 }

@@ -1,6 +1,7 @@
 {
- "version": 51,
+ "version": 52,
  "cambios": [
+  {"v": 52, "fecha": "2026-11-23", "texto": "Aprobar un short reserva automáticamente el mismo horario aleatorio en sus redes conectadas: hasta 6 shorts por día entre todos, de 9 a 21 h de Argentina. Cada envío sigue ligado a la compu que lo aprobó y los horarios vencidos se reprograman. La cola muestra los horarios. X y YouTube pueden reutilizar sus accesos existentes del publicador; YouTube y TikTok siguen en borrador.", "manual": null},
   {"v": 51, "fecha": "2026-11-23", "texto": "La conexión de TikTok informa el motivo de rechazo (credenciales, código vencido, callback o permisos) y registra la etapa sin exponer accesos. El intercambio y la renovación de acceso envían explícitamente el formato requerido por TikTok.", "manual": null},
   {"v": 50, "fecha": "2026-11-23", "texto": "TikTok permite reutilizar la app sandbox que ya tenía GTA. Usa sus claves separadas y los permisos de prueba existentes; Conexiones indica cuándo se está trabajando en sandbox.", "manual": "Agregar el callback del panel en Login Kit de la app sandbox y autorizar desde Conectar."},
   {"v": 49, "fecha": "2026-11-23", "texto": "Publicaciones usa la misma sesión del panel y ya no vuelve a pedir la clave cuando falla la configuración. Distingue una base pendiente de habilitar de un problema de conexión y permite volver a cargar después de resolverlo.", "manual": null},

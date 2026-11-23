@@ -37,3 +37,25 @@ test('Publicaciones conserva la sesión ante un error de base y se recupera al a
   assert.doesNotMatch(texto($('pubContenido')), /clave|Cargando/)
   assert.match($('pubEstado').textContent, /preparar y revisar/)
 })
+test('Aprobar programa con un clic y bloquea el doble clic sin abrir diálogo', async () => {
+  const nodos = {}, pedidos = [], mensajes = []
+  const el = (tag, attrs = {}, ...children) => ({ tag, attrs, children: children.flat().filter(Boolean), append() {}, replaceChildren(...c) { this.children = c }, setAttribute() {}, addEventListener() {} })
+  let terminar
+  const espera = new Promise(resolve => { terminar = resolve })
+  const ctx = { S: { clave: 'sesion' }, $: id => nodos[id] ||= el('div'), el, window: { cargar: async () => {} }, document: { hidden: false }, setInterval() {}, toast: m => mensajes.push(m),
+    api: async (url, body) => {
+      if (!body) return { conexiones: [], automatico_activo: true }
+      pedidos.push({ url, body }); await espera
+      return { programado_el: Date.parse('2026-11-24T16:23:00-03:00') }
+    } }
+  vm.createContext(ctx); vm.runInContext(readFileSync(new URL('../public/publicaciones.js', import.meta.url), 'utf8'), ctx)
+  await new Promise(setImmediate)
+  const c = { id: 'clip-uno', _version: 3 }
+  const primero = ctx.window.aprobarClipPublicacion(c)
+  await ctx.window.aprobarClipPublicacion(c)
+  assert.equal(pedidos.length, 1)
+  assert.equal(pedidos[0].body.op, 'aprobar_clip')
+  assert.equal(pedidos[0].body.plataformas, undefined)
+  terminar(); await primero
+  assert.match(mensajes[0], /programado.*16:23.*Argentina/)
+})

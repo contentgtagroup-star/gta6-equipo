@@ -167,7 +167,7 @@ html{-webkit-text-size-adjust:100%}
           <ol>
             <li><b>Al iniciar sesión en la compu:</b> el motor de clips arranca solo si preparaste esta PC una vez. Dejala encendida para que pueda crear clips y hacer correcciones.</li>
             <li><b>Hacer clips:</b> elegí cuántos, tocá <b>CREAR CLIPS</b> y elegí dónde buscar: YouTube o Twitch. Tu compu crea el pedido; si ya está ocupada, espera en cola. La barra muestra la etapa del clip en curso y cuántos ya están listos. Podés pausar después del paso actual y reanudar luego.</li>
-            <li><b>Revisar:</b> mirá los <b>Nuevos</b> y poneles de 1 a 5 estrellas. Si está bien, <b>Aprobar</b>. Si está mal, <b>Descartar</b> (se borra en el momento). Las notas orientan los próximos turnos de todo el equipo.</li>
+            <li><b>Revisar:</b> mirá los <b>Nuevos</b> y poneles de 1 a 5 estrellas. <b>Aprobar</b> programa el short en las redes conectadas: horario aleatorio, hasta 6 por día para el equipo. YouTube y TikTok quedan en borrador. Si está mal, <b>Descartar</b> (se borra en el momento). Las notas orientan los próximos turnos de todo el equipo.</li>
             <li><b>Corregir:</b> tocá <b>Corregir</b>, escribí qué cambiar (por ejemplo “cortá del segundo 2 al 3”) y tocá <b>Enviar</b>. El motor de clips lo corrige solo en unos minutos.</li>
             <li><b>Publicar:</b> revisá el material y, al aprobar, elegí las redes. En <b>Publicaciones</b> podés preparar sugerencias, editar la cola y conectar las cuentas. Instagram, Facebook y X salen después de aprobar cuando las conexiones están habilitadas; YouTube y TikTok quedan en borrador para terminar de publicar a mano.</li>
             <li><b>Guardar lo bueno:</b> si un clip publicado sirve para más adelante, tocá <b>Guardar en stock</b>. Lo demás se borra solo.</li>
@@ -262,7 +262,7 @@ const FILTROS = [
 const hoy = new Date();
 document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
-const S = {versionActual:51, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
+const S = {versionActual:52, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600); }
@@ -288,7 +288,7 @@ async function cargar(){
     const d = await api('/api/estado');
     const firma = JSON.stringify(d, (k, v) => (k === 'video_url' || k === 'ahora' || k === 'latido') ? undefined : v);
     const igual = firma === S.firma; S.firma = firma;
-    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 51; S.offset = (d.ahora||Date.now()) - Date.now();
+    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 52; S.offset = (d.ahora||Date.now()) - Date.now();
     estado('Conectado · se actualiza solo');
     $('yoTxt').textContent = 'Sos ' + S.yo; $('btnSalir').hidden = false;
     renderTurno();

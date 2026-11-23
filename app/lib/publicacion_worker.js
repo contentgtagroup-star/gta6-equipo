@@ -1,4 +1,4 @@
-import { listarPub, guardarPub, eventoPub, encolarPub } from './publicacion_store.js'
+import { listarPub, guardarPub, eventoPub, encolarPub, admitirPub } from './publicacion_store.js'
 import { db } from './comun.js'
 import { pasoPublicacion } from './publicar_redes.js'
 import { marcarConexionVencida } from './conexiones.js'
@@ -34,6 +34,17 @@ export async function procesarPublicaciones (yo) {
       if (d.datos.vence > Date.now()) continue
       await guardarPub('cola', d.id, { ...d.datos, estado: 'revisar', error: 'Se interrumpió un envío. Revisá la red antes de volver a enviar para evitar duplicados.' }, d.version)
       await eventoPub('envio_interrumpido', yo, { item_id: d.id }); continue
+    }
+    // Las aprobaciones anteriores a la agenda no se envían al habilitarla.
+    if (!d.datos.programado_el || !d.datos.origen_id) continue
+    const turno = await admitirPub(d.datos.origen_id)
+    if (!turno.listo) {
+      if (turno.programado_el !== d.datos.programado_el) {
+        for (const item of cola.filter(c => c.datos.origen_id === d.datos.origen_id && c.datos.estado !== 'enviando')) {
+          try { await guardarPub('cola', item.id, { ...item.datos, programado_el: turno.programado_el, proximo_el: turno.programado_el }, item.version) } catch (e) { if (e.status !== 409) throw e }
+        }
+      }
+      continue
     }
     try { d = await guardarPub('cola', d.id, { ...d.datos, estado: 'enviando', vence: Date.now() + 180000, procesado_por: yo }, d.version) } catch (e) { if (e.status === 409) continue; throw e }
     const checkpoint = async cambios => { d = await guardarPub('cola', d.id, { ...d.datos, ...cambios }, d.version) }

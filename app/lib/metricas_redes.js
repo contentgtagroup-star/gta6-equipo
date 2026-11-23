@@ -39,7 +39,7 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
     const ids = publicaciones.filter(p => p.plataforma === 'x' && p.remoto_id && p.estado === 'publicado' && p.publicado_el >= desde).slice(0, 10)
     let posts = []
     if (ids.length) {
-      const query = 'query {' + ids.map((p, i) => ' p' + i + ': post(id: ' + JSON.stringify(p.remoto_id) + ') { id externalLink metrics { type value unit } }').join(' ') + ' }'
+      const query = 'query {' + ids.map((p, i) => ' p' + i + ': post(input: {id: ' + JSON.stringify(p.remoto_id) + '}) { id externalLink metrics { type value unit } }').join(' ') + ' }'
       const d = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { ...auth(t).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) })
       const nombres = { impressions: 'impresiones', reach: 'alcance', likes: 'likes', comments: 'comentarios', shares: 'compartidos', saves: 'guardados', clicks: 'clics', views: 'vistas' }
       posts = ids.map((p, i) => ({ id: p.remoto_id, titulo: p.titulo, enlace: d.data?.['p' + i]?.externalLink, ...Object.fromEntries((d.data?.['p' + i]?.metrics || []).filter(m => nombres[m.type.toLowerCase()]).map(m => [nombres[m.type.toLowerCase()], Number(m.value)])) }))

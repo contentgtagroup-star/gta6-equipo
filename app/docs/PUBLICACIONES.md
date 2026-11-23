@@ -65,6 +65,23 @@ videos. Cuando el acceso vence, el panel lo renueva solo con esas mismas
 variables. Para usar un OAuth nuevo en su lugar, configurar
 `YOUTUBE_AUTH_MODE=oauth` junto con `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
 
+Si no se conserva el `YT_REFRESH_TOKEN` original, se genera uno nuevo sin que el
+valor pase por el chat: descargar de Google Cloud Console el `client_secret_*.json`
+de la app de escritorio que ya usa el equipo y correr en la compu, con `vercel` y
+`gh` logueados:
+
+```bash
+python3 app/herramientas/youtube_token_vercel.py ruta/client_secret_XXXX.json
+```
+
+Abre el navegador, autoriza con la cuenta dueña del canal y confirma el canal
+mostrado. El script verifica el canal, manda el token a Vercel Production como
+secreto por stdin y dispara el workflow Verificar. Imprime solo el nombre del
+canal y el resultado; nunca muestra el token. Para cargar el token sin disparar
+el deploy, agregar `--sin-deploy`. Si se conoce el ID del canal, se puede pasar
+`--canal UC...` y se comprueba automáticamente. El `client_secret_*.json` se puede
+borrar al terminar.
+
 TikTok ya se preparó en `gta-publicador` con una app sandbox y un callback de
 GitHub Pages. Para autorizar desde este panel, agregar también
 `https://gta6-equipo.vercel.app/api/conexion/tiktok` en Login Kit de esa misma app.

@@ -15,7 +15,7 @@ dos ejecuciones publiquen a la vez.
 - Proyecto: `prj_54G9WHv8ggngapNEXRDDB0GJ3FTE`.
 - Equipo: `team_teuRF4rK0UsjEY2iUYw3ES4v`.
 - Raíz configurada en Vercel: `app`.
-- Secreto de Actions: `GTA_VERCEL_TOKEN`, generado por el titular en
+- Secreto de Actions: `GTADEPLOY`, generado por el titular en
   https://vercel.com/account/settings/tokens y guardado exclusivamente como
   secreto de Actions en este repositorio. Elegir el menor alcance disponible
   que permita desplegar GTA. El workflow fija los IDs del proyecto y equipo.
@@ -28,7 +28,7 @@ La conexión nativa Git de Vercel sigue pendiente de la autorización entre
 cuentas. Este workflow permite producción sin depender de esa conexión.
 Los previews automáticos de ramas no forman parte de este workflow.
 
-Para activarlo, configurar primero `GTA_VERCEL_TOKEN` y luego integrar el PR
+Para activarlo, configurar primero `GTADEPLOY` y luego integrar el PR
 del workflow. La sesión OAuth del CLI no permite crear ese token por API
 (`Cannot create tokens for this app`). No pegar su valor en el chat ni en
 archivos del repositorio.

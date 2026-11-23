@@ -2,7 +2,7 @@
 
 El workflow `Verificar` publica en el proyecto existente `gta6-equipo` al
 integrar cambios a `main`, después de que pasen las pruebas Node y Python.
-Los PR ejecutan pruebas; no publican en producción. También se puede ejecutar
+Los PR ejecutan pruebas y publican un preview. También se puede ejecutar
 manualmente desde Actions → Verificar → Run workflow, seleccionando `main`.
 
 El job `Publicar GTA` ejecuta `vercel pull`, `vercel build --prod` y
@@ -25,8 +25,23 @@ Eze puede integrar sus PR y ejecutar el workflow con sus permisos de GitHub.
 No necesita una membresía de equipo en Vercel para este flujo.
 
 La conexión nativa Git de Vercel sigue pendiente de la autorización entre
-cuentas. Este workflow permite producción sin depender de esa conexión.
-Los previews automáticos de ramas no forman parte de este workflow.
+cuentas. Este workflow permite producción y previews sin depender de esa conexión.
+
+## Previews de PR
+
+Al abrir o actualizar un PR desde una rama de este repositorio, las pruebas
+deben pasar antes de construir y publicar su preview. Aparece como check
+`Preview del PR`, entorno `gta6-preview-N` y comentario con el enlace. El mismo
+comentario se actualiza con cada commit. Los PR de forks no reciben credenciales
+ni despliegues automáticos. Una ejecución vieja no pisa el enlace de un commit
+nuevo o de un PR cerrado. El preview usa las variables Preview de Vercel.
+
+`GTA_PREVIEW_REVIEWER_EMAIL` es un secreto de Actions con el correo de Vercel
+del revisor. El flujo concede acceso personal a ese deployment; no publica
+enlaces con tokens ni desactiva la protección del proyecto. Eze abre el enlace
+con su cuenta de Vercel y usa su clave del panel. Los previews pueden usar la
+base configurada en Preview; los cambios hechos dentro de la app se guardan
+allí. El workflow de preview no ejecuta publicaciones ni migraciones.
 
 Para activarlo, configurar primero `GTADEPLOY` y luego integrar el PR
 del workflow. La sesión OAuth del CLI no permite crear ese token por API

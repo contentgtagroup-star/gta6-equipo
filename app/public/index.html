@@ -139,9 +139,22 @@ html{-webkit-text-size-adjust:100%}
     </div>
   </div>
 
+  <section id="seccionCrearLink">
+    <h2>Hacer clip desde un link (YouTube / Twitch)</h2>
+    <p class="small dim" style="margin:4px 0 0">Pegá un link de YouTube o Twitch (video, directo o clip) que te parezca interesante para hacer un clip editado con ese material puntual.</p>
+    <form id="clipDirectoForm" class="row" style="margin:10px 0 0;gap:8px">
+      <input id="clipDirectoIn" type="url" required placeholder="Pegá un link de YouTube o Twitch (ej. https://youtube.com/watch?v=... o https://clips.twitch.tv/...)" style="flex:3 1 260px">
+      <input id="clipDirectoNota" maxlength="200" placeholder="¿Qué momento o idea tiene de interesante? (opcional)" style="flex:2 1 200px">
+      <button class="primary" type="submit" id="btnClipDirecto" style="white-space:nowrap">CREAR CLIP</button>
+      <button type="button" class="ghost" id="btnClipDirectoCola" style="white-space:nowrap">Solo a la cola</button>
+    </form>
+    <div class="small" id="clipDirectoFeedback" style="margin-top:6px" aria-live="polite"></div>
+  </section>
+
   <section>
-    <h2>Referencias para la IA</h2>
-    <p class="small dim" style="margin:4px 0 0">Pegá links de contenido que funciona (YouTube, Twitch, Kick o posts de X). La IA los mira en cada pedido para aprender qué momentos, temas y ganchos son los mejores.</p>
+    <details id="refsBox">
+      <summary>Referencias para la IA (<span id="refsCount">0</span>)</summary>
+      <p class="small dim" style="margin:6px 0 0">Links de contenido que el equipo guardó como ejemplo. La IA los consulta en cada pedido para aprender qué momentos, temas y ganchos funcionan mejor.</p>
       <form id="linkForm" class="row" style="margin:10px 0 0">
         <input id="linkIn" type="url" required placeholder="Pegá un link de YouTube, Twitch, Kick o X" style="flex:3 1 260px">
         <input id="linkNota" maxlength="200" placeholder="¿Qué tiene de bueno? (opcional)" style="flex:2 1 200px">
@@ -149,6 +162,7 @@ html{-webkit-text-size-adjust:100%}
         <button class="primary" type="submit">Agregar</button>
       </form>
       <div id="refs" class="small" style="margin-top:8px"></div>
+    </details>
   </section>
 
   <section>
@@ -341,10 +355,17 @@ function pasoPoToken(so){
    d) Verificá con "yt-dlp -v --simulate https://www.youtube.com/watch?v=jNQXAC9IVRw" que aparezcan "PO Token Providers: bgutil..." y "Solving JS challenges using node", sin el aviso "n challenge solving failed". Si algo de este paso falla, contame qué pasó y seguí con el resto: es opcional.`;
 }
 function promptActualizar(){
-  return `Actualizá las herramientas del equipo GTA 6 en esta compu. Buscá la carpeta gta6-tools que ya está instalada; no pidas ni muestres la clave de la app.
-Desde esa carpeta corré "python3 equipo.py herramientas" (en Windows: "py equipo.py herramientas"). Si se actualizó, corré el mismo comando una vez más y después "python3 procesar.py revisar" (en Windows: "py procesar.py revisar").
-Si la revisión dice "OPC. generador de PO Token": ${pasoPoToken(navigator.userAgent.includes('Windows') ? 'Windows' : 'otro')}
-Decime qué versión quedó instalada, si la revisión dice OK y si el motor de clips quedó activo. No borres videos ni cambies la configuración.
+  const so = navigator.userAgent.includes('Windows') ? 'Windows' : (navigator.userAgent.includes('Mac') ? 'Mac' : 'Linux');
+  const py = so==='Windows' ? 'py' : 'python3';
+  const instPy12 = so==='Mac' ? 'brew install python@3.12' : (so==='Windows' ? 'winget install Python.Python.3.12' : 'instalá python3.12 con el gestor de paquetes de tu sistema');
+  return `Actualizá las herramientas del equipo GTA 6 en esta compu (${so}). Buscá la carpeta gta6-tools que ya está instalada; no pidas ni muestres la clave de la app.
+1. Desde esa carpeta corré "${py} equipo.py herramientas" (si se actualizó, corré el mismo comando una vez más).
+2. Prepará Whisper para poder transcribir clips de Twitch, Kick y videos sin subtítulos:
+   Corré "${py} procesar.py preparar-whisper".
+   Si avisa que falta Python 3.12, instalalo con "${instPy12}" y volvé a correr "${py} procesar.py preparar-whisper". Usa un entorno propio aislado (.whisper/py312) sin tocar el Python del sistema.
+3. Corré "${py} procesar.py revisar": tiene que decir OK en todas las herramientas y en faster-whisper.
+4. Si la revisión dice "OPC. generador de PO Token": ${pasoPoToken(so)}
+5. Decime qué versión quedó instalada, si la revisión dice OK y si el motor de clips quedó activo. No borres videos ni cambies la configuración.
 Las calificaciones de los clips ya están guardadas en la app compartida: el próximo pedido trae el feedback más reciente para todos. No hace falta copiarlas a cada PC. El motor se actualiza solo mientras está activo.`;
 }
 function promptSetup(so){

@@ -16,20 +16,20 @@ export async function actualizarClipPublicado (clipId, yo) {
 export async function procesarPublicaciones (yo) {
   // La aprobación guardada es la intención durable: repara una respuesta cortada
   // entre aprobar y completar todos los destinos, sin duplicar los ya encolados.
-  const aprobadas = (await listarPub('sugerencias')).filter(s => s.datos.estado === 'aprobada' && !s.datos.encolado && s.datos.aprobado_por)
+  const aprobadas = (await listarPub('sugerencias')).filter(s => s.datos.estado === 'aprobada' && !s.datos.encolado && s.datos.aprobado_por === yo)
   for (const s of aprobadas.slice(0, 1)) {
     await encolarPub('sug-' + s.id, s.datos, s.datos.aprobado_por)
     try { await guardarPub('sugerencias', s.id, { ...s.datos, encolado: true }, s.version) } catch (e) { if (e.status !== 409) throw e }
   }
   const { data: clips, error: errorClips } = await db().from('docs').select('id,datos,version').eq('coleccion', 'clips').eq('datos->>publicacion_cola', 'true').in('datos->>estado', ['aprobado', 'publicado']).limit(100)
-  if (!errorClips) for (const c of (clips || []).filter(c => !c.datos.publicacion_encolada && c.datos.publicacion_snapshot).slice(0, 1)) {
+  if (!errorClips) for (const c of (clips || []).filter(c => c.datos.aprobado_por === yo && !c.datos.publicacion_encolada && c.datos.publicacion_snapshot).slice(0, 1)) {
     await encolarPub('clip-' + c.id, c.datos.publicacion_snapshot, c.datos.aprobado_por)
     await db().from('docs').update({ datos: { ...c.datos, publicacion_encolada: true }, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version)
   }
   if (process.env.PUBLICACION_ACTIVA !== '1') return { ok: true, activo: false }
   const cola = (await listarPub('cola')).filter(d => ['pendiente', 'procesando', 'enviando'].includes(d.datos.estado) && (d.datos.proximo_el || 0) <= Date.now()).sort((a, b) => (a.datos.proximo_el || 0) - (b.datos.proximo_el || 0))
   for (let d of cola) {
-    if (!d.datos.aprobado_por) continue
+    if (d.datos.aprobado_por !== yo) continue
     if (d.datos.estado === 'enviando') {
       if (d.datos.vence > Date.now()) continue
       await guardarPub('cola', d.id, { ...d.datos, estado: 'revisar', error: 'Se interrumpió un envío. Revisá la red antes de volver a enviar para evitar duplicados.' }, d.version)

@@ -47,6 +47,28 @@ function servidor (inicial, escuchas = EQUIPO.map(id => ({ id, datos: { ultima: 
   return { handler: contexto.handler, actual: () => doc, radar: () => radar }
 }
 
+test('reintentar conserva la PC dueña en pedidos anteriores y rechaza al otro integrante', async () => {
+  const s = servidor({ datos: { estado: 'error', pedido_id: 'anterior', asignado: 'Luis', cantidad: 1 }, version: 1 })
+  const ajeno = {}, propio = {}
+  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reintentar', pedido_id: 'anterior' } }, ajeno)
+  assert.equal(ajeno.codigo, 403)
+  await s.handler({ method: 'POST', yo: 'Luis', body: { op: 'reintentar', pedido_id: 'anterior' } }, propio)
+  assert.equal(propio.codigo, 200)
+  assert.equal(s.actual().datos.pedido_por, 'Luis')
+  assert.equal(s.actual().datos.asignado, null)
+})
+
+test('otra persona no reanuda ni cancela una pausa solicitada de un pedido ajeno', async () => {
+  for (const estado of ['pausado', 'pausa_solicitada']) {
+    const s = servidor({ datos: { estado, pedido_id: 'de-luis', pedido_por: 'Luis', asignado: 'Luis', pausa_compatible: true }, version: 1 })
+    const res = {}
+    await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reanudar', pedido_id: 'de-luis' } }, res)
+    assert.equal(res.codigo, 403)
+    assert.equal(s.actual().datos.estado, estado)
+    assert.equal(s.actual().version, 1)
+  }
+})
+
 test('dos escuchas de la misma persona no toman el mismo turno', async () => {
   const s = servidor({ datos: { estado: 'pendiente', pedido_id: 'pedido-1', asignado: 'Eze', prompt: 'crear clips', cantidad: 3 }, version: 1 })
   const a = {}, b = {}
@@ -173,7 +195,7 @@ test('una pausa en ejecución espera al cierre seguro y luego permite continuar'
   assert.deepEqual([pausa.codigo, latido.codigo, cierre.codigo], [200, 200, 200])
   assert.equal(s.actual().datos.estado, 'pausado')
   assert.equal(cierre.datos.estado, 'pausado')
-  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reanudar', pedido_id: 'p2' } }, reanudar)
+  await s.handler({ method: 'POST', yo: 'Eze', body: { op: 'reanudar', pedido_id: 'p2' } }, reanudar)
   await s.handler({ method: 'POST', yo: 'Eze', body: { op: 'tomar', pedido_id: 'p2' } }, tomar)
   assert.deepEqual([reanudar.codigo, tomar.codigo], [200, 200])
   assert.equal(tomar.datos.prompt, 'Crear clips')
@@ -202,7 +224,7 @@ test('un pedido viejo todavía en cola se puede pausar sin riesgo', async () => 
   const s = servidor({ datos: { estado: 'pendiente', pedido_id: 'viejo', asignado: 'Luis' }, version: 1 })
   const pausa = {}, reanudar = {}
   await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'pausar', pedido_id: 'viejo' } }, pausa)
-  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reanudar', pedido_id: 'viejo' } }, reanudar)
+  await s.handler({ method: 'POST', yo: 'Luis', body: { op: 'reanudar', pedido_id: 'viejo' } }, reanudar)
   assert.deepEqual([pausa.codigo, reanudar.codigo], [200, 200])
   assert.equal(s.actual().datos.estado, 'pendiente')
 })
@@ -314,8 +336,11 @@ test('al reanudar, un pedido de Luis vuelve a su PC aunque estuviera en Cuervo',
     { estado: 'pausado', etapa: 'ejecutando', pedido_id: 'de-luis', pedido_por: 'Luis',
       asignado: 'Cuervo', cantidad: 3, pausa_compatible: true, prompt: 'motor de Cuervo' }
   ] }, version: 1 })
-  const reanudar = {}, tomarCuervo = {}, tomarLuis = {}
-  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reanudar', pedido_id: 'de-luis' } }, reanudar)
+  const reanudar = {}, ajeno = {}, tomarCuervo = {}, tomarLuis = {}
+  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reanudar', pedido_id: 'de-luis' } }, ajeno)
+  assert.equal(ajeno.codigo, 403)
+  assert.equal(s.actual().datos.pedidos[0].estado, 'pausado')
+  await s.handler({ method: 'POST', yo: 'Luis', body: { op: 'reanudar', pedido_id: 'de-luis' } }, reanudar)
   assert.equal(reanudar.codigo, 200)
   assert.equal(s.actual().datos.pedidos[0].asignado, 'Luis')
   assert.match(s.actual().datos.pedidos[0].prompt, /motor de clips de Luis/)
@@ -342,15 +367,16 @@ test('el trabajo de un pedido no reemplaza el avance de otro', async () => {
 test('un turno que termina con cero clips queda en error y se puede reintentar', async () => {
   const s = servidor({ datos: { pedidos: [
     { estado: 'ejecutando', pedido_id: 'sin-clips', asignado: 'Cuervo', run_id: 'r1', cantidad: 3 }
-  ] }, version: 1 }, [{ id: 'Eze', datos: { ultima: Date.now(), version: VERSION_TURNOS } }])
+  ] }, version: 1 }, [{ id: 'Cuervo', datos: { ultima: Date.now(), version: VERSION_TURNOS } }])
   const cierre = {}, reintento = {}
   await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'cerrar', pedido_id: 'sin-clips', run_id: 'r1', ok: true, resumen: 'Listo' } }, cierre)
   assert.equal(cierre.codigo, 200)
   assert.equal(cierre.datos.estado, 'error')
   assert.match(s.actual().datos.pedidos[0].resumen, /0\/3 clips/)
-  await s.handler({ method: 'POST', yo: 'Eze', body: { op: 'reintentar', pedido_id: 'sin-clips' } }, reintento)
+  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reintentar', pedido_id: 'sin-clips' } }, reintento)
   assert.equal(reintento.codigo, 200)
   assert.equal(s.actual().datos.pedidos[0].estado, 'pendiente')
+  assert.equal(s.actual().datos.pedidos[0].pedido_por, 'Cuervo')
 })
 
 test('un pedido viejo marcado terminado sin clips también se puede reintentar', async () => {
@@ -359,7 +385,7 @@ test('un pedido viejo marcado terminado sin clips también se puede reintentar',
   ] }, version: 1 }, [{ id: 'Cuervo', datos: { ultima: Date.now(), version: VERSION_TURNOS } },
     { id: 'Luis', datos: { ultima: 0, version: VERSION_TURNOS } }])
   const res = {}
-  await s.handler({ method: 'POST', yo: 'Luis', body: { op: 'reintentar', pedido_id: 'viejo-incompleto' } }, res)
+  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reintentar', pedido_id: 'viejo-incompleto' } }, res)
   assert.equal(res.codigo, 200)
   assert.equal(s.actual().datos.pedidos[0].estado, 'pendiente')
 })
@@ -369,7 +395,7 @@ test('reintentar un error conserva el pedido y regenera el prompt', async () => 
     pedido_el: Date.now() - 1000, prompt: null, resumen: 'out of usage credits' }, version: 4 },
   [{ id: 'Eze', datos: { ultima: Date.now(), version: VERSION_TURNOS } }])
   const reintento = {}, tomar = {}
-  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'reintentar', pedido_id: 'p-viejo' } }, reintento)
+  await s.handler({ method: 'POST', yo: 'Eze', body: { op: 'reintentar', pedido_id: 'p-viejo' } }, reintento)
   assert.equal(reintento.codigo, 200)
   assert.equal(s.actual().datos.pedido_id, 'p-viejo')
   assert.equal(s.actual().datos.asignado, 'Eze')

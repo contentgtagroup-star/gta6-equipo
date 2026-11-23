@@ -105,4 +105,28 @@ test('dos compus no renuevan simultáneamente el mismo refresh token', async () 
   assert.equal(resultados.find(r => r.status === 'rejected').reason.status, 409)
   assert.equal(remotas.length, 1)
 })
+test('cada compu toma solo sus trabajos editoriales, incluso si los ajenos vencieron', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'fuentes', id: 'f1', version: 1, datos: { activa: true } })
+  for (const [id, pedido_por, estado] of [['ajeno', 'Luis', 'pendiente'], ['vencido', 'Luis', 'ejecutando'], ['sin-dueno', undefined, 'pendiente'], ['propio', 'Eze', 'pendiente']]) {
+    tablas.publicacion_docs.push({ coleccion: 'trabajos', id, version: 1, datos: { pedido_por, estado, vence: 1, fuente_id: 'f1', creado: 1 } })
+  }
+  const r = await llamada({ op: 'tomar_trabajo' })
+  assert.equal(r.codigo, 200)
+  assert.equal(r.datos.trabajo.id, 'propio')
+  assert.equal((await llamada({ op: 'tomar_trabajo' })).datos.trabajo, null)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'vencido').version, 1)
+})
+test('rastreo automático y publicaciones de otro integrante esperan a su compu', async () => {
+  reset(); process.env.PUBLICACION_ACTIVA = '1'
+  tablas.publicacion_docs.push({ coleccion: 'fuentes', id: 'ajena', version: 1, datos: { activa: true, automatica: true, creado_por: 'Luis', tipo: 'perfil', intervalo_horas: 6 } })
+  const s = sugerencia(); s.datos.estado = 'aprobada'; s.datos.aprobado_por = 'Luis'; tablas.publicacion_docs.push(s)
+  tablas.publicacion_docs.push({ coleccion: 'cola', id: 'envio-ajeno', version: 1, datos: { estado: 'enviando', vence: 1, aprobado_por: 'Luis', plataforma: 'x' } })
+  assert.equal((await llamada({ op: 'programar_fuentes' })).codigo, 200)
+  await procesarPublicaciones('Eze')
+  assert.equal(tablas.publicacion_docs.filter(d => d.coleccion === 'trabajos').length, 0)
+  assert.equal(tablas.publicacion_docs.filter(d => d.coleccion === 'cola').length, 1)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'envio-ajeno').datos.estado, 'enviando')
+  assert.equal(remotas.length, 0)
+})
 test.after(() => { globalThis.fetch = original })

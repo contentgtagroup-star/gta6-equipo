@@ -88,7 +88,22 @@
       el('div', { class: 'row' }, campo('Activa', activa), campo('Rastrear automáticamente el perfil o feed', auto)), campo('Revisar cada cuántas horas', horas)),
     () => post({ op: 'fuente_guardar', id: f.id, version: f._version, datos: { url: url.value, tipo: tipo.value, idioma: idioma.value, nota: nota.value, activa: activa.checked, automatica: auto.checked, intervalo_horas: Number(horas.value) } }))
   }
+  function generarDesdeLink(box) {
+    const link = entrada('', { placeholder: 'Pegá el link de un post (X, etc.) y generá la publicación', maxlength: 1000, style: 'flex:1;min-width:220px' })
+    const generar = boton('Generar desde link', async () => {
+      const url = link.value.trim()
+      if (!url) return toast('Pegá un link primero.')
+      await post({ op: 'generar_link', url }); link.value = ''
+      toast('Generando. La vas a ver en Sugerencias.'); P.tab = 'sugerencias'; await cargar(true)
+    }, 'tiny primary')
+    link.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); generar.click() } })
+    box.append(el('article', { class: 'bloque', style: 'padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:10px' },
+      el('h3', { class: 'small', style: 'margin:0 0 8px' }, 'Generar desde link'),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, generar),
+      el('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Capta el texto y las imágenes del post, lo adapta al español y deja la publicación en Sugerencias para revisar y aprobar.')))
+  }
   function fuentes(box) {
+    generarDesdeLink(box)
     box.append(el('div', { class: 'row' }, boton('Agregar fuente', () => editarFuente(), 'tiny primary'), boton('Importar fuentes del equipo', async () => { const d = await post({ op: 'importar_fuentes' }); toast(d.agregadas + ' fuentes nuevas'); await cargar(true) })))
     box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un link puntual se adapta una vez. Los enlaces pendientes de verificar se importan pausados.'))
     for (const f of P.datos.fuentes) {

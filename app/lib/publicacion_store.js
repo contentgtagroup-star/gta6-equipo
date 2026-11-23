@@ -4,6 +4,7 @@ import { errorPublicacion, redesValidas, REDES } from './publicacion.js'
 
 const TABLA = 'publicacion_docs'
 function falloLectura (error) {
+  console.error('publicacion_store: fallo de lectura', error?.code, error?.message)
   return errorPublicacion(['42P01', 'PGRST205'].includes(error.code)
     ? 'La base de Publicaciones todavía no está habilitada. Falta aplicar su preparación en Supabase.'
     : 'No se pudo acceder a la base de Publicaciones. Probá Actualizar; si sigue igual, hay que revisar la conexión del servidor.', 503)

@@ -1,6 +1,7 @@
 {
- "version": 58,
+ "version": 59,
  "cambios": [
+  {"v": 59, "fecha": "2026-11-23", "texto": "Los fallos de la base de Publicaciones quedan registrados en el servidor para diagnosticarlos sin exponer el error interno en el panel.", "manual": "Ninguna: es solo diagnóstico interno."},
   {"v": 58, "fecha": "2026-11-23", "texto": "X vuelve a publicarse automáticamente con Buffer. El posteo usaba consultas viejas de GraphQL (post(id:) y channel(id:) con campos que ya no existen), por eso fallaba aunque la conexión estuviera bien. Ahora usa post(input: { id }) y channel(input: { id }) con isQueuePaused, y muestra el motivo cuando Buffer rechaza una consulta. Sigue sin hacer falta la API directa de X ni créditos.", "manual": "Aprobá un clip con X marcado: debe pasar a Publicado con el link del posteo."},
   {"v": 57, "fecha": "2026-11-23", "texto": "X pasa a modo manual: al aprobar, el envío de X queda en la Cola como «Para subir a mano» y no intenta publicarse solo (mientras se resuelve Buffer). Desde la Cola copiás el título y la descripción, bajás el video y lo subís a mano en X; después tocás «Ya lo publiqué» y pegás el link para dejarlo registrado. Instagram y Facebook siguen automáticos; YouTube y TikTok, en borrador.", "manual": "En la Cola, en cada envío de X: Copiar título y descripción, Bajar video, subirlo en X, y Ya lo publiqué con el link del posteo."},
   {"v": 56, "fecha": "2026-11-23", "texto": "Conectar X usa la misma consulta de canales que el publicador, que sí funciona con Buffer. La consulta anterior pedía campos que Buffer no tiene y por eso fallaba. Si Buffer devuelve un error, el panel muestra el motivo sin exponer la clave.", "manual": "Recargá el panel y tocá Conectar en la tarjeta de X."},

@@ -12,12 +12,9 @@ function baseNodes () {
     clipDirectoIn: { value: '' },
     clipDirectoNota: { value: '' },
     btnClipDirecto: { disabled: false },
-    btnClipDirectoCola: { disabled: false, addEventListener () {} },
+    btnAlimentar: { disabled: false },
     clipDirectoFeedback: fb,
-    clipDirectoForm: { addEventListener () {} },
-    linkForm: { addEventListener () {} },
-    refs: { children: [], replaceChildren (...x) { this.children = x }, append (...x) { this.children.push(...x) } },
-    refsCount: { textContent: '' }
+    clipDirectoForm: { addEventListener (tipo, fn) { this[tipo] = fn } },
   }
   return nodes
 }
@@ -37,27 +34,30 @@ function contexto (nodes, { api, state = {} } = {}) {
   }
   vm.createContext(ctx)
   const inicio = script.indexOf('function leerLink')
-  const fin = script.indexOf('async function borrarReferencia')
+  const fin = script.indexOf('function renderSetup')
   vm.runInContext(script.slice(inicio, fin), ctx)
   return { ctx, llamadas, toasts }
 }
 
 test('hay un solo formulario de clip directo, con nota, botones y feedback', () => {
-  for (const id of ['clipDirectoForm', 'clipDirectoIn', 'clipDirectoNota', 'btnClipDirecto', 'btnClipDirectoCola', 'clipDirectoFeedback']) {
+  new vm.Script(script)
+  for (const id of ['clipDirectoForm', 'clipDirectoIn', 'clipDirectoNota', 'btnClipDirecto', 'btnAlimentar', 'clipDirectoFeedback']) {
     assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, id)
   }
-  assert.ok(html.indexOf('id="clipDirectoForm"') < html.indexOf('id="refsBox"'))
-  assert.match(html, /Referencias para la IA \(<span id="refsCount">/)
+  assert.ok(html.indexOf('id="clipDirectoForm"') < html.indexOf('id="pasosBox"'))
+  assert.match(html, /id="btnAlimentar"[^>]*>ALIMENTAR</)
+  assert.doesNotMatch(html, /id="(?:refs|refsBox|linkForm|btnClipDirectoCola)"/)
 })
 
-test('renderReferencias actualiza el contador plegable', () => {
-  const nodes = baseNodes()
-  const { ctx } = contexto(nodes, { state: { referencias: [{ id: 'a', url: 'https://a', plataforma: 'YouTube' }, { id: 'b', url: 'https://b', plataforma: 'Twitch' }] } })
-  const inicio = script.indexOf('function renderReferencias')
-  const fin = script.indexOf('function renderSetup')
-  vm.runInContext(script.slice(inicio, fin), ctx)
-  ctx.renderReferencias()
-  assert.equal(nodes.refsCount.textContent, '2')
+test('cada botón ejecuta su acción y Enter alimenta sin pedir un clip', () => {
+  const nodes = baseNodes(), { ctx } = contexto(nodes)
+  const acciones = []
+  ctx.alimentarReferencia = () => acciones.push('alimentar')
+  ctx.procesarClipDirecto = () => acciones.push('clip')
+  for (const id of ['btnAlimentar', 'btnClipDirecto', undefined]) {
+    nodes.clipDirectoForm.submit({ preventDefault () {}, submitter: id ? { id } : null })
+  }
+  assert.deepEqual(acciones, ['alimentar', 'clip', 'alimentar'])
 })
 
 test('CREAR CLIP envía enlace, plataforma y nota, y no toca el radar', async () => {
@@ -90,36 +90,43 @@ test('si el servidor rechaza el enlace, no borra el formulario ni finge éxito',
   assert.match(toasts.join(' '), /ya se usó/)
 })
 
-test('Solo a la cola guarda el link en radar y no crea un pedido directo', async () => {
+test('ALIMENTAR guarda la referencia y nota sin crear pedido ni tocar radar, incluso sin motor activo', async () => {
   const nodes = baseNodes()
   nodes.clipDirectoIn.value = 'https://clips.twitch.tv/SomeClipSlug'
-  nodes.clipDirectoNota.value = 'nota para el radar'
-  let radar = { videos: [] }
+  nodes.clipDirectoNota.value = 'nota para la IA'
+  let referencias = { items: [] }
   const { ctx, llamadas } = contexto(nodes, {
+    state: { escucha: {} },
     api: async (ruta, cuerpo) => {
-      if (ruta.startsWith('/api/doc?')) return { existe: true, datos: radar, version: 1 }
-      if (ruta === '/api/doc') { radar = cuerpo.datos; return { ok: true } }
+      assert.ok(!ruta.includes('radar'))
+      if (ruta.startsWith('/api/doc?')) return { existe: true, datos: referencias, version: 1 }
+      if (ruta === '/api/doc') { assert.equal(cuerpo.col, 'fuentes'); assert.equal(cuerpo.id, 'referencias'); referencias = cuerpo.datos; return { ok: true } }
       throw new Error('no debería crear pedido')
     }
   })
-  await ctx.procesarClipDirecto(true)
+  await ctx.alimentarReferencia()
   assert.equal(llamadas.some(x => x.ruta === '/api/turno'), false)
-  assert.equal(radar.videos[0].id, 'twitch_cSomeClipSlug')
-  assert.equal(radar.videos[0].nota, 'nota para el radar')
-  assert.equal(radar.videos[0].para, 'Cuervo')
+  assert.equal(referencias.items[0].id, 'twitch_cSomeClipSlug')
+  assert.equal(referencias.items[0].nota, 'nota para la IA')
+  assert.equal(referencias.items[0].agregado_por, 'Cuervo')
+  assert.equal(nodes.clipDirectoIn.value, '')
 })
 
-test('Solo a la cola no revive un link ya usado ni uno tomado', async () => {
-  for (const estado of ['hecho', 'tomado']) {
+test('ALIMENTAR no duplica referencias y conserva el formulario si falla el guardado', async () => {
+  for (const falla of [false, true]) {
     const nodes = baseNodes()
     nodes.clipDirectoIn.value = 'https://youtu.be/dQw4w9WgXcQ'
     const { ctx, toasts } = contexto(nodes, {
-      api: async ruta => ruta.startsWith('/api/doc?')
-        ? { existe: true, datos: { videos: [{ id: 'dQw4w9WgXcQ', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', estado }] }, version: 1 }
-        : { ok: true }
+      api: async ruta => {
+        if(falla) throw new Error('No se pudo guardar')
+        assert.ok(ruta.startsWith('/api/doc?'))
+        return { existe: true, datos: { items: [{ id: 'dQw4w9WgXcQ' }] }, version: 1 }
+      }
     })
-    await ctx.procesarClipDirecto(true)
-    assert.match(toasts.join(' '), estado === 'hecho' ? /ya se usó/ : /otra compu o pedido/)
-    assert.equal(nodes.clipDirectoIn.value, 'https://youtu.be/dQw4w9WgXcQ')
+    await ctx.alimentarReferencia()
+    assert.match(toasts.join(' '), falla ? /No se pudo guardar/ : /ya estaba guardado/)
+    assert.equal(nodes.clipDirectoIn.value, falla ? 'https://youtu.be/dQw4w9WgXcQ' : '')
+    assert.equal(nodes.btnAlimentar.disabled, false)
+    assert.equal(nodes.btnClipDirecto.disabled, false)
   }
 })

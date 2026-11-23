@@ -58,3 +58,6 @@ app/herramientas/tiempos.jsonl
 *.key
 cookies.txt
 cookies-*.txt
+
+# El ejemplo de configuración sí se versiona
+!app/.env.example

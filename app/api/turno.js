@@ -115,7 +115,7 @@ export default async function handler (req, res) {
     try { categoriaPorId(categoria) } catch (e) { return responder(res, 400, { error: e.message }) }
     const fuente = req.body?.fuente === 'twitch' ? 'twitch' : 'youtube'
     const cantidad = req.body?.cantidad
-    if (!Number.isInteger(cantidad) || cantidad < 2 || cantidad > 5) return responder(res, 400, { error: 'Pedido inválido' })
+    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 5) return responder(res, 400, { error: 'Pedido inválido' })
     const { data: escuchas, error: e2 } = await sb.from('docs').select('id,datos').eq('coleccion', 'escucha').in('id', EQUIPO)
     if (e2) return responder(res, 500, { error: e2.message })
     if (versionEscucha(escuchas, yo) < VERSION_TURNOS) return rechazoVersion(res, versionEscucha(escuchas, yo))

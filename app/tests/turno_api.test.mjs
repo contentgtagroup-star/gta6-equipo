@@ -429,3 +429,15 @@ test('si YouTube bloquea, el pedido queda en pausa con hora de reanudación y se
   assert.equal(reanudar.codigo, 200)
   assert.equal(s.actual().datos.pedidos[0].estado, 'pendiente'); assert.equal(s.actual().datos.pedidos[0].reanudar_el, null)
 })
+
+test('un pedido directo de 1 clip es aceptado con la fuente correspondiente', async () => {
+  const s = servidor(null, [{ id: 'Cuervo', datos: { ultima: Date.now(), version: VERSION_TURNOS } }])
+  const res = {}
+  await s.handler({ method: 'POST', yo: 'Cuervo', body: { op: 'pedir', cantidad: 1, fuente: 'twitch' } }, res)
+  assert.equal(res.codigo, 200)
+  assert.equal(res.datos.ok, true)
+  const nuevo = s.actual().datos.pedidos[0]
+  assert.equal(nuevo.cantidad, 1)
+  assert.equal(nuevo.fuente, 'twitch')
+  assert.equal(nuevo.asignado, 'Cuervo')
+})

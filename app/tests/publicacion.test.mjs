@@ -2,8 +2,22 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { fuenteValida, contenidoValido, ventanaMetricas, REDES } from '../lib/publicacion.js'
 import { cifrarConexion, descifrarConexion, jsonRemoto, configOAuth } from '../lib/conexiones.js'
+import { leerPub, listarPub } from '../lib/publicacion_store.js'
 
 const contenido = { titulo: 'Una caja escondida en GTA 6', descripcion: '¿Qué encuentra cuando la abre?', plataformas: ['instagram'], media: 'reusar', video_path: 'Eze/clip.mp4' }
+
+test('la lectura distingue tabla pendiente de un fallo de conexión sin filtrar el error interno', async () => {
+  for (const code of ['PGRST205', '42P01', 'PGRST000']) {
+    const error = { code, message: 'detalle-interno-no-mostrar' }
+    const q = { select: () => q, eq: () => q, order: () => q,
+      maybeSingle: async () => ({ error }), range: async () => ({ error }) }
+    const sb = { from: () => q }
+    for (const leer of [() => leerPub('fuentes', 'f1', sb), () => listarPub('fuentes', sb)]) {
+      await assert.rejects(leer, e => e.status === 503 && !e.message.includes(error.message) &&
+        (code === 'PGRST000' ? /conexión/.test(e.message) : /Supabase/.test(e.message)))
+    }
+  }
+})
 
 test('las fuentes se normalizan y rechazan red interna, credenciales y protocolos inseguros', () => {
   assert.equal(fuenteValida({ url: 'x.com/SourceVI', tipo: 'perfil' }).url, 'https://x.com/SourceVI')

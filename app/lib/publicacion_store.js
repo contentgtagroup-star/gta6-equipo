@@ -3,16 +3,21 @@ import { db } from './comun.js'
 import { errorPublicacion, redesValidas } from './publicacion.js'
 
 const TABLA = 'publicacion_docs'
+function falloLectura (error) {
+  return errorPublicacion(['42P01', 'PGRST205'].includes(error.code)
+    ? 'La base de Publicaciones todavía no está habilitada. Falta aplicar su preparación en Supabase.'
+    : 'No se pudo acceder a la base de Publicaciones. Probá Actualizar; si sigue igual, hay que revisar la conexión del servidor.', 503)
+}
 export async function leerPub (col, id, sb = db()) {
   const { data, error } = await sb.from(TABLA).select('id,datos,version').eq('coleccion', col).eq('id', id).maybeSingle()
-  if (error) throw errorPublicacion('No se pudo leer publicación. Revisá la migración de la base.', 503)
+  if (error) throw falloLectura(error)
   return data
 }
 export async function listarPub (col, sb = db()) {
   const filas = []
   for (let n = 0; ; n += 1000) {
     const { data, error } = await sb.from(TABLA).select('id,datos,version').eq('coleccion', col).order('id').range(n, n + 999)
-    if (error) throw errorPublicacion('Falta preparar la base de publicaciones o se cortó la conexión.', 503)
+    if (error) throw falloLectura(error)
     filas.push(...(data || []))
     if ((data || []).length < 1000) return filas
   }

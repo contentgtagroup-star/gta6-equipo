@@ -80,6 +80,7 @@
     for (const c of P.datos.conexiones) {
       grid.append(el('article', { class: 'person' }, el('h3', {}, c.nombre), el('p', { class: 'small' }, c.cuenta_conectada || c.cuenta),
         el('p', {}, etiquetas[c.estado] || c.estado), el('p', { class: 'small muted' }, c.modo === 'automatico' ? 'Publica después de aprobar.' : c.id === 'tiktok' ? 'Llega al Inbox: terminás de publicar en TikTok.' : 'Se sube como privado: revisás el Short en YouTube Studio.'),
+        c.entorno === 'sandbox' && el('p', { class: 'small muted' }, 'TikTok sandbox: conexión de prueba, con las cuentas autorizadas en esa app.'),
         el('p', { class: 'small muted' }, 'Última sincronización: ' + fecha(c.sincronizada_el)),
         boton(c.estado === 'conectada' ? 'Reconectar' : 'Conectar', async () => {
           const d = await api('/api/conexion/' + c.proveedor, { op: 'iniciar' })

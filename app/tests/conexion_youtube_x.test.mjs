@@ -6,11 +6,11 @@ import { cifrarConexion, descifrarConexion, estadosConexiones, tokenConexion } f
 const clave = 'clave-de-equipo-para-pruebas-youtube'
 const secreto = 'yt-cliente-secreto-privado', refresh = 'yt-refresh-privado', claveBuffer = 'buffer-privado'
 const original = globalThis.fetch
-let filas, llamadas, canales, acceso, falloToken, falloCanal
+let filas, llamadas, canales, acceso, falloToken, falloCanal, falloBuffer
 function reset () {
   Object.assign(process.env, { SUPABASE_URL: 'https://yt-test.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: JSON.stringify({ Cuervo: clave }), PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 9).toString('base64'), PUBLICACION_ORIGIN: 'https://panel.example', YOUTUBE_CHANNEL_ID: 'canal-correcto', YT_CLIENT_ID: 'yt-id', YT_CLIENT_SECRET: secreto, YT_REFRESH_TOKEN: refresh, BUFFER_API_KEY: claveBuffer, BUFFER_CHANNEL_ID: 'canal-x', BUFFER_ORGANIZATION_ID: 'org-x' })
   delete process.env.YOUTUBE_AUTH_MODE; delete process.env.GOOGLE_AUTH_MODE
-  filas = []; llamadas = []; falloToken = false; falloCanal = false
+  filas = []; llamadas = []; falloToken = false; falloCanal = false; falloBuffer = false
   acceso = 'yt-access-privado'
   canales = { items: [{ id: 'canal-correcto', snippet: { title: 'Clips GTA 6' } }] }
 }
@@ -30,7 +30,8 @@ globalThis.fetch = async (url, opciones = {}) => {
   }
   if (u.hostname === 'api.buffer.com') {
     assert.equal(method, 'POST')
-    return respuesta({ data: { channel: { id: 'canal-x', name: '@Gta6univers0', service: 'twitter', isDisconnected: false, isLocked: false } } })
+    if (falloBuffer) return respuesta({ errors: [{ message: 'Cannot query field isDisconnected on type Channel.' }] })
+    return respuesta({ data: { channels: [{ id: 'canal-x', name: '@Gta6univers0', service: 'twitter', isQueuePaused: false }] } })
   }
   assert.equal(u.hostname, 'yt-test.supabase.co', 'No se permite acceso a servicios reales')
   const coincide = d => [...u.searchParams].every(([k, v]) => !v.startsWith('eq.') || String(d[k]) === v.slice(3))
@@ -106,6 +107,9 @@ test('el acceso vencido de YouTube se renueva con las variables de Vercel', asyn
 test('X conecta con Buffer y sin la clave dice qué variable falta', async () => {
   reset()
   assert.equal((await conectar('buffer')).codigo, 200)
+  const consulta = JSON.stringify(llamadas.find(x => x.u.hostname === 'api.buffer.com').body)
+  assert.match(consulta, /channels\(input/)
+  assert.doesNotMatch(consulta, /isDisconnected|isLocked/)
   assert.equal((await tokenConexion('buffer')).access_token, claveBuffer)
   assert.equal((await estadosConexiones()).find(c => c.id === 'x').estado, 'conectada')
   reset(); delete process.env.BUFFER_API_KEY
@@ -114,6 +118,14 @@ test('X conecta con Buffer y sin la clave dice qué variable falta', async () =>
   assert.match(r.body.error, /BUFFER_API_KEY/)
   const x = (await estadosConexiones()).find(c => c.id === 'x')
   assert.equal(x.falta_config, 'BUFFER_API_KEY')
+})
+test('un error de GraphQL de Buffer se muestra sin filtrar la clave', async () => {
+  reset(); falloBuffer = true
+  const r = await conectar('buffer')
+  assert.equal(r.codigo, 502)
+  assert.match(r.body.error, /Buffer rechazó la consulta: Cannot query field/)
+  assert.doesNotMatch(JSON.stringify(r), /buffer-privado/)
+  assert.equal(guardada('buffer'), undefined)
 })
 test('sin sesión del equipo no se leen tokens de YouTube ni de Buffer', async () => {
   reset()

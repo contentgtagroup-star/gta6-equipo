@@ -80,6 +80,7 @@ export async function jsonRemoto (url, opciones = {}) {
   if (!r.ok || (d.error && d.error.code !== 'ok' && d.error.code !== 0) || d.errors?.length) {
     const e = errorPublicacion(r.status === 401 || r.status === 403 ? 'La conexión venció o faltan permisos. Reconectá la cuenta.' : 'La plataforma rechazó la operación. Revisá permisos, formato y límites de la cuenta.', r.status === 401 || r.status === 403 ? 424 : 502)
     e.remoto = r.status
+    if (d.errors?.length) e.detalleRemoto = d.errors.map(x => x.message).filter(Boolean).join(' | ').slice(0, 300)
     if (new URL(url).hostname === 'open.tiktokapis.com') {
       const detalle = detalleTikTok(d)
       e.message = `TikTok (${detalle.codigo}): ${detalle.mensaje}`

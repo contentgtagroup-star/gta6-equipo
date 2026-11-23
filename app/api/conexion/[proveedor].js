@@ -30,9 +30,16 @@ export default async function handler (req, res) {
       }
       if (p === 'buffer') {
         const t = await tokenConexion(p)
-        const datos = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { Authorization: 'Bearer ' + t.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { channel(id: ${JSON.stringify(t.channel_id)}) { id name service isDisconnected isLocked } }` }) })
-        const canal = datos.data?.channel
-        if (!canal || String(canal.service).toLowerCase() !== 'twitter' || canal.isDisconnected || canal.isLocked) throw errorPublicacion('El canal configurado en Buffer no es una cuenta de X conectada y disponible.', 424)
+        let datos
+        try {
+          // Misma consulta que usa gta-publicador: los campos isDisconnected/isLocked no existen en Buffer.
+          datos = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { Authorization: 'Bearer ' + t.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ query: `query { channels(input: { organizationId: ${JSON.stringify(t.organization_id)} }) { id name service isQueuePaused } }` }) })
+        } catch (e) {
+          if (e.detalleRemoto) throw errorPublicacion('Buffer rechazó la consulta: ' + e.detalleRemoto, 502)
+          throw e
+        }
+        const canal = (datos.data?.channels || []).find(x => String(x.id) === String(t.channel_id))
+        if (!canal || String(canal.service).toLowerCase() !== 'twitter') throw errorPublicacion('El canal configurado en Buffer no es una cuenta de X conectada.', 424)
         const actual = await leerPub('conexiones', p)
         await guardarPub('conexiones', p, { estado: 'conectada', sincronizada_el: Date.now(), cuenta: canal.name }, actual?.version || 0)
         return responder(res, 200, { ok: true })

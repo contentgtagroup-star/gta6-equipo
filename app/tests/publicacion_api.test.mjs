@@ -4,7 +4,7 @@ import handler from '../api/publicacion.js'
 import { procesarPublicaciones } from '../lib/publicacion_worker.js'
 import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
 
-Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: '{"Eze":"clave-de-prueba-suficientemente-larga"}', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 2).toString('base64') })
+Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: '{"Eze":"clave-de-prueba-suficientemente-larga"}', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 2).toString('base64'), BUFFER_API_KEY: 'buffer-privado', BUFFER_CHANNEL_ID: 'canal-x' })
 const tablas = { docs: [], publicacion_docs: [] }, remotas = []
 const original = globalThis.fetch
 globalThis.fetch = async (url, opciones = {}) => {
@@ -129,17 +129,16 @@ test('rastreo automático y publicaciones de otro integrante esperan a su compu'
   assert.equal(tablas.publicacion_docs.find(d => d.id === 'envio-ajeno').datos.estado, 'enviando')
   assert.equal(remotas.length, 0)
 })
-test('X aprobado queda a mano y nunca llama a redes aunque el worker esté activo', async () => {
+test('X aprobado vuelve a la cola automática y el worker intenta publicarlo', async () => {
   reset()
   tablas.publicacion_docs.push({ coleccion: 'sugerencias', id: 'sx', version: 1, datos: { titulo: 'Caja en GTA 6', descripcion: '¿Qué hay adentro?', plataformas: ['x'], hashtags: ['#GTA6'], media: 'reusar', video_path: '', imagenes: [], estado: 'pendiente', media_lista: true } })
   assert.equal((await llamada({ op: 'aprobar', id: 'sx', version: 1 })).codigo, 200)
   const item = tablas.publicacion_docs.find(d => d.coleccion === 'cola')
   assert.equal(item.datos.plataforma, 'x')
-  assert.equal(item.datos.estado, 'manual')
+  assert.equal(item.datos.estado, 'pendiente')
   process.env.PUBLICACION_ACTIVA = '1'
   await procesarPublicaciones('Eze')
-  assert.equal(tablas.publicacion_docs.find(d => d.coleccion === 'cola').datos.estado, 'manual')
-  assert.equal(remotas.length, 0)
+  assert.ok(remotas.some(u => u.includes('api.buffer.com')), 'el worker debe consultar Buffer')
 })
 test('confirmar_manual publica X con un link de x.com y rechaza otros hosts', async () => {
   reset()

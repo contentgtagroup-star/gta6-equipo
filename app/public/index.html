@@ -276,7 +276,7 @@ const FILTROS = [
 const hoy = new Date();
 document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
-const S = {versionActual:46, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
+const S = {versionActual:47, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
 function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v);}catch(e){ return null; } }
 function toast(t){ const d=document.createElement('div'); d.className='toast'; d.textContent=t; document.body.appendChild(d); setTimeout(()=>d.remove(),2600); }
@@ -302,7 +302,7 @@ async function cargar(){
     const d = await api('/api/estado');
     const firma = JSON.stringify(d, (k, v) => (k === 'video_url' || k === 'ahora' || k === 'latido') ? undefined : v);
     const igual = firma === S.firma; S.firma = firma;
-    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 46; S.offset = (d.ahora||Date.now()) - Date.now();
+    S.categorias = d.categorias || []; renderCategorias(); S.yo = d.yo; S.clips = d.clips; S.feedback = d.feedback || []; S.escucha = d.escucha || {}; S.radar = d.radar; S.referencias = d.referencias || []; S.equipo = d.equipo || {}; S.turnos = d.turnos || (d.turno ? [d.turno] : []); S.versionActual = Number(d.version_actual) || 47; S.offset = (d.ahora||Date.now()) - Date.now();
     estado('Conectado · se actualiza solo');
     $('yoTxt').textContent = 'Sos ' + S.yo; $('btnSalir').hidden = false;
     renderTurno();
@@ -434,6 +434,8 @@ function renderPedido(t){
   const cabecera = el('div', {class:'row'}, el('b', {}, t.asignado || 'Esperando compu'),
     el('span', {class:'small dim'}, 'Pedido de '+(t.pedido_por||'equipo')+' · '+nombreCategoria(t.categoria)+(t.fuente==='twitch' ? ' · Twitch' : ' · YouTube')));
   const acc = el('div', {class:'row', style:'margin-top:8px'});
+  const puedeRetomar = (t.pedido_por||t.asignado) === S.yo;
+  const avisoRetomar = puedeRetomar ? '' : 'Solo quien pidió los clips puede retomarlos desde su compu';
   let mensaje = '';
   if(t?.estado==='pendiente'){
     const demorado = t.asignado && ahora()-(t.asignado_el||t.pedido_el) > 8*60000;
@@ -448,19 +450,19 @@ function renderPedido(t){
     if(t.pausa_compatible) acc.append(el('button', {class:'tiny ghost', disabled:S.cambiandoPausa, onclick:()=>cambiarPausa('pausar',t.pedido_id)}, 'Pausar'));
   }else if(t?.estado==='pausa_solicitada'){
     mensaje = `Pausando: ${t.asignado} termina el paso actual. ${hechos}/${total} clips listos.`;
-    acc.append(el('button', {class:'tiny primary', disabled:S.cambiandoPausa, onclick:()=>cambiarPausa('reanudar',t.pedido_id)}, 'Reanudar'));
+    acc.append(el('button', {class:'tiny primary', disabled:S.cambiandoPausa||!puedeRetomar, title:avisoRetomar, onclick:()=>cambiarPausa('reanudar',t.pedido_id)}, 'Reanudar'));
   }else if(t?.estado==='pausado'){
     mensaje = t.reanudar_el
       ? `YouTube frenó las descargas de esta compu. Se reanuda solo cerca de las ${new Date(t.reanudar_el).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}. ${hechos}/${total} clips listos.`
       : `En pausa: ${hechos}/${total} clips listos.`;
-    acc.append(el('button', {class:'tiny primary', disabled:S.cambiandoPausa, onclick:()=>cambiarPausa('reanudar',t.pedido_id)}, 'Reanudar'));
+    acc.append(el('button', {class:'tiny primary', disabled:S.cambiandoPausa||!puedeRetomar, title:avisoRetomar, onclick:()=>cambiarPausa('reanudar',t.pedido_id)}, 'Reanudar'));
   }else if(t?.estado==='terminado'){
     mensaje = hechos < total ? `Terminó sin completar: ${hechos}/${total} clips listos. ${t.resumen||''}` : `Terminado: ${hechos}/${total} clips listos. ${t.resumen||''}`;
-    if(hechos < total) acc.append(el('button', {class:'tiny primary', disabled:S.pidiendo, onclick:()=>reintentarTurno(t.pedido_id)}, 'Reintentar faltantes'));
+    if(hechos < total) acc.append(el('button', {class:'tiny primary', disabled:S.pidiendo||!puedeRetomar, title:avisoRetomar, onclick:()=>reintentarTurno(t.pedido_id)}, 'Reintentar faltantes'));
   }
   else if(t?.estado==='error'){
     mensaje = `Terminó con error: ${t.resumen||''}`;
-    acc.append(el('button', {class:'tiny primary', disabled:S.pidiendo, onclick:()=>reintentarTurno(t.pedido_id)}, 'Reintentar pedido'));
+    acc.append(el('button', {class:'tiny primary', disabled:S.pidiendo||!puedeRetomar, title:avisoRetomar, onclick:()=>reintentarTurno(t.pedido_id)}, 'Reintentar pedido'));
   }else mensaje = 'Pedido cancelado.';
   const tiempos = ['terminado','error','pausado'].includes(t?.estado) ? resumenTiempos(t) : '';
   card.append(cabecera, el('p', {class:'small'}, mensaje), tiempos ? el('p', {class:'small dim'}, tiempos) : null,
@@ -584,7 +586,7 @@ function tarjeta(c){
   const quien = c.corrige_por||c.responsable||'alguien';
   const card = el('div', {class:'clip'},
     c.video_url && !['corregir','corrigiendo'].includes(c.estado) ? videoDe(c) :
-      el('div', {class:'ph'}, c.estado==='corrigiendo' ? 'Lo está corrigiendo ' + (c.corrige_ahora||quien) + ' ahora' : c.estado==='corregir' ? 'En cola: lo corrige el motor de ' + quien + (escuchando(quien) ? ' en unos minutos' : (EQUIPO.some(escuchando) ? ' (o el de otro del equipo) en unos minutos' : ' cuando alguna compu preparada esté encendida')) : c.estado==='publicado' ? 'Video borrado (ya publicado)' : 'El video no cargó: actualizá la página'),
+      el('div', {class:'ph'}, c.estado==='corrigiendo' ? 'Lo está corrigiendo ' + (c.corrige_ahora||quien) + ' ahora' : c.estado==='corregir' ? 'En cola: lo corrige el motor de ' + quien + (escuchando(quien) ? ' en unos minutos' : ' cuando su compu esté encendida y disponible') : c.estado==='publicado' ? 'Video borrado (ya publicado)' : 'El video no cargó: actualizá la página'),
     el('div', {class:'g'}, (c.titulo || c.gancho || c.motivo || 'Clip').replace(/\*/g,'')),
     el('div', {class:'m'}, (c.motivo ? c.motivo + ' · ' : '') + (c.canal||'') + ' · ', el('a', {href:c.url, target:'_blank', rel:'noopener'}, 'original')),
     calificacion(c),
@@ -611,7 +613,7 @@ function tarjeta(c){
     card.append(el('label', {}, 'Corrección', nota),
       el('div', {class:'row'},
         el('button', {class:'tiny primary', onclick:async()=>{ const t=nota.value.trim(); if(!t){ toast('Escribí qué cambiar'); return; }
-          if(await upd(c,{estado:'corregir', nota:t, corrige_por:S.yo, pedido_el:ahora()})){ delete S.abiertos[c.id]; render(); toast(EQUIPO.some(escuchando) ? 'Enviado: se corrige en unos minutos' : 'Enviado. Se corrige cuando alguna compu preparada esté encendida'); } }}, 'Enviar'),
+          if(await upd(c,{estado:'corregir', nota:t, corrige_por:S.yo, pedido_el:ahora()})){ delete S.abiertos[c.id]; render(); toast(escuchando(S.yo) ? 'Enviado: tu compu lo corrige cuando esté disponible' : 'Enviado. Se corrige cuando prendas tu compu'); } }}, 'Enviar'),
         el('button', {class:'tiny ghost', onclick:()=>{ delete S.abiertos[c.id]; render(); }}, 'Cancelar')));
   }
   if(S.abiertos[c.id]==='pub'){

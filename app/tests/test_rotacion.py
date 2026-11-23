@@ -14,6 +14,16 @@ import equipo
 
 
 class RotacionVideosTest(unittest.TestCase):
+    def test_correcciones_solo_del_solicitante_incluso_vencidas(self):
+        docs = [
+            {'id': 'mia', 'datos': {'estado': 'corregir', 'responsable': 'Luis', 'corrige_por': 'Cuervo'}},
+            {'id': 'ajena', 'datos': {'estado': 'corregir', 'responsable': 'Cuervo', 'corrige_por': 'Luis'}},
+            {'id': 'vencida-ajena', 'datos': {'estado': 'corrigiendo', 'corrige_por': 'Luis', 'corrigiendo_el': 1}},
+            {'id': 'vencida-mia', 'datos': {'estado': 'corrigiendo', 'corrige_por': 'Cuervo', 'corrigiendo_el': 1}},
+            {'id': 'sin-dueno', 'datos': {'estado': 'corregir'}},
+        ]
+        self.assertEqual([d['id'] for d in equipo.correcciones_pendientes(docs, 'Cuervo')], ['mia', 'vencida-mia'])
+
     def test_prefiere_otro_streamer_aunque_el_link_sea_de_otra_persona(self):
         radar = {'canales_recientes': ['Streamer A'], 'ultimo_canal_por': {'Cuervo': 'Streamer A'}, 'videos': [
             {'id': 'uno', 'canal': 'Streamer A', 'para': 'Cuervo'},

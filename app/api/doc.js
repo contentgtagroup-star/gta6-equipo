@@ -44,6 +44,16 @@ export default async function handler (req, res) {
   if (op === 'update' && !actual) return responder(res, 404, { error: 'No existe' })
   let nuevos = op === 'set' ? (datos || {}) : unir(actual.datos, datos)
   if (col === 'clips') {
+    if (nuevos.estado === 'corregir' && datos?.estado === 'corregir') nuevos = { ...nuevos, corrige_por: yo }
+    if (nuevos.estado === 'corrigiendo') {
+      const dueño = actual?.datos?.corrige_por || actual?.datos?.responsable
+      if (dueño !== yo) return responder(res, 403, { error: 'Esta corrección espera a la compu de quien la pidió' })
+      nuevos = { ...nuevos, corrige_por: dueño, corrige_ahora: yo }
+    }
+    if (actual?.datos?.estado === 'corrigiendo' && nuevos.estado === 'listo' &&
+        (actual.datos.corrige_por || actual.datos.responsable) !== yo) {
+      return responder(res, 403, { error: 'Esta corrección pertenece a otra compu' })
+    }
     // Conservá la categoría y calidad al actualizar metadatos o corregir clips.
     if (actual?.datos?.categoria && !nuevos.categoria) nuevos = { ...nuevos, categoria: actual.datos.categoria, calidad: nuevos.calidad || actual.datos.calidad }
     if (nuevos.turno_id && !nuevos.tipo) {

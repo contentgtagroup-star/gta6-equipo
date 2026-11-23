@@ -232,12 +232,14 @@ export default async function handler (req, res) {
     const { data: escuchas, error: e2 } = await sb.from('docs').select('id,datos').eq('coleccion', 'escucha').in('id', EQUIPO)
     if (e2) return responder(res, 500, { error: e2.message })
     const activos = (escuchas || []).filter(x => ahora - x.datos.ultima < ESCUCHA_VIGENTE_MS && x.datos.version >= VERSION_TURNOS).map(x => x.id)
-    const dueño = t.pedido_por || yo
+    const dueño = t.pedido_por || t.asignado
+    if (!dueño) return responder(res, 409, { error: 'Ese pedido no tiene dueño conocido. Creá uno nuevo desde tu compu.' })
+    if (dueño !== yo) return responder(res, 403, { error: 'Solo quien pidió los clips puede reintentar desde su compu' })
     if (versionEscucha(escuchas, dueño) < VERSION_TURNOS) return rechazoVersion(res, versionEscucha(escuchas, dueño), dueño === yo ? null : dueño)
     const asignado = activos.includes(dueño) && !compuOcupada(turno, dueño, t.pedido_id, t.fuente) && !pedidoAnteriorEnCola(turno, dueño, t.pedido_id) ? dueño : null
     const { feedback, error: e3 } = await leerFeedback(sb)
     if (e3) return responder(res, 500, { error: e3.message })
-    const nuevo = { ...t, estado: 'pendiente', asignado, asignado_el: ahora, pausa_compatible: true,
+    const nuevo = { ...t, pedido_por: dueño, estado: 'pendiente', asignado, asignado_el: ahora, pausa_compatible: true,
       etapa: null, avance: null, avance_base: null, resumen: null, terminado_el: null, run_id: null,
       prompt: asignado ? promptTurno(asignado, t.cantidad, feedback, t.pedido_id, t.categoria, t.fuente, directoDe(t)) : null }
     const datos = reemplazar(turno, ref, nuevo)
@@ -262,6 +264,8 @@ export default async function handler (req, res) {
       const t = ref?.trabajo
       if (!t) return responder(res, 409, { error: 'Ese pedido ya no está disponible' })
       const pausando = op === 'pausar'
+      const dueño = t.pedido_por || t.asignado
+      if (!pausando && dueño !== yo) return responder(res, 403, { error: 'Solo quien pidió los clips puede reanudar desde su compu' })
       if (pausando && !['pendiente', 'ejecutando'].includes(t.estado)) return responder(res, 409, { error: 'Este pedido no se puede pausar ahora' })
       // Si la pausa todavía no se hizo efectiva, reanudar solo la cancela y la PC sigue con lo que estaba haciendo
       if (!pausando && t.estado === 'pausa_solicitada') {
@@ -274,7 +278,6 @@ export default async function handler (req, res) {
       }
       if (!pausando && t.estado !== 'pausado') return responder(res, 409, { error: 'Este pedido todavía no se puede reanudar' })
       if (!t.pausa_compatible && (pausando ? t.estado === 'ejecutando' : t.etapa === 'ejecutando')) return responder(res, 409, { error: 'La pausa de un clip en curso está disponible en pedidos nuevos' })
-      const dueño = t.pedido_por || t.asignado
       if (!pausando && dueño) {
         const { version, error: ev } = await leerVersion(sb, dueño)
         if (ev) return responder(res, 500, { error: ev.message })

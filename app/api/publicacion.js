@@ -21,7 +21,10 @@ async function clipsDisponibles () {
 async function crearTrabajo (f, por, clips) {
   if (!f.datos.activa || f.datos.tipo === 'referencia') throw errorPublicacion('Esta fuente está pausada o es solo una referencia.')
   const id = 'fuente-' + f.id, actual = await leerPub('trabajos', id)
-  if (actual && ['pendiente', 'ejecutando'].includes(actual.datos.estado)) return actual
+  if (actual && ['pendiente', 'ejecutando'].includes(actual.datos.estado)) {
+    if (actual.datos.pedido_por !== por) throw errorPublicacion('Esta fuente ya tiene un pedido de otra compu. Esperá a que termine.', 409)
+    return actual
+  }
   if (f.datos.tipo === 'publicacion' && f.datos.generada_el) throw errorPublicacion('Esta publicación ya generó una sugerencia.')
   const adaptadas = (await listarPub('sugerencias')).filter(s => s.datos.fuente_id === f.id).map(s => s.datos.fuente_url).slice(-50)
   return guardarPub('trabajos', id, { estado: 'pendiente', fuente_id: f.id, fuente: f.datos, pedido_por: por, creado: Date.now(),
@@ -61,7 +64,8 @@ export default async function handler (req, res) {
     } else if (b.op === 'fuente_guardar') {
       const datos = fuenteValida(b.datos || {}), id = b.id || idFuente(datos.url), actual = await leerPub('fuentes', id)
       if (actual && Number(b.version) !== actual.version) throw errorPublicacion('La fuente cambió. Actualizá antes de guardar.', 409)
-      salida = await guardarPub('fuentes', id, { ...actual?.datos, ...datos, eliminada: false, creado_por: actual?.datos.creado_por || yo, creado: actual?.datos.creado || Date.now() }, actual?.version || 0)
+      salida = await guardarPub('fuentes', id, { ...actual?.datos, ...datos, eliminada: false, creado_por: actual?.datos.creado_por || yo, creado: actual?.datos.creado || Date.now(),
+        ...(datos.automatica ? { automatico_por: yo } : {}) }, actual?.version || 0)
       await eventoPub('fuente_guardada', yo, { fuente_id: id, fuente_url: datos.url })
     } else if (b.op === 'fuente_quitar') {
       const d = await exigirItem('fuentes', b.id, b.version)
@@ -92,7 +96,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       salida = await guardarPub('trabajos', id, { estado: 'pendiente', tipo: 'media', sugerencia_id: d.id, sugerencia_version: d.version, pedido_por: yo, creado: Date.now(), prompt }, actual?.version || 0)
       await eventoPub('preparacion_media', yo, { trabajo_id: id, sugerencia_id: d.id })
     } else if (b.op === 'programar_fuentes') {
-      const candidatas = (await listarPub('fuentes')).filter(f => f.datos.activa && !f.datos.eliminada && f.datos.automatica && ['perfil', 'feed'].includes(f.datos.tipo) && Date.now() - (f.datos.programada_el || 0) >= f.datos.intervalo_horas * 3600000).sort((a, b) => (a.datos.programada_el || 0) - (b.datos.programada_el || 0))
+      const candidatas = (await listarPub('fuentes')).filter(f => (f.datos.automatico_por || f.datos.creado_por) === yo && f.datos.activa && !f.datos.eliminada && f.datos.automatica && ['perfil', 'feed'].includes(f.datos.tipo) && Date.now() - (f.datos.programada_el || 0) >= f.datos.intervalo_horas * 3600000).sort((a, b) => (a.datos.programada_el || 0) - (b.datos.programada_el || 0))
       const f = candidatas[0]
       if (f) {
         await guardarPub('fuentes', f.id, { ...f.datos, programada_el: Date.now() }, f.version)
@@ -100,10 +104,10 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       }
     } else if (b.op === 'latido_trabajo') {
       const d = await exigirItem('trabajos', b.id)
-      if (d.datos.estado !== 'ejecutando' || d.datos.por !== yo || d.datos.run_id !== b.run_id) throw errorPublicacion('El trabajo cambió de responsable.', 409)
+      if (d.datos.pedido_por !== yo || d.datos.estado !== 'ejecutando' || d.datos.por !== yo || d.datos.run_id !== b.run_id) throw errorPublicacion('El trabajo cambió de responsable.', 409)
       await guardarPub('trabajos', d.id, { ...d.datos, vence: Date.now() + 20 * 60000 }, d.version)
     } else if (b.op === 'tomar_trabajo') {
-      const trabajos = (await listarPub('trabajos')).filter(d => d.datos.estado === 'pendiente' || (d.datos.estado === 'ejecutando' && d.datos.vence < Date.now())).sort((a, b) => a.datos.creado - b.datos.creado)
+      const trabajos = (await listarPub('trabajos')).filter(d => d.datos.pedido_por === yo && (d.datos.estado === 'pendiente' || (d.datos.estado === 'ejecutando' && d.datos.vence < Date.now()))).sort((a, b) => a.datos.creado - b.datos.creado)
       salida = { trabajo: null }
       for (const d of trabajos) {
         if (d.datos.tipo === 'media') {
@@ -120,7 +124,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       }
     } else if (b.op === 'cerrar_trabajo') {
       const d = await exigirItem('trabajos', b.id)
-      if (d.datos.estado !== 'ejecutando' || d.datos.por !== yo || d.datos.run_id !== b.run_id || d.datos.vence < Date.now()) throw errorPublicacion('El trabajo cambió de responsable.', 409)
+      if (d.datos.pedido_por !== yo || d.datos.estado !== 'ejecutando' || d.datos.por !== yo || d.datos.run_id !== b.run_id || d.datos.vence < Date.now()) throw errorPublicacion('El trabajo cambió de responsable.', 409)
       if (!b.error && d.datos.tipo === 'media') {
         const s = await exigirItem('sugerencias', d.datos.sugerencia_id, d.datos.sugerencia_version)
         if (s.datos.estado === 'aprobada') throw errorPublicacion('La sugerencia se aprobó mientras se preparaba el material.', 409)

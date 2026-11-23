@@ -26,10 +26,10 @@ No rotar la clave de cifrado sin migrar antes los tokens existentes o reconectar
    Python compatible, preferentemente 3.12. En Mac: `brew install python@3.12`.
 4. Importar las fuentes desde Cuentas a rastrear. El rastreo automático se activa
    individualmente; los perfiles tienen un intervalo mínimo de seis horas.
-5. Probar una sugerencia y revisar su material antes de aprobar. Las compus con
-   el motor activo toman los trabajos editoriales y procesan pasos de la cola;
+5. Probar una sugerencia y revisar su material antes de aprobar. Cada compu con
+   el motor activo toma solo los trabajos que pidió su usuario y los envíos que aprobó;
    el botón Procesar próximo envío permite avanzar un paso desde el panel.
-   Si las tres compus están apagadas no se generan sugerencias ni se avanza la cola.
+   Si esa compu está apagada u ocupada, sus pedidos esperan allí. Otra compu no los toma.
 6. Recién después de conectar y probar las cuentas, habilitar los envíos. Las
    pruebas automáticas usan respuestas simuladas y nunca publican contenido real.
 

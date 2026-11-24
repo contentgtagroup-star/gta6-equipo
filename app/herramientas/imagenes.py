@@ -63,17 +63,17 @@ def modelar(entrada, salida, w, h, con_sello, texto):
         t = escapar_texto(limpio)
         fs = 56 if len(limpio) <= 22 else 46 if len(limpio) <= 34 else 36
         alto = 176
-        barra = (f'[{ultimo}]drawbox=x=0:y={h}-{alto}:w={w}:h={alto}:color=0x0E0320@0.80:t=fill,'
-                 f"drawtext=fontfile='{fpath(FUENTE)}':text='{t}':fontcolor=white:fontsize={fs}:"
-                 f'borderw=5:bordercolor=black:x=(w-text_w)/2:y={h}-{alto}+(({alto}-text_h)/2)[txt]')
+        centro = alto - 60 if con_sello else alto
+        barra = (f'[{ultimo}]drawbox=x=0:y={h}-{alto}:w={w}:h={alto}:color=0x1B1426@0.86:t=fill,drawbox=x=0:y={h}-{alto}:w={w}:h=5:color=0xFF4FA3:t=fill,'
+                 f"drawtext=fontfile='{fpath(FUENTE)}':text='{t}':fontcolor=0xF3ECF8:fontsize={fs}:"
+                 f'borderw=5:bordercolor=black:x=(w-text_w)/2:y={h}-{alto}+(({centro}-text_h)/2)[txt]')
         cadena.append(barra)
         ultimo = 'txt'
-    # 3) sello discreto (ancho ~ 32% del formato). Con barra de título va arriba a
-    #    la derecha para no taparla; si no, abajo a la derecha.
+    # 3) sello discreto en el pie. La barra de título reserva su propio espacio.
     if con_sello:
         entradas += ['-i', SELLO]
-        sw = int(w * 0.32)
-        pos = 'W-w-26:26' if texto else 'W-w-26:H-h-26'
+        sw = int(w * 0.26)
+        pos = '(W-w)/2:H-h-20'
         cadena.append(f'[1:v]scale={sw}:-1[sel]')
         cadena.append(f'[{ultimo}][sel]overlay={pos}[out]')
         ultimo = 'out'

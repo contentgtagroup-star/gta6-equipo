@@ -70,6 +70,21 @@ python3 app/herramientas/procesar.py revisar
    y descarga de YouTube.
 10. Si algo falla dos veces, parar y reportar el error en 3 líneas.
 
+## Identidad visual editorial
+
+El material nuevo usa la identidad de GTA6 Universo que ya tiene el panel:
+fondo violeta oscuro, fucsia para acentos, texto claro de alto contraste y
+la tipografía del equipo. Conservá el enfoque y la composición aprobados.
+Para piezas que se modelan o regeneran, aplicá el sello GTA6 Universo al
+exportar y ubicá la marca sin tapar rótulos ni información. Un recurso
+reusado tal cual conserva su presentación.
+
+## Calidad mínima de video
+
+- Conservá la resolución original. Para vertical, preferí 1080 × 1920 y usá 720 × 1280 como mínimo. Para horizontal, el mínimo es 1280 × 720. Elegí una fuente que alcance ese piso.
+- Si el archivo supera un límite de envío, primero recortá pausas, repeticiones y momentos secundarios. Conservá el gancho y el remate. Si los puntos de corte lo permiten, copiá las pistas sin recodificar.
+- Verificá resolución, peso y reproducción antes de aprobar. El flujo actual de YouTube y TikTok admite hasta 14 MiB. Si preparás una variante para esas redes, conservá el máster y presentá la variante para revisión.
+
 ## Deuda técnica conocida (priorizada)
 
 1. ✅ **Rutas absolutas: resuelto.** Derivadas de `__file__` / `BASH_SOURCE` en

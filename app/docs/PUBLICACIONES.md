@@ -120,3 +120,12 @@ Referencias oficiales:
 - https://developers.google.com/youtube/data/reference/rest/v3/videos/insert
 - https://developers.google.com/youtube/analytics/sample-requests
 - https://developers.tiktok.com/docs/en/content-posting-api-get-started-upload-content
+
+## Calidad de video antes de encolar
+
+Conservá el máster en resolución original. El piso de entrega es 720 × 1280
+en vertical o 1280 × 720 en horizontal. Si supera los 14 MiB del flujo actual
+de YouTube o TikTok, prepará una variante con los momentos más relevantes.
+Preferí cortes sin recodificación cuando sean posibles y comprobá tamaño y
+reproducción antes de aprobar. Si el texto enumera momentos, actualizalo para
+que coincida con la variante.

@@ -213,16 +213,25 @@
     modal.addEventListener('close', limpiarPreviewLocal, { once: true })
   }
   function publicarSugerencia(item, clip = false) {
-    const tieneMedia = !!(item.video_path || item.imagenes?.length)
-    const cuentas = P.datos.conexiones.filter(c => (c.estado === 'conectada' || c.modo === 'manual') &&
-      (item.video_path || !(c.id === 'youtube' || c.id === 'tiktok')) && (tieneMedia || c.id === 'x'))
+    const fotos = !item.video_path && !!item.imagenes?.length
+    const tieneMedia = !!item.video_path || fotos
+    const cuentas = P.datos.conexiones.filter(c => (fotos && ['youtube', 'tiktok'].includes(c.id)) ||
+      ((c.estado === 'conectada' || c.modo === 'manual') && (tieneMedia || c.id === 'x')))
     const preview = el('div', { class: 'row', style: 'overflow:auto;flex-wrap:wrap' })
     const opciones = cuentas.map(c => {
+      let motivo = ''
+      if (fotos && c.id === 'tiktok') {
+        if (c.estado !== 'conectada' || !c.permisos?.includes('video.upload')) motivo = 'Falta conectar TikTok con permiso de subida.'
+        else if (!P.datos.tiktok_fotos_configurado) motivo = 'Falta verificar el prefijo de imágenes en TikTok.'
+        else if (item.imagenes.some(p => !/\.(jpe?g|webp)$/i.test(p))) motivo = 'TikTok requiere placas JPEG o WebP.'
+      }
       const input = entrada('', { type: 'checkbox' })
-      const modo = c.modo === 'borrador' ? 'Borrador' : c.modo === 'manual' ? 'Manual' : 'Automático'
+      input.disabled = !!motivo
+      const modo = fotos && c.id === 'youtube' ? 'Publicación manual' : fotos && c.id === 'tiktok' ? 'Enviar a bandeja' :
+        c.modo === 'borrador' ? 'Borrador' : c.modo === 'manual' ? 'Manual' : 'Automático'
       const cuenta = c.cuenta_conectada || c.cuenta
       const label = el('label', { class: 'pub-check' }, input,
-        el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo].filter(Boolean).join(' · '))))
+        el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo, motivo].filter(Boolean).join(' · '))))
       return { id: c.id, input, label }
     })
     const textoPublico = String(item.descripcion || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
@@ -262,7 +271,7 @@
         !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
       el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material')), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
-      const plataformas = opciones.filter(c => c.input.checked).map(c => c.id)
+      const plataformas = opciones.filter(c => !c.input.disabled && c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
       if (!titulo.value.trim() || !descripcion.value.trim()) throw new Error('Completá el título y la descripción.')
       await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas,
@@ -349,6 +358,8 @@
       .sort((a, b) => (a.proximo_el || a.creado || Infinity) - (b.proximo_el || b.creado || Infinity))
     for (const p of lista) {
       const acciones = el('div', { class: 'row' })
+      const youtubeFotos = p.estado === 'manual' && p.plataforma === 'youtube' && !p.video_path && p.imagenes?.length
+      const tiktokFotos = p.estado === 'borrador' && p.plataforma === 'tiktok' && !p.video_path && p.imagenes?.length
       const confirmar = () => {
         const url = entrada('', { type: 'url', required: true })
         dialogo('Confirmar publicación manual', campo('Link público de la publicación', url), () => post({ op: 'confirmar_manual', id: p.id, version: p._version, url: url.value }), 'Confirmar')
@@ -360,7 +371,16 @@
       if (p.estado === 'error') acciones.append(boton('Reintentar', async () => { await post({ op: 'cola_reintentar', id: p.id, version: p._version }); await cargar(true) }, 'tiny primary'))
       if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
       if (p.remoto_id && ['procesando', 'enviando'].includes(p.estado)) acciones.append(boton('Detener reintentos', async () => { await post({ op: 'cola_detener', id: p.id, version: p._version }); await cargar(true) }))
-      if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
+      if (youtubeFotos) {
+        p.imagenes.forEach((ruta, i) => acciones.append(boton('Bajar placa ' + (i + 1), async () => {
+          const { urls } = await post({ op: 'vista_media', imagenes: [ruta] })
+          const descarga = new URL(urls[0])
+          descarga.searchParams.set('download', 'placa-' + String(i + 1).padStart(2, '0') + '.' + ruta.split('.').pop())
+          const enlace = el('a', { href: descarga.href, download: '' })
+          enlace.click()
+        })))
+        acciones.append(boton('Ya lo publiqué', confirmar))
+      } else if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
         if (!p.video_path && !p.imagenes?.length) return toast('Esta publicación no tiene video ni imágenes.')
         const { urls } = await post({ op: 'vista_media', video_path: p.video_path, imagenes: p.imagenes || [] })
         urls.forEach(u => window.open(u, '_blank', 'noopener'))
@@ -368,8 +388,8 @@
       if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', confirmar))
       const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
       box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
-        el('p', {}, (etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
-        p.estado === 'manual' && el('p', { class: 'small muted' }, 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
+        el('p', {}, (youtubeFotos ? 'Pendiente manual' : tiktokFotos ? 'En bandeja de TikTok' : etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
+        p.estado === 'manual' && el('p', { class: 'small muted' }, youtubeFotos ? 'Bajá las placas en orden, copiá el texto y subilo desde + → Publicación en YouTube. Después pegá el enlace.' : 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
         el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('details', {}, el('summary', { class: 'small', style: 'color:var(--bad)' }, p.estado === 'revisar' ? 'Ver motivo y qué revisar' : 'Ver motivo del error'), el('p', { class: 'small' }, p.error)),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))
       if (p.estado === 'manual') vista(p, preview)

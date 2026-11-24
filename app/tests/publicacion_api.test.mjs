@@ -107,12 +107,27 @@ test('aprobar desde Biblioteca conserva el copy editado en la ficha y en cada de
     assert.deepEqual(datos.hashtags, ['#GTA6', '#GTAVI'])
   }
 })
-test('no aprueba material sin revisar ni permite publicar imágenes como Short', async () => {
-  reset(); const d = sugerencia(); d.datos.media_lista = false; tablas.publicacion_docs.push(d)
-  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1 })).codigo, 422)
-  d.datos.media_lista = true; d.datos.video_path = ''; d.datos.imagenes = ['Eze/uno.png']
-  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['youtube'] })).codigo, 422)
-  assert.equal(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').length, 0)
+test('un carrusel revisado crea una tarea manual de YouTube y conserva el orden de sus placas', async () => {
+  reset(); const d = sugerencia()
+  d.datos.video_path = ''; d.datos.imagenes = ['Eze/uno.jpg', 'Eze/dos.jpg']
+  tablas.publicacion_docs.push(d)
+  const aprobar = { op: 'aprobar', id: 's1', version: 1, plataformas: ['youtube'] }
+  assert.equal((await llamada(aprobar)).codigo, 422)
+  assert.equal((await llamada({ ...aprobar, revisado: true, plataformas: ['tiktok'] })).codigo, 422)
+  assert.equal((await llamada({ ...aprobar, revisado: true, titulo: 'Comparación editada' })).codigo, 200)
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola')
+  assert.equal(cola.length, 1)
+  const [tarea] = cola
+  assert.equal(tarea.datos.estado, 'manual')
+  assert.equal(tarea.datos.titulo, 'Comparación editada')
+  assert.deepEqual(tarea.datos.imagenes, d.datos.imagenes)
+  process.env.PUBLICACION_ACTIVA = '1'
+  await procesarPublicaciones('Eze')
+  assert.equal(remotas.length, 0)
+  const confirmar = { op: 'confirmar_manual', id: tarea.id, version: tarea.version }
+  assert.equal((await llamada({ ...confirmar, url: 'https://www.youtube.com/watch?v=video' })).codigo, 400)
+  assert.equal((await llamada({ ...confirmar, url: 'https://www.youtube.com/post/Ugkx-uno' })).codigo, 200)
+  assert.equal(tarea.datos.estado, 'publicado')
 })
 test('una edición vieja no pisa la de otro integrante', async () => {
   reset(); const d = sugerencia(); tablas.publicacion_docs.push(d)

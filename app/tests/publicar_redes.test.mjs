@@ -15,10 +15,12 @@ globalThis.fetch = async (url, op = {}) => {
       const p = u.searchParams.get('id').slice(3)
       return respuesta([{ id: p, version: 1, datos: { sobre: cifrarConexion(p, { access_token: 'fixture', page_id: 'pagina', ig_id: 'ig', expira_el: Date.now() + 9999999 }) } }])
     }
+    if (u.pathname.endsWith('/sign/clips')) return respuesta(JSON.parse(op.body).paths.map(path => ({ path, signedURL: '/object/sign/clips/' + path + '?token=fixture' })))
     if (u.pathname.includes('/sign/')) return respuesta({ signedURL: '/object/sign/clips/Eze/clip.mp4?token=fixture' })
     return new Response('video-fixture', { status: 200, headers: { 'Content-Type': 'video/mp4' } })
   }
   if (red === 'youtube' && u.hostname === 'www.googleapis.com') return respuesta({ id: 'yt-uno' })
+  if (red === 'tiktok' && u.pathname.endsWith('/content/init/')) return respuesta({ data: { publish_id: 'tt-fotos' }, error: { code: 'ok' } })
   if (red === 'tiktok' && u.pathname.endsWith('/inbox/video/init/')) return respuesta({ data: { publish_id: 'tt-uno', upload_url: 'https://upload.tiktokapis.com/video/uno' }, error: { code: 'ok' } })
   if (red === 'tiktok' && u.hostname === 'upload.tiktokapis.com') return new Response('', { status: 201 })
   if (red === 'tiktok' && u.pathname.endsWith('/status/fetch/')) return respuesta({ data: { status: 'SEND_TO_USER_INBOX' }, error: { code: 'ok' } })
@@ -53,6 +55,26 @@ test('TikTok transfiere el archivo al Inbox y espera su confirmación', async ()
   assert.equal(JSON.parse(llamadas.find(l => l.url.includes('/inbox/')).op.body).source_info.source, 'FILE_UPLOAD')
   assert.ok(llamadas.some(l => l.op.method === 'PUT'))
   assert.equal((await pasoPublicacion({ ...item(red), remoto_id: 'tt-uno' }, async () => {})).estado, 'borrador')
+})
+test('TikTok envía las fotos en orden a la bandeja y consulta el ID sin volver a subirlas', async () => {
+  red = 'tiktok'; llamadas.length = 0
+  const fotos = { ...item(red), video_path: '', imagenes: ['Eze/dos.jpg', 'Eze/uno.jpg'] }
+  try {
+    process.env.TIKTOK_PHOTO_URL_PREFIX = 'https://unit.supabase.co/storage/v1/object/sign/clips/'
+    const envio = await pasoPublicacion(fotos, async () => {})
+    assert.equal(envio.remoto_id, 'tt-fotos')
+    const carga = JSON.parse(llamadas.find(l => l.url.endsWith('/content/init/')).op.body)
+    assert.equal(carga.media_type, 'PHOTO')
+    assert.equal(carga.post_mode, 'MEDIA_UPLOAD')
+    assert.equal(carga.source_info.photo_cover_index, 0)
+    assert.deepEqual(carga.source_info.photo_images.map(url => new URL(url).pathname.split('/').at(-1)), ['dos.jpg', 'uno.jpg'])
+    assert.match(carga.post_info.description, /#GTA6/)
+    assert.equal((await pasoPublicacion({ ...fotos, ...envio }, async () => {})).estado, 'borrador')
+    assert.equal(llamadas.filter(l => l.url.endsWith('/content/init/')).length, 1)
+    process.env.TIKTOK_PHOTO_URL_PREFIX = 'https://unit.supabase.co/storage/v1/object/sign/otro/'
+    await assert.rejects(pasoPublicacion(fotos, async () => {}), /prefijo de imágenes/)
+    assert.equal(llamadas.filter(l => l.url.endsWith('/content/init/')).length, 1)
+  } finally { delete process.env.TIKTOK_PHOTO_URL_PREFIX }
 })
 test('X verifica el canal y publica por Buffer con el esquema actual', async () => {
   red = 'x'; llamadas.length = 0; falloBuffer = false; estadoPost = 'sent'

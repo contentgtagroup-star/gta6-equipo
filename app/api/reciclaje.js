@@ -1,6 +1,8 @@
 import { db, exigir, responder, todas, BUCKET } from '../lib/comun.js'
-import { listarPub } from '../lib/publicacion_store.js'
-import { planReciclaje, humano } from '../lib/reciclaje.js'
+import { eventoPub, listarPub } from '../lib/publicacion_store.js'
+import { planReciclaje, planLimpiezaPendientes, humano } from '../lib/reciclaje.js'
+
+const CONFIRMACION_LIMPIEZA = 'DESCARTAR_CLIPS_SIN_APROBAR'
 
 // Lista todos los archivos del bucket con su tamaño (una pasada por carpeta de usuario).
 async function listarArchivos (sb) {
@@ -20,26 +22,95 @@ async function listarArchivos (sb) {
   return archivos
 }
 
-// SIMULACIÓN de reciclaje: solo lectura. Lista candidatos, motivo y bytes recuperables.
-// No borra nada. El borrado real es una entrega posterior, previa autorización.
+async function cargarInventario (sb) {
+  const [{ data: docs, error }, cola, sugerencias, trabajos, archivos] = await Promise.all([
+    todas(() => sb.from('docs').select('coleccion,id,datos,version,actualizado').eq('coleccion', 'clips')),
+    listarPub('cola', sb), listarPub('sugerencias', sb), listarPub('trabajos', sb), listarArchivos(sb)
+  ])
+  if (error) throw error
+  return {
+    docs: docs || [],
+    cola: cola.map(d => d.datos),
+    sugerencias: sugerencias.map(d => d.datos),
+    trabajos: trabajos.map(d => d.datos),
+    archivos,
+    clips: (docs || []).map(d => ({ id: d.id, ...d.datos, _actualizado_db: d.actualizado }))
+  }
+}
+
+async function descartarCandidato (sb, doc, candidato, yo, lote) {
+  const ahora = new Date().toISOString()
+  const bloqueado = { ...doc.datos, estado: 'limpiando', limpieza_id: lote, limpieza_iniciada: Date.now(), limpieza_por: yo }
+  const { data: toma, error: errorToma } = await sb.from('docs').update({ datos: bloqueado, version: doc.version + 1, actualizado: ahora })
+    .eq('coleccion', 'clips').eq('id', doc.id).eq('version', doc.version).eq('datos->>estado', 'listo').select('version')
+  if (errorToma) return { id: doc.id, path: candidato.path, ok: false, error: errorToma.message }
+  if (!toma?.length) return { id: doc.id, path: candidato.path, ok: false, omitido: true, error: 'El clip cambió antes de bloquearlo' }
+
+  const { error: errorBorrado } = await sb.storage.from(BUCKET).remove([candidato.path])
+  if (errorBorrado) {
+    await sb.from('docs').update({ datos: doc.datos, version: doc.version + 2, actualizado: new Date().toISOString() })
+      .eq('coleccion', 'clips').eq('id', doc.id).eq('version', doc.version + 1).eq('datos->>limpieza_id', lote)
+    return { id: doc.id, path: candidato.path, ok: false, error: errorBorrado.message }
+  }
+
+  const descartado = {
+    ...bloqueado,
+    estado: 'descartado',
+    descartado_por: yo,
+    descartado_el: Date.now(),
+    motivo_descarte: 'limpieza_automatica_sin_aprobar',
+    archivo_reciclado_path: candidato.path
+  }
+  delete descartado.video_path
+  delete descartado.limpieza_id
+  delete descartado.limpieza_iniciada
+  const { data: fin, error: errorFin } = await sb.from('docs').update({ datos: descartado, version: doc.version + 2, actualizado: new Date().toISOString() })
+    .eq('coleccion', 'clips').eq('id', doc.id).eq('version', doc.version + 1).eq('datos->>limpieza_id', lote).select('version')
+  if (errorFin || !fin?.length) return { id: doc.id, path: candidato.path, ok: false, borrado: true, error: errorFin?.message || 'El archivo se borró pero no se pudo cerrar la metadata' }
+  try { await eventoPub('clip_sin_aprobar_descartado', yo, { clip_id: doc.id, bytes: candidato.bytes, antiguedad_dias: candidato.dias }) } catch (e) { console.error('No se pudo registrar el evento de limpieza:', e?.message || e) }
+  return { id: doc.id, path: candidato.path, bytes: candidato.bytes, ok: true }
+}
+
 export default async function handler (req, res) {
   const yo = exigir(req, res); if (!yo) return
-  if (req.method !== 'GET') return responder(res, 405, { error: 'Método no permitido. Esta ruta solo simula, no borra.' })
+  if (!['GET', 'POST'].includes(req.method)) return responder(res, 405, { error: 'Método no permitido.' })
   try {
     const sb = db()
     const dias = Math.min(365, Math.max(0, Number(req.query?.dias) || 7))
-    const [{ data: docs, error }, cola, sugerencias, trabajos, archivos] = await Promise.all([
-      todas(() => sb.from('docs').select('id,datos').eq('coleccion', 'clips')),
-      listarPub('cola'), listarPub('sugerencias'), listarPub('trabajos'), listarArchivos(sb)
-    ])
-    if (error) return responder(res, 500, { error: error.message })
+    const diasSinAprobar = Math.min(365, Math.max(1, Number(req.query?.dias_sin_aprobar || req.body?.dias) || 14))
+    if (req.method === 'POST' && (req.body?.op !== 'limpiar_sin_aprobar' || req.body?.confirmar !== CONFIRMACION_LIMPIEZA)) {
+      return responder(res, 400, { error: 'La limpieza requiere op="limpiar_sin_aprobar" y la confirmación explícita.' })
+    }
+    if (req.method === 'POST' && diasSinAprobar < 14) return responder(res, 400, { error: 'La limpieza no permite una antigüedad menor a 14 días.' })
+    const { docs, cola, sugerencias, trabajos, archivos, clips } = await cargarInventario(sb)
     const plan = planReciclaje({
-      cola: cola.map(d => d.datos),
-      clips: (docs || []).map(d => ({ id: d.id, ...d.datos })),
-      sugerencias: sugerencias.map(d => d.datos),
-      trabajos: trabajos.map(d => d.datos),
-      archivos
+      cola, clips, sugerencias, trabajos, archivos
     }, { dias })
+    const limpieza = planLimpiezaPendientes({
+      cola, clips, sugerencias, trabajos, archivos
+    }, { dias: diasSinAprobar })
+    if (req.method === 'POST') {
+      const maximo = Math.min(50, Math.max(1, Number(req.body?.maximo) || 10))
+      const porId = new Map(docs.map(d => [d.id, d]))
+      const lote = 'limpieza-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
+      const resultados = []
+      for (const candidato of limpieza.candidatos.slice(0, maximo)) {
+        const doc = porId.get(candidato.id)
+        if (doc) resultados.push(await descartarCandidato(sb, doc, { ...candidato, dias: diasSinAprobar }, yo, lote))
+      }
+      const borrados = resultados.filter(r => r.ok)
+      return responder(res, 200, {
+        ok: resultados.every(r => r.ok),
+        simulacion: false,
+        dias: diasSinAprobar,
+        candidatos_detectados: limpieza.candidatos.length,
+        procesados: resultados.length,
+        borrados: borrados.length,
+        bytes_recuperados: borrados.reduce((s, r) => s + (r.bytes || 0), 0),
+        bytes_recuperados_humano: humano(borrados.reduce((s, r) => s + (r.bytes || 0), 0)),
+        resultados
+      })
+    }
     return responder(res, 200, {
       simulacion: true,
       aviso: 'Solo simulación: no se borró ningún archivo.',
@@ -53,7 +124,16 @@ export default async function handler (req, res) {
       bytes_recuperables_humano: humano(plan.bytes_total),
       retenidos: plan.retenidos.length,
       muestra_candidatos: plan.candidatos.slice(0, 50).map(c => ({ ...c, bytes_humano: humano(c.bytes) })),
-      muestra_retenidos: plan.retenidos.slice(0, 50).map(r => ({ ...r, bytes_humano: humano(r.bytes) }))
+      muestra_retenidos: plan.retenidos.slice(0, 50).map(r => ({ ...r, bytes_humano: humano(r.bytes) })),
+      limpieza_sin_aprobar: {
+        dias: diasSinAprobar,
+        candidatos: limpieza.candidatos.length,
+        bytes_recuperables: limpieza.bytes_total,
+        bytes_recuperables_humano: humano(limpieza.bytes_total),
+        retenidos: limpieza.retenidos.length,
+        muestra_candidatos: limpieza.candidatos.slice(0, 50).map(c => ({ ...c, bytes_humano: humano(c.bytes) })),
+        muestra_retenidos: limpieza.retenidos.slice(0, 50).map(r => ({ ...r, bytes_humano: humano(r.bytes) }))
+      }
     })
   } catch (e) { return responder(res, 500, { error: 'No se pudo simular el reciclaje. ' + (e?.message || '') }) }
 }

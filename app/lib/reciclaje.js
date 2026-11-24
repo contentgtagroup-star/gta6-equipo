@@ -28,6 +28,17 @@ const clipActivo = c => !!c && (
 // pero el worker todavía la va a encolar (encolado !== true).
 const sugerenciaActiva = s => !!s && !(s.estado === 'aprobada' && s.encolado === true)
 
+const tiempoValido = valor => {
+  const n = typeof valor === 'string' && !/^\d+$/.test(valor) ? Date.parse(valor) : Number(valor)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+const ultimaActividad = c => Math.max(
+  tiempoValido(c.creado),
+  tiempoValido(c.actualizado),
+  tiempoValido(c._actualizado_db)
+)
+
 export function planReciclaje ({ cola = [], clips = [], sugerencias = [], trabajos = [], archivos = [] } = {}, { ahora = Date.now(), dias = 7 } = {}) {
   const limite = ahora - dias * DIA
   const tam = new Map(archivos.map(a => [a.path, Math.max(0, Number(a.size) || 0)]))
@@ -69,6 +80,67 @@ export function planReciclaje ({ cola = [], clips = [], sugerencias = [], trabaj
   }
   candidatos.sort((a, b) => b.bytes - a.bytes)
   return { candidatos, retenidos, bytes_total: candidatos.reduce((s, c) => s + c.bytes, 0), parametros: { ahora, dias, limite } }
+}
+
+// Clips generados que el equipo nunca aprobó. Esta función también es solo un
+// plan: no modifica metadata ni borra archivos.
+export function planLimpiezaPendientes ({ cola = [], clips = [], sugerencias = [], trabajos = [], archivos = [] } = {}, { ahora = Date.now(), dias = 14 } = {}) {
+  const limite = ahora - dias * DIA
+  const tam = new Map(archivos.map(a => [a.path, Math.max(0, Number(a.size) || 0)]))
+  const referencias = new Map()
+  const referir = (p, motivo) => {
+    if (p && !referencias.has(p)) referencias.set(p, motivo)
+  }
+
+  // Cualquier referencia de Publicaciones conserva el archivo. Este plan se
+  // limita a material que realmente nunca entró en otro flujo.
+  for (const c of cola) for (const p of pathsDe(c)) referir(p, 'referenciado por la cola de publicaciones')
+  for (const s of sugerencias) for (const p of pathsDe(s)) referir(p, 'referenciado por una sugerencia de publicación')
+  for (const t of trabajos) {
+    for (const p of pathsDe(t)) referir(p, 'referenciado por un trabajo de publicación')
+    for (const p of pathsDe(t && t.fuente)) referir(p, 'referenciado por la fuente de un trabajo')
+  }
+  for (const c of clips) {
+    for (const p of pathsDe(c && c.publicacion_snapshot)) referir(p, 'referenciado por el snapshot de publicación de otro clip')
+  }
+
+  // Un mismo objeto puede aparecer en más de un documento de clips. Solo se
+  // puede limpiar cuando todos sus dueños son candidatos compatibles.
+  const dueños = new Map()
+  for (const c of clips) for (const p of pathsDe(c)) {
+    if (!dueños.has(p)) dueños.set(p, [])
+    dueños.get(p).push(c)
+  }
+
+  const motivos = new Map()
+  const retener = (c, motivo) => { if (!motivos.has(c.id)) motivos.set(c.id, motivo) }
+  for (const c of clips) {
+    if (c.estado !== 'listo') continue
+    if (!c.video_path) { retener(c, 'clip listo sin video_path'); continue }
+    const actividad = ultimaActividad(c)
+    if (!actividad) { retener(c, 'falta una fecha válida de creación o actividad'); continue }
+    if (actividad > limite) { retener(c, 'tuvo actividad hace menos de ' + dias + ' días'); continue }
+    if (c.stock === true) { retener(c, 'guardado en stock'); continue }
+    if (c.en_recop) { retener(c, 'forma parte de una recopilación'); continue }
+    if (c.publicacion_cola || c.publicacion_snapshot) { retener(c, 'tiene una aprobación o publicación asociada'); continue }
+    if (referencias.has(c.video_path)) { retener(c, referencias.get(c.video_path)); continue }
+    const compartido = (dueños.get(c.video_path) || []).find(otro => otro.id !== c.id && otro.estado !== 'descartado' && otro.estado !== 'reciclado')
+    if (compartido) { retener(c, 'el archivo también pertenece al clip "' + (compartido.id || '') + '"'); continue }
+    if (!tam.has(c.video_path)) { retener(c, 'el archivo ya no existe en el bucket'); continue }
+  }
+
+  const candidatos = clips.filter(c => c.estado === 'listo' && !motivos.has(c.id))
+    .map(c => ({ id: c.id, path: c.video_path, bytes: tam.get(c.video_path) || 0, ultima_actividad: ultimaActividad(c), motivo: 'clip sin aprobar ni usar hace más de ' + dias + ' días' }))
+    .sort((a, b) => b.bytes - a.bytes)
+  const retenidos = clips.filter(c => c.estado === 'listo' && motivos.has(c.id))
+    .map(c => ({ id: c.id, path: c.video_path || '', bytes: tam.get(c.video_path) || 0, ultima_actividad: ultimaActividad(c) || 0, motivo: motivos.get(c.id) }))
+
+  return {
+    candidatos,
+    retenidos,
+    bytes_total: candidatos.reduce((s, c) => s + c.bytes, 0),
+    parametros: { ahora, dias, limite }
+  }
 }
 
 export function humano (bytes) {

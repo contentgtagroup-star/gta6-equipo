@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { planReciclaje, humano, DIA } from '../lib/reciclaje.js'
+import { planReciclaje, planLimpiezaPendientes, humano, DIA } from '../lib/reciclaje.js'
 
 const ahora = 100000 * DIA
 const archivo = (path, mb) => ({ path, size: mb * 1024 * 1024 })
@@ -137,4 +137,85 @@ test('humano formatea bytes legibles', () => {
   assert.equal(humano(0), '0 B')
   assert.equal(humano(1024), '1.0 KB')
   assert.equal(humano(10 * 1024 * 1024), '10.0 MB')
+})
+
+test('limpieza propone clips listos sin aprobar ni usar después de 14 días', () => {
+  const plan = planLimpiezaPendientes({
+    clips: [{ id: 'viejo', estado: 'listo', video_path: 'eze/viejo.mp4', creado: ahora - 20 * DIA }],
+    archivos: [archivo('eze/viejo.mp4', 11)]
+  }, { ahora, dias: 14 })
+  assert.equal(plan.candidatos.length, 1)
+  assert.equal(plan.candidatos[0].id, 'viejo')
+  assert.equal(plan.bytes_total, 11 * 1024 * 1024)
+})
+
+test('limpieza conserva clips recientes, stock, recopilados y con fecha inválida', () => {
+  const clips = [
+    { id: 'reciente', estado: 'listo', video_path: 'eze/reciente.mp4', creado: ahora - 3 * DIA },
+    { id: 'stock', estado: 'listo', video_path: 'eze/stock.mp4', creado: ahora - 30 * DIA, stock: true },
+    { id: 'recop', estado: 'listo', video_path: 'eze/recop.mp4', creado: ahora - 30 * DIA, en_recop: 'rc-1' },
+    { id: 'sin-fecha', estado: 'listo', video_path: 'eze/sin-fecha.mp4' }
+  ]
+  const plan = planLimpiezaPendientes({ clips, archivos: clips.map(c => archivo(c.video_path, 1)) }, { ahora, dias: 14 })
+  assert.equal(plan.candidatos.length, 0)
+  assert.deepEqual(new Set(plan.retenidos.map(c => c.id)), new Set(['reciente', 'stock', 'recop', 'sin-fecha']))
+})
+
+test('limpieza usa la actividad más reciente del documento', () => {
+  const plan = planLimpiezaPendientes({
+    clips: [{ id: 'editado', estado: 'listo', video_path: 'eze/editado.mp4', creado: ahora - 40 * DIA, _actualizado_db: new Date(ahora - 2 * DIA).toISOString() }],
+    archivos: [archivo('eze/editado.mp4', 2)]
+  }, { ahora, dias: 14 })
+  assert.equal(plan.candidatos.length, 0)
+  assert.match(plan.retenidos[0].motivo, /actividad/)
+})
+
+test('limpieza conserva cualquier archivo referenciado por Publicaciones', () => {
+  const base = {
+    clips: [{ id: 'referido', estado: 'listo', video_path: 'eze/referido.mp4', creado: ahora - 40 * DIA }],
+    archivos: [archivo('eze/referido.mp4', 3)]
+  }
+  for (const extra of [
+    { cola: [{ video_path: 'eze/referido.mp4', estado: 'cancelado' }] },
+    { sugerencias: [{ video_path: 'eze/referido.mp4', estado: 'aprobada', encolado: true }] },
+    { trabajos: [{ video_path: 'eze/referido.mp4', estado: 'terminado' }] },
+    { trabajos: [{ fuente: { video_path: 'eze/referido.mp4' }, estado: 'terminado' }] }
+  ]) {
+    const plan = planLimpiezaPendientes({ ...base, ...extra }, { ahora, dias: 14 })
+    assert.equal(plan.candidatos.length, 0, JSON.stringify(extra))
+  }
+})
+
+test('limpieza conserva archivos compartidos y clips con publicación asociada', () => {
+  const plan = planLimpiezaPendientes({
+    clips: [
+      { id: 'viejo', estado: 'listo', video_path: 'eze/compartido.mp4', creado: ahora - 40 * DIA },
+      { id: 'otro', estado: 'aprobado', video_path: 'eze/compartido.mp4', creado: ahora - 40 * DIA },
+      { id: 'cola', estado: 'listo', video_path: 'eze/cola.mp4', creado: ahora - 40 * DIA, publicacion_cola: true }
+    ],
+    archivos: [archivo('eze/compartido.mp4', 4), archivo('eze/cola.mp4', 5)]
+  }, { ahora, dias: 14 })
+  assert.equal(plan.candidatos.length, 0)
+  assert.deepEqual(new Set(plan.retenidos.map(c => c.id)), new Set(['viejo', 'cola']))
+})
+
+test('limpieza conserva un archivo usado por el snapshot de otro clip', () => {
+  const plan = planLimpiezaPendientes({
+    clips: [
+      { id: 'viejo', estado: 'listo', video_path: 'eze/anterior.mp4', creado: ahora - 40 * DIA },
+      { id: 'aprobado', estado: 'aprobado', video_path: 'eze/nuevo.mp4', publicacion_snapshot: { video_path: 'eze/anterior.mp4' } }
+    ],
+    archivos: [archivo('eze/anterior.mp4', 4), archivo('eze/nuevo.mp4', 4)]
+  }, { ahora, dias: 14 })
+  assert.equal(plan.candidatos.length, 0)
+  assert.match(plan.retenidos[0].motivo, /snapshot/)
+})
+
+test('limpieza conserva metadata cuando el archivo ya falta del bucket', () => {
+  const plan = planLimpiezaPendientes({
+    clips: [{ id: 'sin-archivo', estado: 'listo', video_path: 'eze/falta.mp4', creado: ahora - 40 * DIA }],
+    archivos: []
+  }, { ahora, dias: 14 })
+  assert.equal(plan.candidatos.length, 0)
+  assert.equal(plan.retenidos[0].motivo, 'el archivo ya no existe en el bucket')
 })

@@ -65,6 +65,20 @@ test('la limpieza exige la frase de confirmación y no borra sin ella', async ()
   assert.equal(tablas.docs[0].datos.estado, 'listo')
 })
 
+test('la limpieza la rechaza para otro integrante del equipo', async () => {
+  const claves = process.env.TEAM_KEYS
+  process.env.TEAM_KEYS = JSON.stringify({ Eze: clave })
+  borrados = []
+  try {
+    const r = await llamar({ op: 'limpiar_sin_aprobar', confirmar: 'DESCARTAR_CLIPS_SIN_APROBAR' })
+    assert.equal(r.codigo, 403)
+    assert.deepEqual(borrados, [])
+    assert.equal(tablas.docs[0].datos.estado, 'listo')
+  } finally {
+    process.env.TEAM_KEYS = claves
+  }
+})
+
 test('la limpieza bloquea, borra y conserva metadata del clip descartado', async () => {
   borrados = []
   const r = await llamar({ op: 'limpiar_sin_aprobar', confirmar: 'DESCARTAR_CLIPS_SIN_APROBAR', dias: 14, maximo: 10 })

@@ -3,6 +3,9 @@ import { eventoPub, listarPub } from '../lib/publicacion_store.js'
 import { planReciclaje, planLimpiezaPendientes, humano } from '../lib/reciclaje.js'
 
 const CONFIRMACION_LIMPIEZA = 'DESCARTAR_CLIPS_SIN_APROBAR'
+// Según el PTM, datos y almacenamiento los opera Cuervo. La clave del panel
+// identifica a cualquier integrante, así que el borrado necesita dueño explícito.
+const DUEÑOS_LIMPIEZA = new Set(['Cuervo'])
 
 // Lista todos los archivos del bucket con su tamaño (una pasada por carpeta de usuario).
 async function listarArchivos (sb) {
@@ -48,9 +51,10 @@ async function descartarCandidato (sb, doc, candidato, yo, lote) {
 
   const { error: errorBorrado } = await sb.storage.from(BUCKET).remove([candidato.path])
   if (errorBorrado) {
-    await sb.from('docs').update({ datos: doc.datos, version: doc.version + 2, actualizado: new Date().toISOString() })
+    const { error: errorRestaurar } = await sb.from('docs').update({ datos: doc.datos, version: doc.version + 2, actualizado: new Date().toISOString() })
       .eq('coleccion', 'clips').eq('id', doc.id).eq('version', doc.version + 1).eq('datos->>limpieza_id', lote)
-    return { id: doc.id, path: candidato.path, ok: false, error: errorBorrado.message }
+    if (errorRestaurar) console.error('No se pudo desbloquear el clip tras el fallo de borrado:', doc.id, errorRestaurar.message)
+    return { id: doc.id, path: candidato.path, ok: false, error: errorBorrado.message, restaurado: !errorRestaurar }
   }
 
   const descartado = {
@@ -64,9 +68,18 @@ async function descartarCandidato (sb, doc, candidato, yo, lote) {
   delete descartado.video_path
   delete descartado.limpieza_id
   delete descartado.limpieza_iniciada
-  const { data: fin, error: errorFin } = await sb.from('docs').update({ datos: descartado, version: doc.version + 2, actualizado: new Date().toISOString() })
-    .eq('coleccion', 'clips').eq('id', doc.id).eq('version', doc.version + 1).eq('datos->>limpieza_id', lote).select('version')
-  if (errorFin || !fin?.length) return { id: doc.id, path: candidato.path, ok: false, borrado: true, error: errorFin?.message || 'El archivo se borró pero no se pudo cerrar la metadata' }
+  const cerrar = version => sb.from('docs').update({ datos: descartado, version: version + 1, actualizado: new Date().toISOString() })
+    .eq('coleccion', 'clips').eq('id', doc.id).eq('version', version).eq('datos->>limpieza_id', lote).select('version')
+  let fin = await cerrar(doc.version + 1)
+  if (fin.error || !fin.data?.length) {
+    const { data: actuales } = await sb.from('docs').select('version,datos').eq('coleccion', 'clips').eq('id', doc.id).limit(1)
+    const actual = actuales?.[0]
+    if (actual?.datos?.limpieza_id === lote) fin = await cerrar(actual.version)
+  }
+  if (fin.error || !fin.data?.length) {
+    console.error('Clip borrado sin cierre de metadata:', doc.id, lote, fin.error?.message || '')
+    return { id: doc.id, path: candidato.path, ok: false, borrado: true, inconsistente: true, error: fin.error?.message || 'El archivo se borró pero no se pudo cerrar la metadata' }
+  }
   try { await eventoPub('clip_sin_aprobar_descartado', yo, { clip_id: doc.id, bytes: candidato.bytes, antiguedad_dias: candidato.dias }) } catch (e) { console.error('No se pudo registrar el evento de limpieza:', e?.message || e) }
   return { id: doc.id, path: candidato.path, bytes: candidato.bytes, ok: true }
 }
@@ -74,10 +87,11 @@ async function descartarCandidato (sb, doc, candidato, yo, lote) {
 export default async function handler (req, res) {
   const yo = exigir(req, res); if (!yo) return
   if (!['GET', 'POST'].includes(req.method)) return responder(res, 405, { error: 'Método no permitido.' })
+  if (req.method === 'POST' && !DUEÑOS_LIMPIEZA.has(yo)) return responder(res, 403, { error: 'La limpieza de datos la ejecuta el dueño de almacenamiento.' })
   try {
     const sb = db()
     const dias = Math.min(365, Math.max(0, Number(req.query?.dias) || 7))
-    const diasSinAprobar = Math.min(365, Math.max(1, Number(req.query?.dias_sin_aprobar || req.body?.dias) || 14))
+    const diasSinAprobar = Math.min(365, Math.max(1, Number(req.query?.dias_sin_aprobar ?? req.body?.dias_sin_aprobar ?? req.body?.dias) || 14))
     if (req.method === 'POST' && (req.body?.op !== 'limpiar_sin_aprobar' || req.body?.confirmar !== CONFIRMACION_LIMPIEZA)) {
       return responder(res, 400, { error: 'La limpieza requiere op="limpiar_sin_aprobar" y la confirmación explícita.' })
     }
@@ -102,6 +116,7 @@ export default async function handler (req, res) {
       return responder(res, 200, {
         ok: resultados.every(r => r.ok),
         simulacion: false,
+        lote,
         dias: diasSinAprobar,
         candidatos_detectados: limpieza.candidatos.length,
         procesados: resultados.length,
@@ -135,5 +150,8 @@ export default async function handler (req, res) {
         muestra_retenidos: limpieza.retenidos.slice(0, 50).map(r => ({ ...r, bytes_humano: humano(r.bytes) }))
       }
     })
-  } catch (e) { return responder(res, 500, { error: 'No se pudo simular el reciclaje. ' + (e?.message || '') }) }
+  } catch (e) {
+    const accion = req.method === 'POST' ? 'No se pudo ejecutar la limpieza. ' : 'No se pudo simular el reciclaje. '
+    return responder(res, 500, { error: accion + (e?.message || '') })
+  }
 }

@@ -397,7 +397,7 @@ def ejecutar_turno(yo, con, exe):
     print(prefijo + texto[-300:], flush=True)
 
 
-HERRAMIENTAS = ('procesar.py', 'recopilar.py', 'radar.py', 'publicaciones.py', 'BowlbyOne-Regular.ttf', 'OFL.txt', 'OVERLAY.png', 'categorias.json', 'equipo.py', 'CAMBIOS.json')
+HERRAMIENTAS = ('procesar.py', 'recopilar.py', 'radar.py', 'publicaciones.py', 'capturar.py', 'imagenes.py', 'BowlbyOne-Regular.ttf', 'OFL.txt', 'OVERLAY.png', 'SELLO.png', 'categorias.json', 'equipo.py', 'CAMBIOS.json')
 
 
 def herramientas_completas():

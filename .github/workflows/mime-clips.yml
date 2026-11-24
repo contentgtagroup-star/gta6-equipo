@@ -26,34 +26,34 @@ jobs:
           set -euo pipefail
           test -n "$VERCEL_TOKEN" || { echo 'Falta configurar GTADEPLOY en GitHub Actions.'; exit 1; }
 
-          # `vercel pull` no baja secretos; se leen con la API y no se imprimen.
-          curl -fsS "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&decrypt=true" \
+          # `vercel pull` no baja secretos; se leen por ID con la API y no se imprimen.
+          curl -fsS "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
             -H "Authorization: Bearer $VERCEL_TOKEN" > "$RUNNER_TEMP/vars.json"
-          echo "Variables visibles: $(jq -r '(.envs // .) | map(.key) | join(", ")' "$RUNNER_TEMP/vars.json")"
-          echo "Ocultas de producción: $(jq -r '.hiddenProductionEnvCount // 0' "$RUNNER_TEMP/vars.json")"
-          jq -r '(.envs // .)[] | select(.key == "SUPABASE_URL" or .key == "SUPABASE_SERVICE_KEY") | "\(.key) target=\(.target) type=\(.type) decrypted=\(.decrypted) tieneValor=\((.value // "") | length > 0)"' "$RUNNER_TEMP/vars.json"
-          id_de() {
-            jq -r --arg key "$1" '
-              def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
-              (.envs // .) | .[] | select(.key == $key and es_prod) | .id
-            ' "$RUNNER_TEMP/vars.json" | head -n 1
-          }
-          valor_de() {
-            local id respuesta
-            id=$(id_de "$1")
-            test -n "$id" || { echo "No hay ID de producción para $1."; return 1; }
-            echo "ID de $1: <$id>"
-            respuesta=$(curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/${id}?teamId=${VERCEL_ORG_ID}" \
-              -H "Authorization: Bearer $VERCEL_TOKEN") || return 1
-            jq -r '"\(.key) decrypted=\(.decrypted) tieneValor=\((.value // "") | length > 0)"' <<< "$respuesta"
-            jq -r '.value // empty' <<< "$respuesta"
-          }
 
-          BASE=$(valor_de SUPABASE_URL || true)
-          KEY=$(valor_de SUPABASE_SERVICE_KEY || true)
-          test -n "$KEY" || KEY=$(valor_de SUPABASE_SERVICE_ROLE_KEY || true)
-          test -n "$BASE" || { echo 'Falta SUPABASE_URL en la configuración de producción de Vercel.'; exit 1; }
-          test -n "$KEY" || { echo 'Falta la clave de servicio de Supabase en la configuración de producción de Vercel.'; exit 1; }
+          ID_URL=$(jq -r --arg k SUPABASE_URL '
+            def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
+            first((.envs // .)[] | select(.key == $k and es_prod) | .id)
+          ' "$RUNNER_TEMP/vars.json")
+          ID_KEY=$(jq -r --arg k SUPABASE_SERVICE_KEY '
+            def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
+            first((.envs // .)[] | select(.key == $k and es_prod) | .id)
+          ' "$RUNNER_TEMP/vars.json")
+          echo "IDs de producción: URL=$ID_URL KEY=$ID_KEY"
+
+          leer() {
+            curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/$1?teamId=${VERCEL_ORG_ID}" \
+              -H "Authorization: Bearer $VERCEL_TOKEN"
+          }
+          test -n "$ID_URL" && [ "$ID_URL" != null ] || { echo 'No hay ID de SUPABASE_URL en producción.'; exit 1; }
+          test -n "$ID_KEY" && [ "$ID_KEY" != null ] || { echo 'No hay ID de SUPABASE_SERVICE_KEY en producción.'; exit 1; }
+          RESP_URL=$(leer "$ID_URL")
+          RESP_KEY=$(leer "$ID_KEY")
+          echo "SUPABASE_URL decrypted=$(jq -r '.decrypted' <<< "$RESP_URL")"
+          echo "SUPABASE_SERVICE_KEY decrypted=$(jq -r '.decrypted' <<< "$RESP_KEY")"
+          BASE=$(jq -r '.value // empty' <<< "$RESP_URL")
+          KEY=$(jq -r '.value // empty' <<< "$RESP_KEY")
+          test -n "$BASE" || { echo 'Vercel no devolvió el valor de SUPABASE_URL.'; exit 1; }
+          test -n "$KEY" || { echo 'Vercel no devolvió el valor de SUPABASE_SERVICE_KEY.'; exit 1; }
           BASE="${BASE%/}"
           AUTH=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY")
 

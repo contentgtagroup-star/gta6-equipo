@@ -24,6 +24,11 @@ test('las fuentes se normalizan y rechazan red interna, credenciales y protocolo
   for (const url of ['http://x.com/uno', 'https://localhost/test', 'https://127.0.0.1', 'https://x.com@evil.test/', 'https://clave:secreto@x.com/uno', 'file:///tmp/uno', 'https://x.com:999/uno']) assert.throws(() => fuenteValida({ url, tipo: 'perfil' }), url)
 })
 
+test('acepta Facebook (incluido m.facebook.com) como fuente', () => {
+  assert.equal(fuenteValida({ url: 'https://facebook.com/gta6/posts/123', tipo: 'publicacion' }).plataforma, 'Facebook')
+  assert.equal(fuenteValida({ url: 'https://m.facebook.com/gta6/posts/123', tipo: 'publicacion' }).plataforma, 'Facebook')
+})
+
 test('el ruteo conserva YouTube y TikTok en borrador y el resto automático', () => {
   assert.equal(REDES.youtube.modo, 'borrador')
   assert.equal(REDES.tiktok.modo, 'borrador')

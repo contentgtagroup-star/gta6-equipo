@@ -5,16 +5,19 @@ Dado el link de un post, devuelve de forma determinística el texto, el idioma,
 el autor y las imágenes descargadas con su cantidad. No descarga streams enteros
 ni hace descargas masivas: solo ese post.
 
-  python3 capturar.py <url> [--dir CARPETA]
+  python3 capturar.py <url> [--dir CARPETA] [--video]
 
 Salida JSON:
-  { "ok": true, "plataforma": "X", "autor": "...", "texto": "...", "idioma": "es",
-    "fecha": "...", "imagenes": ["cap_0.jpg", ...], "n_imagenes": 2, "video": false }
+  { "ok": true, "plataforma": "X", "tipo": "imagenes|video|texto", "autor": "...",
+    "texto": "...", "idioma": "es", "fecha": "...", "imagenes": ["cap_0.jpg", ...],
+    "n_imagenes": 2, "video": false, "video_path": "" }
 o  { "error": "qué acceso falta" } si el post no es accesible.
 
-Para X/Twitter usa el endpoint público de sindicación (el mismo que alimenta los
-tweets embebidos). Para el resto intenta yt-dlp (metadatos + miniatura). Solo
-necesita Python 3; yt-dlp es opcional para el camino de respaldo.
+Plataformas: X/Twitter por el endpoint público de sindicación (texto + imágenes);
+YouTube, TikTok, Instagram y Facebook por yt-dlp (metadatos + miniatura). Con
+--video baja además el video del post (fuente.mp4) para usarlo como clip/material.
+"tipo" dice qué trae el link para que el flujo habilite la acción que corresponde.
+Solo necesita Python 3; yt-dlp para el respaldo y la descarga de video.
 """
 import argparse
 import json
@@ -36,10 +39,30 @@ def fail(msg):
 
 
 def plataforma(host):
-    host = host.replace('www.', '').lower()
+    host = re.sub(r'^(www|m|mobile)\.', '', host.lower())
     return {'x.com': 'X', 'twitter.com': 'X', 'instagram.com': 'Instagram',
+            'facebook.com': 'Facebook', 'fb.watch': 'Facebook', 'fb.com': 'Facebook',
             'tiktok.com': 'TikTok', 'youtube.com': 'YouTube', 'youtu.be': 'YouTube',
             'twitch.tv': 'Twitch', 'kick.com': 'Kick'}.get(host, 'Web')
+
+
+def tipo_contenido(video, n_imagenes):
+    return 'video' if video else ('imagenes' if n_imagenes else 'texto')
+
+
+def bajar_video(url, carpeta):
+    # Baja SOLO ese video (no playlists) para usarlo como material/clip. Devuelve el archivo o ''.
+    tmpl = os.path.join(carpeta, 'fuente.%(ext)s')
+    try:
+        subprocess.run(['yt-dlp', '-q', '--no-warnings', '--no-playlist',
+                        '-f', 'bv*+ba/best', '--merge-output-format', 'mp4', '-o', tmpl, url],
+                       check=True, timeout=300, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        return ''
+    for f in sorted(os.listdir(carpeta)):
+        if f.startswith('fuente.'):
+            return f
+    return ''
 
 
 def pedir(url, binario=False, timeout=30):
@@ -97,7 +120,7 @@ def bajar_imagenes(urls, carpeta):
     return archivos
 
 
-def capturar_x(url, carpeta):
+def capturar_x(url, carpeta, con_video=False):
     m = re.search(r'(?:x|twitter)\.com/[^/]+/status(?:es)?/(\d+)', url)
     if not m:
         fail('No pude leer el id del tweet en el link.')
@@ -117,6 +140,7 @@ def capturar_x(url, carpeta):
     video = any(m2.get('type') in ('video', 'animated_gif') for m2 in medios)
     archivos = bajar_imagenes(fotos, carpeta)
     user = d.get('user') or {}
+    video_path = bajar_video(url, carpeta) if (video and con_video) else ''
     return {
         'ok': True, 'plataforma': 'X',
         'autor': user.get('screen_name') or user.get('name') or '',
@@ -124,29 +148,35 @@ def capturar_x(url, carpeta):
         'idioma': d.get('lang') or '?',
         'fecha': d.get('created_at') or '',
         'imagenes': archivos, 'n_imagenes': len(archivos), 'video': video,
+        'video_path': video_path, 'tipo': tipo_contenido(video, len(archivos)),
     }
 
 
-def capturar_generico(url, carpeta):
-    # Respaldo: metadatos + miniatura con yt-dlp. No baja el video.
+def capturar_generico(url, carpeta, con_video=False):
+    # Metadatos + miniatura con yt-dlp (YouTube, TikTok, Instagram, Facebook, etc.).
+    # Con con_video, además baja el video del post para usarlo como material.
     try:
         j = json.loads(subprocess.run(
-            ['yt-dlp', '-j', '--skip-download', '--no-warnings', url],
+            ['yt-dlp', '-j', '--skip-download', '--no-warnings', '--no-playlist', url],
             capture_output=True, text=True, timeout=90).stdout or '{}')
     except Exception:
         j = {}
+    plat = plataforma(re.sub(r'^https?://', '', url).split('/')[0])
     if not j:
-        fail('No pude leer ese link automáticamente. Pegá el texto y las imágenes a mano o probá un post de X.')
+        extra = ' Instagram y Facebook suelen pedir que el post sea público o requerir login.' if plat in ('Instagram', 'Facebook') else ''
+        fail('No pude leer ese link automáticamente (' + plat + ').' + extra + ' Pegá el texto y las imágenes a mano o probá un post de X.')
     thumb = j.get('thumbnail')
     archivos = bajar_imagenes([thumb] if thumb else [], carpeta)
+    video = bool(j.get('duration'))
+    video_path = bajar_video(url, carpeta) if (video and con_video) else ''
     return {
-        'ok': True, 'plataforma': plataforma(j.get('webpage_url_domain') or ''),
+        'ok': True, 'plataforma': plataforma(j.get('webpage_url_domain') or '') if j.get('webpage_url_domain') else plat,
         'autor': j.get('uploader') or j.get('channel') or '',
         'texto': (j.get('description') or j.get('title') or '').strip(),
         'idioma': j.get('language') or '?',
         'fecha': str(j.get('upload_date') or ''),
-        'imagenes': archivos, 'n_imagenes': len(archivos),
-        'video': bool(j.get('duration')),
+        'imagenes': archivos, 'n_imagenes': len(archivos), 'video': video,
+        'video_path': video_path, 'tipo': tipo_contenido(video, len(archivos)),
     }
 
 
@@ -155,15 +185,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('url')
     ap.add_argument('--dir', default='.')
+    ap.add_argument('--video', action='store_true', help='Además baja el video del post (para clip/material).')
     a = ap.parse_args()
     carpeta = os.path.abspath(a.dir)
     os.makedirs(carpeta, exist_ok=True)
     host = re.sub(r'^https?://', '', a.url).split('/')[0]
     avance_editorial(20, 'capturando')
     if plataforma(host) == 'X':
-        salida = capturar_x(a.url, carpeta)
+        salida = capturar_x(a.url, carpeta, a.video)
     else:
-        salida = capturar_generico(a.url, carpeta)
+        salida = capturar_generico(a.url, carpeta, a.video)
     if os.environ.get('GTA6_TIPO_EDITORIAL') == 'media':
         avance_editorial(35, 'preparando')
     else:

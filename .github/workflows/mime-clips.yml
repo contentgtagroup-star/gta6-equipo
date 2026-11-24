@@ -39,16 +39,13 @@ jobs:
             ' "$RUNNER_TEMP/vars.json" | head -n 1
           }
           valor_de() {
-            local id valor
-            valor=$(jq -r --arg key "$1" '
-              def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
-              (.envs // .) | .[] | select(.key == $key and es_prod) | (.value // empty)
-            ' "$RUNNER_TEMP/vars.json" | head -n 1)
-            if [ -n "$valor" ]; then printf '%s' "$valor"; return 0; fi
+            local id respuesta
             id=$(id_de "$1")
-            test -n "$id" || return 1
-            curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/${id}?teamId=${VERCEL_ORG_ID}" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" | jq -r '.value // empty'
+            test -n "$id" || { echo "No hay ID de producción para $1."; return 1; }
+            respuesta=$(curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/${id}?teamId=${VERCEL_ORG_ID}" \
+              -H "Authorization: Bearer $VERCEL_TOKEN") || return 1
+            jq -r '"\(.key) decrypted=\(.decrypted) tieneValor=\((.value // "") | length > 0)"' <<< "$respuesta"
+            jq -r '.value // empty' <<< "$respuesta"
           }
 
           BASE=$(valor_de SUPABASE_URL || true)

@@ -20,29 +20,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '26'
-      - name: Preparar entorno de producción
-        run: |
-          test -n "$VERCEL_TOKEN" || { echo 'Falta configurar GTADEPLOY en GitHub Actions.'; exit 1; }
-          npm install --global vercel@65.9.0
-          vercel pull --yes --environment=production --non-interactive
       - name: Habilitar image/jpeg en el bucket privado clips
         shell: bash
         run: |
           set -euo pipefail
-          ENVFILE=$(find . -maxdepth 3 -name '.env.local' -print -quit)
-          test -n "$ENVFILE" || { echo 'No apareció .env.local al hacer vercel pull.'; exit 1; }
-          set -a
-          # shellcheck disable=SC1090
-          . "$ENVFILE"
-          set +a
+          test -n "$VERCEL_TOKEN" || { echo 'Falta configurar GTADEPLOY en GitHub Actions.'; exit 1; }
 
-          BASE="${SUPABASE_URL:-}"
-          KEY="${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
-          test -n "$BASE" || { echo 'Falta SUPABASE_URL en la configuración de producción.'; exit 1; }
-          test -n "$KEY" || { echo 'Falta la clave de servicio de Supabase en producción.'; exit 1; }
+          # `vercel pull` no baja secretos; se leen por ID con la API y no se imprimen.
+          curl -fsS "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" > "$RUNNER_TEMP/vars.json"
+          id_de() {
+            jq -r --arg key "$1" '
+              def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
+              .[] | select(.key == $key and es_prod) | .id
+            ' "$RUNNER_TEMP/vars.json" | head -n 1
+          }
+          valor_de() {
+            local id
+            id=$(id_de "$1")
+            test -n "$id" || return 1
+            curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/${id}?teamId=${VERCEL_ORG_ID}" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" | jq -r '.value // empty'
+          }
+
+          BASE=$(valor_de SUPABASE_URL || true)
+          KEY=$(valor_de SUPABASE_SERVICE_KEY || true)
+          test -n "$KEY" || KEY=$(valor_de SUPABASE_SERVICE_ROLE_KEY || true)
+          test -n "$BASE" || { echo 'Falta SUPABASE_URL en la configuración de producción de Vercel.'; exit 1; }
+          test -n "$KEY" || { echo 'Falta la clave de servicio de Supabase en la configuración de producción de Vercel.'; exit 1; }
           BASE="${BASE%/}"
           AUTH=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY")
 

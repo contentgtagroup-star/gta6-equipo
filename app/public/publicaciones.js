@@ -216,22 +216,55 @@
       (item.video_path || !(c.id === 'youtube' || c.id === 'tiktok')) && (tieneMedia || c.id === 'x'))
     const preview = el('div', { class: 'row', style: 'overflow:auto;flex-wrap:wrap' })
     const opciones = cuentas.map(c => {
-      const input = entrada('', { type: 'checkbox', style: 'width:auto' })
-      const modo = c.modo === 'borrador' ? ' · borrador' : c.modo === 'manual' ? ' · manual' : ' · automático'
-      return { id: c.id, input, label: campo(c.nombre + (c.cuenta_conectada || c.cuenta ? ' · ' + (c.cuenta_conectada || c.cuenta) : '') + modo, input) }
+      const input = entrada('', { type: 'checkbox' })
+      const modo = c.modo === 'borrador' ? 'Borrador' : c.modo === 'manual' ? 'Manual' : 'Automático'
+      const cuenta = c.cuenta_conectada || c.cuenta
+      const label = el('label', { class: 'pub-check' }, input,
+        el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo].filter(Boolean).join(' · '))))
+      return { id: c.id, input, label }
     })
-    const revisado = entrada('', { type: 'checkbox', style: 'width:auto' })
+    const textoPublico = String(item.descripcion || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
+    const lineaHashtags = textoPublico.match(/(?:^|\n)((?:#[\p{L}\p{N}_]+[ \t]*)+)$/u)
+    const tagsOriginales = Array.isArray(item.hashtags) ? item.hashtags : []
+    const hashtags = entrada([...new Set([...tagsOriginales, ...(lineaHashtags ? lineaHashtags[1].trim().split(/\s+/) : [])])].join(' '))
+    const titulo = entrada(String(item.titulo || item.gancho || 'Clip GTA 6').slice(0, 60), { maxlength: 60 })
+    const descripcion = el('textarea', { rows: 4, maxlength: 4000, value: lineaHashtags ? textoPublico.slice(0, lineaHashtags.index).trim() : textoPublico })
+    const revisado = entrada('', { type: 'checkbox' })
+    const tituloVista = el('h3')
+    const descripcionVista = el('p', { style: 'white-space:pre-wrap' })
+    const hashtagsVista = el('p', { class: 'small muted' })
+    const editor = el('div', { class: 'pub-review-editor', hidden: true },
+      campo('Título', titulo), campo('Descripción', descripcion), campo('Hashtags', hashtags))
+    const textoVista = el('div', { class: 'pub-review-copy' }, tituloVista, descripcionVista, hashtagsVista)
+    const editar = boton('✎ Editar texto', () => {
+      const abierto = editor.hidden
+      editor.hidden = !abierto
+      textoVista.hidden = abierto
+      editar.textContent = abierto ? 'Ver vista previa' : '✎ Editar texto'
+      editar.setAttribute('aria-expanded', String(abierto))
+      if (abierto) titulo.focus()
+    })
+    editar.setAttribute('aria-expanded', 'false')
+    function actualizarTexto() {
+      tituloVista.textContent = titulo.value
+      descripcionVista.textContent = descripcion.value
+      hashtagsVista.textContent = hashtags.value
+      revisado.checked = false
+    }
+    for (const campoTexto of [titulo, descripcion, hashtags]) campoTexto.addEventListener('input', actualizarTexto)
+    actualizarTexto()
     let vistaLista = !tieneMedia
-    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:12px' },
-      el('h3', {}, item.titulo || item.gancho), el('p', { style: 'white-space:pre-wrap' }, item.descripcion),
-      el('p', { class: 'small' }, (item.hashtags || []).join(' ')), preview,
-      el('div', { class: 'row', style: 'flex-wrap:wrap' }, opciones.map(c => c.label)),
-      !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.'),
-      campo('Revisé la publicación y el material', revisado)), async () => {
+    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:14px' },
+      el('div', { class: 'pub-review-copy-head' }, el('div', { style: 'flex:1;min-width:0' }, textoVista, editor), editar), preview,
+      el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Destinos de publicación'), opciones.map(c => c.label),
+        !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
+      el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material')), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
       const plataformas = opciones.filter(c => c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
-      await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas })
+      if (!titulo.value.trim() || !descripcion.value.trim()) throw new Error('Completá el título y la descripción.')
+      await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas,
+        titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value })
       if (clip) await window.cargar?.()
       P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
     }, 'Confirmar publicación')
@@ -425,8 +458,11 @@
     box.append(el('div', { class: 'row' }, campo('Cuenta', red), campo('Ventana', ventana), boton('Sincronizar', () => mostrar(true))), acceso, resultado)
     mostrar()
   }
-  window.aprobarClipPublicacion = c => {
-    if (!P.datos) return toast('Cargá Publicaciones para ver las cuentas disponibles.')
+  window.aprobarClipPublicacion = async c => {
+    if (P.modal) return
+    if (!P.datos) await cargar(true)
+    if (P.modal) return
+    if (!P.datos) return toast(P.error || 'Las cuentas todavía están cargando. Volvé a tocar Aprobar.')
     publicarSugerencia(c, true)
   }
   $('pubActualizar').addEventListener('click', () => cargar(true))

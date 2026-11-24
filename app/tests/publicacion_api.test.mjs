@@ -76,6 +76,36 @@ test('aprobar crea un envío por red y la repetición no duplica la cola', async
   assert.ok(cola.every(x => x.datos.aprobado_por === 'Eze'))
   assert.equal(remotas.length, 0)
 })
+test('la descripción confirmada deja las fuentes en la ficha interna', async () => {
+  reset()
+  const s = sugerencia()
+  const fuente = 'https://www.youtube.com/watch?v=test'
+  s.datos.fuente_url = fuente
+  tablas.publicacion_docs.push(s, { ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  const descripcion = '¿Cuál te voló más la cabeza?\n\nOriginales:\n' + fuente + '\n\n#GTA6'
+  const r = await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['instagram'], descripcion })
+  assert.equal(r.codigo, 200)
+  const envio = tablas.publicacion_docs.find(d => d.coleccion === 'cola')
+  assert.equal(envio.datos.fuente_url, fuente)
+  assert.equal(envio.datos.descripcion, '¿Cuál te voló más la cabeza?\n\n#GTA6')
+})
+test('aprobar desde Biblioteca conserva el copy editado en la ficha y en cada destino elegido', async () => {
+  reset()
+  tablas.docs.push({ coleccion: 'clips', id: 'c1', version: 1, datos: {
+    estado: 'listo', titulo: 'Título anterior', descripcion: 'Texto anterior', video_path: 'Eze/clip.mp4'
+  } })
+  tablas.publicacion_docs.push({ ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  const r = await llamada({ op: 'aprobar_clip', id: 'c1', version: 1, revisado: true,
+    plataformas: ['instagram'], titulo: 'Título editado', descripcion: 'Copy nuevo', hashtags: '#GTA6 #GTAVI' })
+  assert.equal(r.codigo, 200)
+  const envios = tablas.publicacion_docs.filter(d => d.coleccion === 'cola')
+  assert.deepEqual(envios.map(d => d.datos.plataforma), ['instagram'])
+  for (const datos of [tablas.docs[0].datos, envios[0].datos]) {
+    assert.equal(datos.titulo, 'Título editado')
+    assert.equal(datos.descripcion, 'Copy nuevo')
+    assert.deepEqual(datos.hashtags, ['#GTA6', '#GTAVI'])
+  }
+})
 test('no aprueba material sin revisar ni permite publicar imágenes como Short', async () => {
   reset(); const d = sugerencia(); d.datos.media_lista = false; tablas.publicacion_docs.push(d)
   assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1 })).codigo, 422)

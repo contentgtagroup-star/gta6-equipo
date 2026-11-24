@@ -133,7 +133,7 @@ export default async function handler (req, res) {
 Trabajá solo en la carpeta temporal actual. Las herramientas están en GTA6_TOOLS (se indica al empezar). No leas equipo.json ni claves. Para un video propio, usá python3 GTA6_TOOLS/equipo.py bajar-video <video_path> actual.mp4. Para cortes de un clip propio, usá procesar.py cortar o parchar con su receta si está disponible; si falta, informalo y no inventes la cámara. Si el video fuente es externo, bajá solo el tramo corto necesario y analizalo con la skill watch instalada.
 Si la propuesta tiene clip_id, consultá python3 GTA6_TOOLS/equipo.py get clips <clip_id> y guardá su campo receta en receta.json para aplicar el recorte sin rehacer el clip entero.
 Para imágenes de un post externo: bajá el post con python3 GTA6_TOOLS/capturar.py <fuente_url> --dir . (devuelve las imágenes y cuántas son). Si media es "modificar" o "regenerar", modelalas con python3 GTA6_TOOLS/imagenes.py --entrada <todos los nombres de imagenes devueltos, separados por comas> --formato 4:5 --sello si --subir (si la propuesta trae un título corto para la tapa, agregá --texto "..."); usá la lista completa y en orden, no uses comodines ni una lista de ejemplo; verificá que el resultado tenga la misma cantidad que la captura. Eso las lleva a 4:5, les pone el sello del equipo y las sube, devolviendo los paths en "imagenes". Si media es "reusar", subí la imagen tal cual con publicacion-subir, SIN sello. Nunca acredites al autor del post ajeno. Si hace falta mapa o carrusel nuevo, usá la skill de imágenes instalada y generá archivos reales; no finjas haberlos creado. Adaptá al español. No descargues streams enteros ni hagas descargas masivas. El material puede requerir acceso a la fuente: si no está disponible, devolvé {"error":"qué falta"}.
-Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equipo.py publicacion-subir <archivo>. Devuelve un path privado. Respondé SOLO JSON con video_path o imagenes (lista de paths de imágenes, en orden); incluí titulo/descripcion/hashtags solo si corresponde cambiarlos. No apruebes ni publiques ni borres clips. El equipo revisará el material antes de aprobar.`
+Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equipo.py publicacion-subir <archivo>. Devuelve un path privado. Respondé SOLO JSON con video_path o imagenes (lista de paths de imágenes, en orden); incluí titulo/descripcion/hashtags solo si corresponde cambiarlos. La descripción es copy propio, sin los enlaces originales, que se guardan en la ficha interna. No apruebes ni publiques ni borres clips. El equipo revisará el material antes de aprobar.`
       salida = await guardarPub('trabajos', id, { estado: 'pendiente', tipo: 'media', sugerencia_id: d.id, sugerencia_version: d.version, pedido_por: yo, creado: Date.now(), prompt }, actual?.version || 0)
       await eventoPub('preparacion_media', yo, { trabajo_id: id, sugerencia_id: d.id })
     } else if (b.op === 'programar_fuentes') {
@@ -202,7 +202,9 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         if (!d.datos.video_path && plataformas.some(p => ['youtube', 'tiktok'].includes(p))) throw errorPublicacion('YouTube y TikTok requieren un video en este flujo.', 422)
         if (!d.datos.video_path && !d.datos.imagenes?.length && (d.datos.fuente_url || plataformas.some(p => p !== 'x'))) throw errorPublicacion('Prepará el material antes de publicar.', 422)
         await destinosPublicacion(plataformas)
-        d = await guardarPub('sugerencias', d.id, { ...d.datos, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now() }, d.version)
+        const { titulo, descripcion, hashtags } = contenidoValido({ ...d.datos, plataformas,
+          titulo: b.titulo ?? d.datos.titulo, descripcion: b.descripcion ?? d.datos.descripcion, hashtags: b.hashtags ?? d.datos.hashtags })
+        d = await guardarPub('sugerencias', d.id, { ...d.datos, titulo, descripcion, hashtags, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now() }, d.version)
       }
       salida.ids = await encolar('sug-' + d.id, d.datos, d.datos.aprobado_por)
       try { await guardarPub('sugerencias', d.id, { ...d.datos, encolado: true }, d.version) } catch (e) { if (e.status !== 409) throw e }
@@ -211,10 +213,12 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       if (error || !c || !['listo', 'aprobado'].includes(c.datos.estado)) throw errorPublicacion('El clip no está listo para aprobar.', 409)
       if (b.revisado !== true) throw errorPublicacion('Revisá el material y confirmá la publicación.', 422)
       if (b.version !== c.version) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
-      const datos = contenidoValido({ ...c.datos, titulo: String(c.datos.titulo || c.datos.gancho || 'Clip GTA 6').slice(0, 60), descripcion: c.datos.descripcion || 'Un momento de GTA 6.', plataformas: await destinosPublicacion(b.plataformas), media: 'reusar' })
+      const datos = contenidoValido({ ...c.datos, titulo: b.titulo ?? String(c.datos.titulo || c.datos.gancho || 'Clip GTA 6').slice(0, 60),
+        descripcion: b.descripcion ?? (c.datos.descripcion || 'Un momento de GTA 6.'), hashtags: b.hashtags ?? c.datos.hashtags,
+        plataformas: await destinosPublicacion(b.plataformas), media: 'reusar' })
       if (!datos.video_path) throw errorPublicacion('El clip todavía no tiene video.', 422)
       const snapshot = { ...datos, clip_id: c.id, fuente_url: c.datos.url || '', aprobado_el: Date.now() }
-      const aprobacion = { ...c.datos, estado: 'aprobado', aprobado_por: yo, publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: snapshot }
+      const aprobacion = { ...c.datos, titulo: datos.titulo, descripcion: datos.descripcion, hashtags: datos.hashtags, estado: 'aprobado', aprobado_por: yo, publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: snapshot }
       const { data, error: e } = await db().from('docs').update({ datos: aprobacion, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version).select('version')
       if (e || !data?.length) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
       salida.ids = await encolar('clip-' + c.id, snapshot, yo)

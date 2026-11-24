@@ -1,6 +1,7 @@
 {
- "version": 66,
+ "version": 67,
  "cambios": [
+  {"v": 67, "fecha": "2026-11-24", "texto": "En la revisión final, cada destino tiene su propia casilla alineada y el lápiz permite editar título, descripción y hashtags. Las recopilaciones nuevas usan un gancho propio y la descripción pública omite el bloque heredado de enlaces a originales.", "manual": null},
   {"v": 66, "fecha": "2026-11-24", "texto": "Actividad abre con 48 horas y permite pedir páginas anteriores. Métricas distingue conexión, permisos y datos disponibles. Links del equipo permite filtrar y muestra los clips vinculados. Sugerencias tiene un bloque de Material generado con vista previa a demanda.", "manual": null},
   {"v": 65, "fecha": "2026-11-24", "texto": "Publicar abre la vista previa y pide elegir las cuentas y confirmar la revisión antes de encolar. El motor prepara todas las imágenes antes de subirlas y muestra el código de rechazo si falla Storage.", "manual": "Actualizá las herramientas del motor."},
   {"v": 64, "fecha": "2026-11-24", "texto": "El panel tiene una barra lateral con secciones: Crear clips, Biblioteca, Publicaciones, Links del equipo y Ayuda y compu. La biblioteca y Publicaciones no se abren ni descargan videos ni datos hasta que las elegís, así la pantalla de crear queda limpia y no compite por red. La sección elegida se recuerda y también se puede abrir por link (#biblioteca, #publicaciones). En la sidebar se ve cuántos clips hay para revisar sin entrar a la biblioteca.", "manual": null},

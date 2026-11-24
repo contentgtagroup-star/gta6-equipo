@@ -123,6 +123,16 @@ test('un clip con snapshot aprobado pendiente de encolar retiene su archivo', ()
   assert.equal(plan.candidatos.length, 0)
 })
 
+test('retiene el path del snapshot pendiente aunque el clip ya esté publicado con otro video_path', () => {
+  const plan = planReciclaje({
+    cola: [{ video_path: 'eze/anterior.mp4', plataforma: 'instagram', estado: 'publicado', publicado_el: ahora - 30 * DIA }],
+    clips: [{ id: 'k4', estado: 'publicado', video_path: 'eze/nuevo.mp4', publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: { video_path: 'eze/anterior.mp4' } }],
+    archivos: [archivo('eze/anterior.mp4', 9), archivo('eze/nuevo.mp4', 9)]
+  }, { ahora, dias: 7 })
+  assert.equal(plan.candidatos.length, 0)
+  assert.equal(plan.retenidos.find(r => r.path === 'eze/anterior.mp4')?.motivo, 'clip "k4" con aprobación pendiente de encolar (snapshot)')
+})
+
 test('humano formatea bytes legibles', () => {
   assert.equal(humano(0), '0 B')
   assert.equal(humano(1024), '1.0 KB')

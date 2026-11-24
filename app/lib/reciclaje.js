@@ -36,7 +36,13 @@ export function planReciclaje ({ cola = [], clips = [], sugerencias = [], trabaj
   const motivoRetencion = new Map()
   const retener = (p, motivo) => { if (p && tam.has(p) && !motivoRetencion.has(p)) motivoRetencion.set(p, motivo) }
   for (const c of cola) if (EN_JUEGO.has(c.estado)) for (const p of pathsDe(c)) retener(p, 'envío de ' + (c.plataforma || 'una red') + ' en estado "' + c.estado + '"')
-  for (const c of clips) if (clipActivo(c)) for (const p of pathsDe(c)) retener(p, 'clip "' + (c.id || c.titulo || '') + '" todavía en publicación')
+  for (const c of clips) {
+    const id = (c && (c.id || c.titulo)) || ''
+    if (clipActivo(c)) for (const p of pathsDe(c)) retener(p, 'clip "' + id + '" todavía en publicación')
+    // El worker encola el SNAPSHOT, cuyos paths pueden diferir del video_path actual del clip.
+    if (c && c.publicacion_cola && c.publicacion_snapshot && c.publicacion_encolada !== true)
+      for (const p of pathsDe(c.publicacion_snapshot)) retener(p, 'clip "' + id + '" con aprobación pendiente de encolar (snapshot)')
+  }
   for (const s of sugerencias) if (sugerenciaActiva(s)) for (const p of pathsDe(s)) retener(p, s.estado === 'aprobada' ? 'aprobación pendiente de encolar necesita el archivo' : 'sugerencia sin cerrar necesita el archivo')
   for (const t of trabajos) if (['pendiente', 'ejecutando'].includes(t.estado)) for (const p of pathsDe(t)) retener(p, 'trabajo en curso usa el archivo')
 

@@ -35,18 +35,44 @@ def ejecutar(yo, con, exe):
         with tempfile.TemporaryDirectory(prefix='gta6_editorial_') as carpeta, tempfile.TemporaryFile(mode='w+t', encoding='utf-8') as log:
             prompt = 'GTA6_TOOLS = ' + equipo.AQUI + '\n' + t['prompt'].replace('GTA6_TOOLS/', equipo.AQUI + os.sep)
             comando = equipo.comando_claude(exe, prompt) if con == 'claude' else equipo.comando_codex(exe, prompt)
+            ruta_avance = os.path.join(carpeta, '.avance-editorial.json')
+            entorno = {**os.environ, 'GTA6_AVANCE_EDITORIAL': ruta_avance, 'GTA6_TIPO_EDITORIAL': t.get('tipo', '')}
             p = subprocess.Popen(comando, cwd=carpeta, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.DEVNULL,
-                                 text=True, encoding='utf-8', **equipo.grupo_propio())
-            inicio = time.monotonic()
+                                 env=entorno, text=True, encoding='utf-8', **equipo.grupo_propio())
+            inicio = ultimo_latido = time.monotonic()
+            ultima_escucha = inicio
+            ultimo_porcentaje = 10
+            latido = {'op': 'latido_trabajo', 'id': t['id'], 'run_id': t['run_id']}
             try:
                 while p.poll() is None:
                     try:
-                        p.wait(timeout=30)
+                        p.wait(timeout=3)
                     except subprocess.TimeoutExpired:
-                        if time.monotonic() - inicio > 15 * 60:
+                        ahora = time.monotonic()
+                        if ahora - inicio > 15 * 60:
                             raise TimeoutError('La propuesta tardó más de 15 minutos.')
-                        equipo.pedir('POST', '/api/publicacion', {'op': 'latido_trabajo', 'id': t['id'], 'run_id': t['run_id']})
-                        equipo.escribir('set', 'escucha', yo, {'ultima': equipo.ahora_ms(), 'version': equipo.version_local()})
+                        avance = {}
+                        try:
+                            with open(ruta_avance, encoding='utf-8') as archivo:
+                                datos_avance = json.load(archivo)
+                            if isinstance(datos_avance, dict) and type(datos_avance.get('porcentaje')) is int:
+                                avance = datos_avance
+                        except (OSError, ValueError):
+                            pass
+                        porcentaje = avance.get('porcentaje', 0)
+                        toca_latido = ahora - ultimo_latido >= 30
+                        if porcentaje > ultimo_porcentaje or toca_latido:
+                            try:
+                                equipo.pedir('POST', '/api/publicacion', {**latido, 'avance': avance})
+                            except (SystemExit, equipo.ConflictoError):
+                                if toca_latido:
+                                    raise
+                                continue
+                            ultimo_porcentaje = max(ultimo_porcentaje, porcentaje)
+                            if ahora - ultima_escucha >= 30:
+                                equipo.escribir('set', 'escucha', yo, {'ultima': equipo.ahora_ms(), 'version': equipo.version_local()})
+                                ultima_escucha = ahora
+                            ultimo_latido = ahora
             finally:
                 if p.poll() is None:
                     equipo.cortar_todo(p)
@@ -57,6 +83,10 @@ def ejecutar(yo, con, exe):
             if datos.get('error'):
                 cierre['error'] = str(datos['error'])[:1000]
             else:
+                try:
+                    equipo.pedir('POST', '/api/publicacion', {**latido, 'avance': {'porcentaje': 98, 'etapa': 'guardando'}})
+                except (SystemExit, equipo.ConflictoError):
+                    pass
                 cierre['resultado'] = datos
     except (Exception, SystemExit) as e:
         cierre['error'] = str(e)[:1000] or 'Se interrumpió el trabajo editorial.'

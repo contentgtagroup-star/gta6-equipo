@@ -151,6 +151,7 @@ def capturar_generico(url, carpeta):
 
 
 def main():
+    from equipo import avance_editorial
     ap = argparse.ArgumentParser()
     ap.add_argument('url')
     ap.add_argument('--dir', default='.')
@@ -158,10 +159,15 @@ def main():
     carpeta = os.path.abspath(a.dir)
     os.makedirs(carpeta, exist_ok=True)
     host = re.sub(r'^https?://', '', a.url).split('/')[0]
+    avance_editorial(20, 'capturando')
     if plataforma(host) == 'X':
         salida = capturar_x(a.url, carpeta)
     else:
         salida = capturar_generico(a.url, carpeta)
+    if os.environ.get('GTA6_TIPO_EDITORIAL') == 'media':
+        avance_editorial(35, 'preparando')
+    else:
+        avance_editorial(60, 'redactando')
     salida['dir'] = carpeta
     print(json.dumps(salida, ensure_ascii=False))
 

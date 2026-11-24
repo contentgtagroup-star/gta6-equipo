@@ -1,6 +1,7 @@
 {
- "version": 67,
+ "version": 68,
  "cambios": [
+  {"v": 68, "fecha": "2026-11-24", "texto": "Actividad y Sugerencias muestran el porcentaje de generación y preparación según las etapas que completó el motor, incluida la subida privada de cada imagen.", "manual": null},
   {"v": 67, "fecha": "2026-11-24", "texto": "En la revisión final, cada destino tiene su propia casilla alineada y el lápiz permite editar título, descripción y hashtags. Las recopilaciones nuevas usan un gancho propio y la descripción pública omite el bloque heredado de enlaces a originales. Podés descartar sugerencias y volver a generar desde el mismo enlace con otro enfoque.", "manual": null},
   {"v": 66, "fecha": "2026-11-24", "texto": "Actividad abre con 48 horas y permite pedir páginas anteriores. Métricas distingue conexión, permisos y datos disponibles. Links del equipo permite filtrar y muestra los clips vinculados. Sugerencias tiene un bloque de Material generado con vista previa a demanda.", "manual": null},
   {"v": 65, "fecha": "2026-11-24", "texto": "Publicar abre la vista previa y pide elegir las cuentas y confirmar la revisión antes de encolar. El motor prepara todas las imágenes antes de subirlas y muestra el código de rechazo si falla Storage.", "manual": "Actualizá las herramientas del motor."},

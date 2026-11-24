@@ -353,4 +353,23 @@ test('descartar oculta la propuesta, bloquea su aprobación y habilita otra desd
   assert.notEqual(visibles[0].id, s.id)
 })
 
+test('el avance editorial sube por etapas y llega a 100 solo al guardar el resultado', async () => {
+  reset()
+  const url = 'https://x.com/cuenta/status/456'
+  assert.equal((await llamada({ op: 'generar_link', url })).codigo, 200)
+  const { trabajo } = (await llamada({ op: 'tomar_trabajo' })).datos
+  assert.equal(trabajo.porcentaje, 10)
+  const latido = { op: 'latido_trabajo', id: trabajo.id, run_id: trabajo.run_id }
+  assert.equal((await llamada({ ...latido, avance: { porcentaje: 70, etapa: 'modelando' } })).codigo, 200)
+  await llamada({ ...latido, avance: { porcentaje: 35, etapa: 'preparando' } })
+  await llamada({ ...latido, avance: { porcentaje: 100, etapa: 'guardando' } })
+  const actual = () => tablas.publicacion_docs.find(d => d.id === trabajo.id).datos
+  assert.equal(actual().porcentaje, 70)
+  assert.equal(actual().etapa, 'modelando')
+  assert.equal((await llamada({ op: 'cerrar_trabajo', id: trabajo.id, run_id: trabajo.run_id,
+    resultado: { ...sugerencia().datos, fuente_url: url } })).codigo, 200)
+  assert.equal(actual().porcentaje, 100)
+  assert.equal(actual().estado, 'terminado')
+})
+
 test.after(() => { globalThis.fetch = original })

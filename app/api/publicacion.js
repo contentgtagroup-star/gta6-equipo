@@ -155,7 +155,12 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
     } else if (b.op === 'latido_trabajo') {
       const d = await exigirItem('trabajos', b.id)
       if (d.datos.pedido_por !== yo || d.datos.estado !== 'ejecutando' || d.datos.por !== yo || d.datos.run_id !== b.run_id) throw errorPublicacion('El trabajo cambió de responsable.', 409)
-      await guardarPub('trabajos', d.id, { ...d.datos, vence: Date.now() + 20 * 60000 }, d.version)
+      const ahora = Date.now(), avance = b.avance
+      const etapas = ['capturando', 'preparando', 'redactando', 'modelando', 'subiendo', 'guardando']
+      const actualizar = etapas.includes(avance?.etapa) && Number.isInteger(avance.porcentaje) &&
+        avance.porcentaje > (d.datos.porcentaje || 10) && avance.porcentaje < 100
+      await guardarPub('trabajos', d.id, { ...d.datos, vence: ahora + 20 * 60000, ultimo_latido: ahora,
+        ...(actualizar ? { porcentaje: avance.porcentaje, etapa: avance.etapa } : {}) }, d.version)
     } else if (b.op === 'tomar_trabajo') {
       const trabajos = (await listarPub('trabajos')).filter(d => d.datos.pedido_por === yo && (d.datos.estado === 'pendiente' || (d.datos.estado === 'ejecutando' && d.datos.vence < Date.now()))).sort((a, b) => a.datos.creado - b.datos.creado)
       salida = { trabajo: null }
@@ -172,7 +177,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
           if (!f?.datos.activa || f.datos.eliminada) continue
         }
         try {
-          const guardado = await guardarPub('trabajos', d.id, { ...d.datos, estado: 'ejecutando', por: yo, run_id: randomUUID(), vence: Date.now() + 20 * 60000 }, d.version)
+          const guardado = await guardarPub('trabajos', d.id, { ...d.datos, estado: 'ejecutando', porcentaje: 10, etapa: 'iniciando', ultimo_latido: Date.now(), por: yo, run_id: randomUUID(), vence: Date.now() + 20 * 60000 }, d.version)
           salida.trabajo = plano(guardado); break
         } catch (e) { if (e.status !== 409) throw e }
       }
@@ -201,7 +206,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         const f = await leerPub('fuentes', d.datos.fuente_id)
         if (f) await guardarPub('fuentes', f.id, { ...f.datos, generada_el: Date.now() }, f.version)
       }
-      await guardarPub('trabajos', d.id, { ...d.datos, estado: b.error ? 'error' : 'terminado', error: String(b.error || '').slice(0, 1000), terminado_el: Date.now() }, d.version)
+      await guardarPub('trabajos', d.id, { ...d.datos, estado: b.error ? 'error' : 'terminado', ...(b.error ? {} : { porcentaje: 100, etapa: 'lista' }), error: String(b.error || '').slice(0, 1000), terminado_el: Date.now() }, d.version)
       await eventoPub(b.error ? 'sugerencia_error' : 'sugerencia_generada', yo, { trabajo_id: d.id, fuente_id: d.datos.fuente_id, resultado: b.error ? String(b.error).slice(0, 1000) : 'lista_para_revisar' })
     } else if (b.op === 'sugerir_clips') {
       let agregadas = 0

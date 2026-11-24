@@ -214,7 +214,7 @@ html{-webkit-text-size-adjust:100%}
     <h2>Pegá un link</h2>
     <p class="small dim" style="margin:4px 0 0">ALIMENTAR lo guarda como referencia para la IA. CREAR CLIP hace un short con ese material específico en tu compu (YouTube, Twitch o Kick).</p>
     <form id="clipDirectoForm" class="row" style="margin:10px 0 0;gap:8px">
-      <input id="clipDirectoIn" type="url" required aria-label="Link del material" placeholder="Pegá un link de YouTube, Twitch, Kick o X" style="flex:3 1 260px">
+      <input id="clipDirectoIn" type="url" required aria-label="Link del material" placeholder="Link de YouTube/Twitch/Kick (clip) o X/IG/FB/TikTok (publicación)" style="flex:3 1 260px">
       <input id="clipDirectoNota" maxlength="200" placeholder="¿Qué momento o idea tiene de interesante? (opcional)" style="flex:2 1 200px">
       <button type="submit" class="ghost" id="btnAlimentar" style="white-space:nowrap">ALIMENTAR</button>
       <button class="primary" type="submit" id="btnClipDirecto" style="white-space:nowrap">CREAR CLIP</button>
@@ -777,6 +777,19 @@ function leerLink(txt){
     if(clip) return {id: 'kick_c' + clip.slice(0, 100), url: 'https://kick.com/' + partes[0] + '/clips/' + clip, fuente: 'Kick', canal: partes[0]};
     if(partes[1] === 'videos' && partes[2]) return {id: 'kick_v' + partes[2].slice(0, 100), url: 'https://kick.com/' + partes[0] + '/videos/' + partes[2], fuente: 'Kick', canal: partes[0]};
   }
+  // Posts sociales (no son fuente de clip, pero sí de referencia y de "Generar desde link").
+  if(h === 'instagram.com'){
+    const id = ['p','reel','reels','tv'].includes(partes[0]) ? partes[1] : null;
+    if(id) return {id: 'ig_' + id.slice(0, 60), url: 'https://www.instagram.com/' + partes[0] + '/' + id + '/', fuente: 'Instagram'};
+  }
+  if(h === 'tiktok.com'){
+    const id = (partes[0]||'').startsWith('@') && partes[1] === 'video' ? partes[2] : (partes[0] === 't' ? partes[1] : null);
+    if(id) return {id: 'tiktok_' + id.slice(0, 60), url: u.href, fuente: 'TikTok', canal: (partes[0]||'').replace(/^@/, '')};
+  }
+  if((h === 'facebook.com' || h === 'fb.watch' || h === 'fb.com') && partes.length){
+    const clave = (partes.join('_') + (u.searchParams.get('v') ? '_' + u.searchParams.get('v') : '')).replace(/[^A-Za-z0-9_]/g, '').slice(0, 80);
+    return {id: 'fb_' + (clave || Date.now()), url: u.href, fuente: 'Facebook', canal: partes[0] || ''};
+  }
   return null;
 }
 // Referencias: fuentes/referencias en la app. El motor les completa título y texto (equipo.py referencias) y las usa de ejemplo.
@@ -797,7 +810,7 @@ async function alimentarReferencia(){
   if(!S.yo){ toast('Primero entrá con tu clave'); return; }
   if($('btnAlimentar').disabled || $('btnClipDirecto').disabled) return;
   const l = leerLink($('clipDirectoIn').value);
-  if(!l){ toast('Ese link no es de un video de YouTube, Twitch, Kick o un post de X'); return; }
+  if(!l){ toast('Ese link no es de YouTube, Twitch, Kick, X, Instagram, Facebook o TikTok'); return; }
   const nota = $('clipDirectoNota').value.trim();
   const fb = $('clipDirectoFeedback');
   $('btnAlimentar').disabled = true; $('btnClipDirecto').disabled = true;
@@ -829,7 +842,10 @@ async function procesarClipDirecto(){
   if(!raw){ toast('Pegá un link primero'); return; }
   const l = leerLink(raw);
   if(!l || !['YouTube', 'Twitch', 'Kick'].includes(l.fuente)){
-    toast('Para crear un clip usá YouTube, Twitch o Kick. Los posts de X se pueden guardar con ALIMENTAR.');
+    if(l && ['X', 'Instagram', 'Facebook', 'TikTok'].includes(l.fuente))
+      toast('Ese es un post de ' + l.fuente + '. Para un clip usá YouTube, Twitch o Kick. Para hacer una publicación con ese post, andá a Publicaciones → Generar desde link.');
+    else
+      toast('Para crear un clip pegá un video de YouTube, Twitch o Kick.');
     return;
   }
   const nota = ($('clipDirectoNota')?.value || '').trim();

@@ -7,7 +7,7 @@ Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_
 const original = globalThis.fetch, llamadas = []
 const respuesta = (d, status = 200) => new Response(JSON.stringify(d), { status, headers: { 'Content-Type': 'application/json' } })
 const item = plataforma => ({ plataforma, video_path: 'Eze/clip.mp4', titulo: 'Una caja escondida', descripcion: '¿Qué tiene adentro?', hashtags: ['#GTA6'], aprobado_por: 'Eze' })
-let red = '', enviado = false, estadoPost = 'sent', falloBuffer = false
+let red = '', enviado = false, estadoPost = 'sent', falloBuffer = false, estadoReel = 'complete', envueltoVideoStatus = false
 globalThis.fetch = async (url, op = {}) => {
   const u = new URL(url); llamadas.push({ url: u.href, op })
   if (u.hostname === 'unit.supabase.co') {
@@ -29,7 +29,10 @@ globalThis.fetch = async (url, op = {}) => {
     if (query.includes('post(')) return respuesta({ data: { post: { id: 'buf-uno', status: estadoPost, sentAt: estadoPost === 'sent' ? '2026-11-22T12:00:00Z' : null, externalLink: 'https://x.com/cuenta/status/123' } } })
     return respuesta({ data: { createPost: { post: { id: 'buf-uno', sentAt: '2026-11-22T12:00:00Z', externalLink: 'https://x.com/cuenta/status/123' } } } })
   }
-  if (red === 'facebook' && u.pathname.endsWith('/video')) return respuesta({ status: { processing_phase: { status: 'completed' }, publishing_phase: { publish_status: enviado ? 'published' : 'draft' } } })
+  if (red === 'facebook' && u.pathname.endsWith('/video')) {
+    const fases = { processing_phase: { status: estadoReel }, publishing_phase: { publish_status: enviado ? 'published' : 'draft' } }
+    return respuesta(envueltoVideoStatus ? { video_status: fases } : { status: fases })
+  }
   if (red === 'facebook' && u.pathname.endsWith('/video_reels')) { enviado = true; return respuesta({ success: true }) }
   throw new Error('Solicitud inesperada: ' + u.href)
 }
@@ -77,9 +80,26 @@ test('X consulta el estado del post con el esquema actual y detecta fallos', asy
   estadoPost = 'sent'
 })
 test('Facebook espera confirmación sin repetir finish', async () => {
-  red = 'facebook'; llamadas.length = 0; enviado = false
+  red = 'facebook'; llamadas.length = 0; enviado = false; estadoReel = 'complete'; envueltoVideoStatus = false
   assert.equal((await pasoPublicacion({ ...item(red), remoto_id: 'video', etapa: 'procesando' }, async () => {})).etapa, 'confirmando')
   assert.equal((await pasoPublicacion({ ...item(red), remoto_id: 'video', etapa: 'confirmando' }, async () => {})).estado, 'publicado')
   assert.equal(llamadas.filter(l => l.url.includes('/video_reels')).length, 1)
+})
+test('Facebook cierra con processing_phase.status = complete, no completed', async () => {
+  red = 'facebook'; llamadas.length = 0; enviado = false; estadoReel = 'complete'; envueltoVideoStatus = false
+  assert.equal((await pasoPublicacion({ ...item(red), remoto_id: 'video', etapa: 'procesando' }, async () => {})).etapa, 'confirmando')
+  enviado = true
+  assert.equal((await pasoPublicacion({ ...item(red), remoto_id: 'video', etapa: 'confirmando' }, async () => {})).estado, 'publicado')
+})
+test('Facebook entiende video_status y publish_status published', async () => {
+  red = 'facebook'; llamadas.length = 0; enviado = true; estadoReel = 'complete'; envueltoVideoStatus = true
+  const d = await pasoPublicacion({ ...item(red), remoto_id: 'video', etapa: 'procesando' }, async () => {})
+  assert.equal(d.estado, 'publicado')
+  assert.equal(d.publicacion_remota, 'video')
+  assert.equal(llamadas.filter(l => l.url.includes('/video_reels')).length, 0)
+})
+test('Facebook no sigue esperando si Graph reporta error', async () => {
+  red = 'facebook'; llamadas.length = 0; enviado = false; estadoReel = 'error'; envueltoVideoStatus = false
+  await assert.rejects(() => pasoPublicacion({ ...item(red), remoto_id: 'video', etapa: 'procesando' }, async () => {}), /Facebook no pudo procesar el video/)
 })
 test.after(() => { globalThis.fetch = original })

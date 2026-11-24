@@ -4,6 +4,27 @@ import { REDES, errorPublicacion } from './publicacion.js'
 
 const bearer = token => ({ Authorization: 'Bearer ' + token })
 const json = (body, token) => ({ method: 'POST', headers: { ...bearer(token), 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+// Graph no es consistente con el vocabulario de estados de un reel: suele
+// devolver processing_phase.status = 'complete' (no 'completed') y a veces lo
+// anida en video_status. El publish_status published llega en otra fase.
+const LISTO_REEL = new Set(['complete', 'completed', 'finished', 'ready'])
+function estadoReel (d) {
+  const estados = []
+  for (const fase of [d, d?.status, d?.video_status, d?.status?.video_status]) {
+    if (!fase || typeof fase !== 'object') continue
+    for (const tipo of ['processing_phase', 'video_processing_phase', 'uploading_phase']) {
+      if (fase[tipo]?.status) estados.push(String(fase[tipo].status).toLowerCase())
+    }
+    if (fase.publishing_phase?.publish_status) estados.push(String(fase.publishing_phase.publish_status).toLowerCase())
+    if (typeof fase.status === 'string') estados.push(fase.status.toLowerCase())
+    if (typeof fase.publish_status === 'string') estados.push(fase.publish_status.toLowerCase())
+  }
+  return {
+    publicado: estados.includes('published'),
+    fallo: estados.some(e => ['error', 'expired', 'failed', 'canceled'].includes(e)),
+    listo: estados.some(e => LISTO_REEL.has(e))
+  }
+}
 async function video (item, completo = false) {
   if (!item.video_path) throw errorPublicacion('Prepará y revisá el video antes de enviarlo.', 422)
   if (completo) {
@@ -77,10 +98,11 @@ export async function pasoPublicacion (item, checkpoint) {
       return { etapa: 'procesando' }
     }
     const d = await jsonRemoto(GRAPH + '/' + item.remoto_id + '?fields=status', { headers: bearer(t.access_token) })
-    if (d.status?.publishing_phase?.publish_status === 'published') return { estado: 'publicado', publicacion_remota: item.remoto_id }
-    if (d.status?.processing_phase?.status === 'error' || d.status?.uploading_phase?.status === 'error') throw errorPublicacion('Facebook no pudo procesar el video.', 422)
+    const estado = estadoReel(d)
+    if (estado.publicado) return { estado: 'publicado', publicacion_remota: item.remoto_id }
+    if (estado.fallo) throw errorPublicacion('Facebook no pudo procesar el video.', 422)
     if (item.etapa === 'confirmando') return { etapa: 'confirmando' }
-    if (d.status?.processing_phase?.status !== 'completed') return { etapa: 'procesando' }
+    if (!estado.listo) return { etapa: 'procesando' }
     await checkpoint({ etapa: 'publicando' })
     await jsonRemoto(GRAPH + '/' + t.page_id + '/video_reels', { method: 'POST', headers: bearer(t.access_token), body: new URLSearchParams({ upload_phase: 'finish', video_id: item.remoto_id, video_state: 'PUBLISHED', description: texto }) })
     return { etapa: 'confirmando' }

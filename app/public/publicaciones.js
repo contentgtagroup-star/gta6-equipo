@@ -196,6 +196,7 @@
       }
       acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
       if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
+      if (p.remoto_id && ['procesando', 'enviando'].includes(p.estado)) acciones.append(boton('Detener reintentos', async () => { await post({ op: 'cola_detener', id: p.id, version: p._version }); await cargar(true) }))
       if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
         if (!p.video_path && !p.imagenes?.length) return toast('Esta publicación no tiene video ni imágenes.')
         const { urls } = await post({ op: 'vista_media', video_path: p.video_path, imagenes: p.imagenes || [] })

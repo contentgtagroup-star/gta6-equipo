@@ -4,6 +4,14 @@ import { pasoPublicacion } from './publicar_redes.js'
 import { marcarConexionVencida } from './conexiones.js'
 import { REDES } from './publicacion.js'
 
+// Un reel puede quedar "procesando" para siempre en Graph. Después de este
+// tiempo lo pasamos a revisión para no gastar egress reconsultando sin parar.
+const PROCESANDO_TIMEOUT_MS = 30 * 60000
+function vencioProcesando (datos) {
+  const inicio = datos.procesando_desde || datos.aprobado_el || datos.creado || 0
+  return inicio > 0 && Date.now() - inicio > PROCESANDO_TIMEOUT_MS
+}
+
 export async function actualizarClipPublicado (clipId, yo) {
   if (!clipId) return
   const envios = (await listarPub('cola')).filter(p => p.datos.clip_id === clipId && p.datos.estado !== 'cancelado')
@@ -35,6 +43,7 @@ export async function procesarPublicaciones (yo) {
       await guardarPub('cola', d.id, { ...d.datos, estado: 'revisar', error: 'Se interrumpió un envío. Revisá la red antes de volver a enviar para evitar duplicados.' }, d.version)
       await eventoPub('envio_interrumpido', yo, { item_id: d.id }); continue
     }
+    const estadoInicial = d.datos.estado
     try { d = await guardarPub('cola', d.id, { ...d.datos, estado: 'enviando', vence: Date.now() + 180000, procesado_por: yo }, d.version) } catch (e) { if (e.status === 409) continue; throw e }
     const checkpoint = async cambios => { d = await guardarPub('cola', d.id, { ...d.datos, ...cambios }, d.version) }
     try {
@@ -46,8 +55,16 @@ export async function procesarPublicaciones (yo) {
         }
       }
       const siguiente = await pasoPublicacion(d.datos, checkpoint)
-      const estado = siguiente.estado || 'procesando'
-      await checkpoint({ ...siguiente, estado, error: '', proximo_el: Date.now() + 30000, ...(estado === 'publicado' ? { publicado_el: Date.now() } : {}), ...(estado === 'borrador' ? { borrador_el: Date.now() } : {}) })
+      let estado = siguiente.estado || 'procesando'
+      let error = ''
+      if (estadoInicial === 'procesando' && estado === 'procesando' && vencioProcesando(d.datos)) {
+        estado = 'revisar'
+        error = 'La plataforma no confirmó la publicación a tiempo. Verificá en la red si ya se publicó antes de volver a enviar.'
+        await eventoPub('procesando_vencido', yo, { item_id: d.id, plataforma: d.datos.plataforma, remoto_id: d.datos.remoto_id || '' })
+      }
+      await checkpoint({ ...siguiente, estado, error, proximo_el: Date.now() + 30000,
+        procesando_desde: estado === 'procesando' ? (d.datos.procesando_desde || Date.now()) : 0,
+        ...(estado === 'publicado' ? { publicado_el: Date.now() } : {}), ...(estado === 'borrador' ? { borrador_el: Date.now() } : {}) })
       await eventoPub(estado, yo, { item_id: d.id, plataforma: d.datos.plataforma, aprobado_por: d.datos.aprobado_por, fuente_url: d.datos.fuente_url, remoto_id: d.datos.remoto_id || '', resultado: estado })
       if (estado === 'publicado') { try { await actualizarClipPublicado(d.datos.clip_id, yo) } catch {} }
     } catch (e) {

@@ -42,6 +42,7 @@ jobs:
             local id respuesta
             id=$(id_de "$1")
             test -n "$id" || { echo "No hay ID de producción para $1."; return 1; }
+            echo "ID de $1: <$id>"
             respuesta=$(curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/${id}?teamId=${VERCEL_ORG_ID}" \
               -H "Authorization: Bearer $VERCEL_TOKEN") || return 1
             jq -r '"\(.key) decrypted=\(.decrypted) tieneValor=\((.value // "") | length > 0)"' <<< "$respuesta"

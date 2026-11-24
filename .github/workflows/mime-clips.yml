@@ -1,0 +1,73 @@
+name: MIME del bucket clips
+
+# Configuración de Supabase, no código de la app. Se ejecuta a mano desde Actions.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  habilitar-jpeg:
+    name: Agregar image/jpeg sin quitar los MIME actuales
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_ORG_ID: team_teuRF4rK0UsjEY2iUYw3ES4v
+      VERCEL_PROJECT_ID: prj_54G9WHv8ggngapNEXRDDB0GJ3FTE
+      VERCEL_TOKEN: ${{ secrets.GTADEPLOY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Preparar entorno de producción
+        run: |
+          test -n "$VERCEL_TOKEN" || { echo 'Falta configurar GTADEPLOY en GitHub Actions.'; exit 1; }
+          npm install --global vercel@65.9.0
+          vercel pull --yes --environment=production --non-interactive
+      - name: Habilitar image/jpeg en el bucket privado clips
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENVFILE=$(find . -maxdepth 3 -name '.env.local' -print -quit)
+          test -n "$ENVFILE" || { echo 'No apareció .env.local al hacer vercel pull.'; exit 1; }
+          set -a
+          # shellcheck disable=SC1090
+          . "$ENVFILE"
+          set +a
+
+          BASE="${SUPABASE_URL:-}"
+          KEY="${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
+          test -n "$BASE" || { echo 'Falta SUPABASE_URL en la configuración de producción.'; exit 1; }
+          test -n "$KEY" || { echo 'Falta la clave de servicio de Supabase en producción.'; exit 1; }
+          BASE="${BASE%/}"
+          AUTH=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+
+          curl -fsS "${BASE}/storage/v1/bucket/clips" "${AUTH[@]}" > "$RUNNER_TEMP/bucket.json"
+
+          jq -e '.id == "clips"' "$RUNNER_TEMP/bucket.json" > /dev/null
+          jq -c '
+            (.allowed_mime_types // []) as $actuales |
+            if ($actuales | index("image/jpeg")) then $actuales else $actuales + ["image/jpeg"] end
+          ' "$RUNNER_TEMP/bucket.json" > "$RUNNER_TEMP/mimes.json"
+          MIMES=$(cat "$RUNNER_TEMP/mimes.json")
+          echo "MIME antes: $(jq -c '.allowed_mime_types // []' "$RUNNER_TEMP/bucket.json")"
+          echo "MIME después: $MIMES"
+
+          jq -c --argjson mimes "$MIMES" '
+            {id: .id, name: .name, public: .public, allowed_mime_types: $mimes}
+            + (if .file_size_limit != null then {file_size_limit: .file_size_limit} else {} end)
+          ' "$RUNNER_TEMP/bucket.json" > "$RUNNER_TEMP/body.json"
+
+          curl -fsS -X PUT "${BASE}/storage/v1/bucket/clips" \
+            "${AUTH[@]}" -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/body.json" > "$RUNNER_TEMP/respuesta.json"
+
+          curl -fsS "${BASE}/storage/v1/bucket/clips" "${AUTH[@]}" > "$RUNNER_TEMP/final.json"
+          jq -e '(.allowed_mime_types // []) | index("image/jpeg") != null' "$RUNNER_TEMP/final.json" > /dev/null
+          echo "Verificado: el bucket clips conserva sus tipos y ahora acepta image/jpeg."
+          echo "MIME finales: $(jq -c '.allowed_mime_types' "$RUNNER_TEMP/final.json")"
+          echo 'image/jpeg habilitado en el bucket clips de Supabase.' >> "$GITHUB_STEP_SUMMARY"

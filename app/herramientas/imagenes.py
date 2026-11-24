@@ -93,6 +93,7 @@ def subir(archivo):
 
 
 def main():
+    from equipo import avance_editorial
     ap = argparse.ArgumentParser()
     ap.add_argument('--entrada', required=True, help='imágenes separadas por coma')
     ap.add_argument('--formato', default='4:5', choices=list(FORMATOS))
@@ -110,15 +111,21 @@ def main():
     if not entradas:
         fail('No pasaste ninguna imagen.')
     archivos, paths = [], []
-    for i, e in enumerate(entradas[:10]):
+    entradas = entradas[:10]
+    avance_editorial(40, 'modelando')
+    for i, e in enumerate(entradas):
         origen = e if os.path.isabs(e) else os.path.join(carpeta, e)
         if not os.path.exists(origen):
             fail('No encuentro la imagen ' + e)
         salida = os.path.join(carpeta, f'pub_{i}.jpg')
         modelar(origen, salida, w, h, a.sello == 'si', a.texto if i == 0 else '')
         archivos.append(salida)
+        avance_editorial(40 + (30 * len(archivos) // len(entradas)), 'modelando')
     if a.subir:
-        paths = [subir(archivo) for archivo in archivos]
+        avance_editorial(75, 'subiendo')
+        for archivo in archivos:
+            paths.append(subir(archivo))
+            avance_editorial(75 + (20 * len(paths) // len(archivos)), 'subiendo')
     out = {'ok': True, 'formato': a.formato, 'archivos': archivos, 'n': len(archivos)}
     if a.subir:
         out['imagenes'] = paths

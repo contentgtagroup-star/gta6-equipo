@@ -49,6 +49,7 @@
   async function cargar(forzar = false) {
     if (!S.clave || P.cargando || P.modal && !forzar) return
     P.cargando = true
+    P.ultimaConsulta = Date.now()
     P.error = ''
     if (!P.datos) render()
     try {
@@ -271,16 +272,33 @@
     }, 'Confirmar publicación')
     if (tieneMedia) vista(item, preview, () => { vistaLista = false }).then(lista => { vistaLista = lista })
   }
+  const trabajoActivo = t => ['pendiente', 'ejecutando'].includes(t.estado)
+  function progresoTrabajo(t, titulo) {
+    const etapas = { iniciando: 'Motor tomó el trabajo', capturando: 'Capturando la fuente', preparando: 'Fuente capturada',
+      redactando: 'Redactando la sugerencia', modelando: 'Modelando imágenes', subiendo: 'Subiendo material privado',
+      guardando: 'Guardando el resultado', lista: 'Lista para revisar' }
+    const terminado = t.estado === 'terminado'
+    const porcentaje = terminado ? 100 : t.estado === 'pendiente' ? 0
+      : Math.max(0, Math.min(99, t.porcentaje ?? (t.estado === 'ejecutando' ? 10 : 0)))
+    const etapa = t.estado === 'pendiente' ? 'Esperando al motor' : terminado ? etapas.lista
+      : t.estado === 'error' ? 'Error en el trabajo' : etapas[t.etapa] || 'Motor en ejecución'
+    const persona = t.pedido_por ? ' · ' + t.pedido_por : ''
+    return el('div', { class: 'pub-progreso' },
+      el('div', { class: 'pub-progreso-titulo' }, el('strong', {}, titulo), el('span', {}, porcentaje + '%')),
+      el('progress', { max: 100, value: porcentaje, 'aria-label': titulo + ' · ' + etapa }),
+      el('p', { class: 'small muted' }, etapa + persona +
+        (t.estado === 'ejecutando' && t.ultimo_latido ? ' · Última señal ' + fecha(t.ultimo_latido) : '')))
+  }
   function sugerencias(box) {
     box.append(boton('Traer clips aprobados', async () => { const d = await post({ op: 'sugerir_clips' }); toast(d.agregadas + ' sugerencias nuevas'); await cargar(true) }))
     for (const s of P.datos.sugerencias.filter(s => s.estado === 'pendiente')) {
       const listo = Boolean(s.video_path || s.imagenes?.length)
       const trabajo = P.datos.trabajos.find(t => t.sugerencia_id === s.id && t.tipo === 'media')
-      const ocupado = trabajo && ['pendiente', 'ejecutando'].includes(trabajo.estado)
+      const ocupado = trabajo && trabajoActivo(trabajo)
       const material = el('div', { class: 'card', style: 'padding:12px;margin:10px 0' }, el('h4', {}, 'Material generado'),
         el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length + ' imágenes') + ' · versión privada para revisar'
-          : ocupado ? 'Preparación ' + (trabajo.estado === 'pendiente' ? 'en espera' : 'en curso')
-            : trabajo?.estado === 'error' ? 'La preparación quedó con error' : 'Todavía no hay material preparado.'))
+          : trabajo ? '' : 'Todavía no hay material preparado.'))
+      if (trabajo && trabajo.estado !== 'cancelado') material.append(progresoTrabajo(trabajo, 'Preparación de material'))
       if (trabajo?.estado === 'error' && trabajo.error) material.append(el('details', {}, el('summary', {}, 'Ver detalle'), el('p', { class: 'small' }, trabajo.error)))
       if (listo) {
         const galeria = el('div', { class: 'row', style: 'flex-wrap:wrap' })
@@ -359,8 +377,12 @@
     if (!lista.length) box.append(el('p', { class: 'small muted' }, items.length ? 'No hay envíos con ese filtro.' : 'Las publicaciones aprobadas van a aparecer acá.'))
   }
   function actividad(box) {
-    const activas = P.datos.trabajos.filter(t => t.tipo === 'media' && ['pendiente', 'ejecutando'].includes(t.estado))
-    for (const t of activas) box.append(el('p', { class: 'small' }, 'Preparación de material · ' + etiquetas[t.estado]))
+    const activas = P.datos.trabajos.filter(trabajoActivo)
+    for (const t of activas) {
+      const sugerencia = P.datos.sugerencias.find(s => s.id === t.sugerencia_id)
+      const titulo = t.tipo === 'media' ? 'Preparación de material' : 'Generación de sugerencia'
+      box.append(progresoTrabajo(t, sugerencia?.titulo ? titulo + ' · ' + sugerencia.titulo : titulo))
+    }
     const { ancla, siguiente } = P.datos.actividad || {}
     if (P.historial?.clave !== S.clave) P.historial = { clave: S.clave, eventos: [] }
     function fila(e) {
@@ -477,5 +499,9 @@
   const enSeccion = () => !window.estoyEn || window.estoyEn('publicaciones')
   window.publicacionesAlEntrar = () => cargar()
   render(); if (enSeccion()) cargar()
-  setInterval(() => { if (!document.hidden && enSeccion()) cargar() }, 30000)
+  setInterval(() => {
+    if (document.hidden || !enSeccion()) return
+    const siguiendo = ['actividad', 'sugerencias'].includes(P.tab) && P.datos?.trabajos?.some(trabajoActivo)
+    if (Date.now() - (P.ultimaConsulta || 0) >= (siguiendo ? 5000 : 30000)) cargar()
+  }, 5000)
 })()

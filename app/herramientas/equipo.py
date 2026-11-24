@@ -45,6 +45,19 @@ def conf():
     return json.load(open(CONF))
 
 
+def avance_editorial(porcentaje, etapa):
+    ruta = os.environ.get('GTA6_AVANCE_EDITORIAL')
+    if not ruta:
+        return
+    temporal = f'{ruta}.{os.getpid()}'
+    try:
+        with open(temporal, 'w', encoding='utf-8') as archivo:
+            json.dump({'porcentaje': porcentaje, 'etapa': etapa}, archivo)
+        os.replace(temporal, ruta)
+    except OSError:
+        pass
+
+
 def subir_media_publicacion(archivo, tipo):
     d = pedir('POST', '/api/publicacion', {
         'op': 'subir_media', 'tipo': tipo, 'peso': os.path.getsize(archivo)})
@@ -782,6 +795,7 @@ def main():
     a = ap.parse_args()
 
     if a.cmd == 'publicacion-subir':
+        avance_editorial(75, 'subiendo')
         import mimetypes
         tipo = mimetypes.guess_type(a.archivo)[0]
         try:

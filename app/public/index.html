@@ -64,6 +64,20 @@ button.tiny{padding:4px 9px;font-size:12.5px}
 button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 input,select,textarea{font:14px var(--body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
 textarea{resize:vertical;min-height:70px}
+.pub-review-copy{display:grid;gap:8px}
+.pub-review-copy h3,.pub-review-copy p{margin:0;overflow-wrap:anywhere}
+.pub-review-copy-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.pub-review-copy-head button{flex:none}
+.pub-review-editor{display:grid;gap:10px}
+.pub-review-editor[hidden],.pub-review-copy[hidden]{display:none}
+.pub-destinos{display:grid;gap:7px;margin:0;padding:0;border:0;min-width:0}
+.pub-destinos legend{margin-bottom:8px;font-weight:700}
+.pub-check{display:flex;flex-direction:row;align-items:center;gap:10px;min-height:42px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;color:var(--fg);cursor:pointer}
+.pub-check input[type=checkbox]{width:16px;height:16px;padding:0;margin:0;flex:0 0 16px;accent-color:var(--pink)}
+.pub-check span{min-width:0;overflow-wrap:anywhere}
+.pub-check small{display:block;color:var(--muted);margin-top:2px}
+.pub-check-confirm{margin-top:3px}
+
 label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
 .turno{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;background:var(--surface);border:1px solid var(--pink);border-radius:12px;padding:18px}
 .turno p{margin:6px 0 0;color:var(--muted);font-size:14px;max-width:60ch}
@@ -645,15 +659,57 @@ function renderLib(){
 }
 function renderRadar(){
   const box = $('radar'); box.replaceChildren();
-  const vids = (S.radar && Array.isArray(S.radar.videos)) ? S.radar.videos.filter(v=>v.estado!=='hecho') : [];
-  if(!vids.length){ box.append(el('p', {class:'small dim'}, 'Todavía no hay links: se buscan solos en el próximo turno.')); return; }
-  const libres = vids.filter(v=>(v.estado||'libre')==='libre').length;
-  const orden = {libre:0, tomado:1};
-  const ls_ = [...vids].sort((a,b)=> String(a.para||'~').localeCompare(String(b.para||'~')) || (orden[a.estado||'libre']-orden[b.estado||'libre']) || (b.vistas||0)-(a.vistas||0) || (b.vph||0)-(a.vph||0));
-  box.append(el('p', {class:'small dim', style:'margin:10px 0 0'}, `Quedan ${libres} links libres · cuando queden 3, el próximo turno busca 5 nuevos para cada uno. Un link trabajado no vuelve nunca.`),
-    el('div', {class:'tbl'}, el('table', {},
-      el('thead', {}, el('tr', {}, el('th',{},'Para'), el('th',{},'Estado'), el('th',{},'Canal'), el('th',{},'Video'), el('th',{style:'text-align:right'},'Vistas'), el('th',{style:'text-align:right'},'Vistas/h'))),
-      el('tbody', {}, ls_.map(v => el('tr', {}, el('td', {}, v.para||'cualquiera'), el('td', {}, v.estado==='tomado' ? 'lo trabaja ' + (v.tomado_por||'alguien') : 'libre'), el('td', {}, v.canal||''), el('td', {}, el('a', {href:v.url, target:'_blank', rel:'noopener'}, (v.titulo||'').slice(0,70)), v.manual ? el('span', {class:'small dim'}, ' · lo agregó ' + (v.agregado_por||'alguien')) : null), el('td', {class:'n'}, fmt(v.vistas)), el('td', {class:'n'}, fmt(v.vph))))))));
+  const videos = S.radar?.videos || [];
+  const clipsPorFuente = new Map();
+  for(const c of S.clips){
+    const id = c.video_id || leerLink(c.receta?.url || c.url)?.id;
+    if(id) clipsPorFuente.set(id, [...(clipsPorFuente.get(id) || []), c]);
+  }
+  const estadoLink = v => v.estado || 'libre';
+  const plataforma = v => leerLink(v.url)?.fuente || 'Otra';
+  const libres = videos.filter(v=>estadoLink(v)==='libre').length;
+  const tomados = videos.filter(v=>estadoLink(v)==='tomado').length;
+  const conClips = videos.filter(v=>clipsPorFuente.has(v.id)).length;
+  box.append(el('p', {class:'small dim'}, `${libres} libres · ${tomados} reservados · ${conClips} con clips vinculados`));
+  if(!videos.length){ box.append(el('p', {class:'small dim'}, 'Todavía no hay links. Cargá uno para clips o esperá la búsqueda del próximo turno.')); return; }
+  const filtro = (etiqueta, clave, opciones) => {
+    const control = el('select', {}, opciones.map(([valor, nombre])=>el('option', {value:valor}, nombre)));
+    control.value = S[clave] || '';
+    control.addEventListener('change', ()=>{ S[clave] = control.value; renderRadar(); });
+    return el('label', {class:'small'}, etiqueta, control);
+  };
+  box.append(el('div', {class:'row', style:'flex-wrap:wrap'},
+    filtro('Estado', 'linksEstado', [['','Todos'],['libre','Libres'],['tomado','Reservados'],['hecho','Procesados'],['clips','Con clips vinculados']]),
+    filtro('Plataforma', 'linksPlataforma', [['','Todas'], ...[...new Set(videos.map(plataforma))].sort().map(n=>[n,n])]),
+    filtro('Origen', 'linksOrigen', [['','Todos'],['manual','Agregado a mano'],['radar','Radar']])
+  ));
+  const visible = videos.filter(v=>(!S.linksEstado || (S.linksEstado==='clips' ? clipsPorFuente.has(v.id) : estadoLink(v)===S.linksEstado)) &&
+    (!S.linksPlataforma || plataforma(v)===S.linksPlataforma) &&
+    (!S.linksOrigen || (v.manual ? 'manual' : 'radar')===S.linksOrigen));
+  const orden = {tomado:0, libre:1, hecho:2};
+  visible.sort((a,b)=>(orden[estadoLink(a)] ?? 3)-(orden[estadoLink(b)] ?? 3) || (b.cargado_el||0)-(a.cargado_el||0));
+  if(!visible.length){ box.append(el('p', {class:'small dim'}, 'No hay links con estos filtros.')); return; }
+  const fechaLink = t => t ? new Date(t).toLocaleString('es-AR', {dateStyle:'short',timeStyle:'short'}) : '';
+  box.append(el('div', {class:'tbl'}, el('table', {},
+    el('thead', {}, el('tr', {}, ['Enlace', 'Estado', 'Resultado', 'Vistas', 'Vistas/h'].map(c=>el('th',{},c)))),
+    el('tbody', {}, visible.map(v=>{
+      const relacionados = clipsPorFuente.get(v.id) || [];
+      const e = estadoLink(v);
+      const reserva = e==='tomado' ? S.turnos.find(t=>t.pedido_id===v.tomado_pedido) : null;
+      const actividad = e==='tomado' ? [v.tomado_por, fechaLink(v.tomado_el), reserva?.estado].filter(Boolean).join(' · ')
+        : e==='hecho' ? [v.hecho_por, fechaLink(v.hecho_el)].filter(Boolean).join(' · ') : '';
+      return el('tr', {},
+        el('td', {}, el('a', {href:v.url, target:'_blank', rel:'noopener noreferrer'}, v.titulo || v.url),
+          el('div', {class:'small dim'}, [plataforma(v), v.canal, v.manual ? 'A mano' : 'Radar', fechaLink(v.cargado_el)].filter(Boolean).join(' · '))),
+        el('td', {}, {libre:'Libre',tomado:'Reservado',hecho:'Procesado'}[e] || e, actividad && el('div', {class:'small dim'}, actividad)),
+        el('td', {}, relacionados.length ? el('details', {}, el('summary', {}, `${relacionados.length} clips`),
+          ...relacionados.map(c=>el('div', {class:'small'}, (c.titulo || c.id) + ' · ' + c.estado)))
+          : e==='hecho' ? 'Sin clip visible vinculado' : '—'),
+        el('td', {class:'n'}, typeof v.vistas==='number' ? fmt(v.vistas) : '—'),
+        el('td', {class:'n'}, typeof v.vph==='number' ? fmt(v.vph) : '—'));
+    }))
+  )));
+  box.append(el('p', {class:'small dim'}, 'Los clips se vinculan por ID o URL de origen. Los procesados que ya se purgaron del radar no aparecen en este listado.'));
 }
 // Links pegados a mano: van primeros en la cola del motor (ver elegir_video en equipo.py)
 function leerLink(txt){

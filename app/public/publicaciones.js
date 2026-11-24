@@ -111,22 +111,23 @@
   }
   function generarDesdeLink(box) {
     const link = entrada('', { placeholder: 'Pegá el link de un post (X, etc.) y generá la publicación', maxlength: 1000, style: 'flex:1;min-width:220px' })
+    const enfoque = entrada('', { placeholder: 'Enfoque distinto (opcional)', maxlength: 400 })
     const generar = boton('Generar desde link', async () => {
       const url = link.value.trim()
       if (!url) return toast('Pegá un link primero.')
-      await post({ op: 'generar_link', url }); link.value = ''
+      await post({ op: 'generar_link', url, enfoque: enfoque.value }); link.value = ''; enfoque.value = ''
       toast('Generando. La vas a ver en Sugerencias.'); P.tab = 'sugerencias'; await cargar(true)
     }, 'tiny primary')
     link.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); generar.click() } })
     box.append(el('article', { class: 'bloque', style: 'padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:10px' },
       el('h3', { class: 'small', style: 'margin:0 0 8px' }, 'Generar desde link'),
-      el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, generar),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, enfoque, generar),
       el('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Capta el texto y las imágenes del post, lo adapta al español y deja la publicación en Sugerencias para revisar y aprobar.')))
   }
   function fuentes(box) {
     generarDesdeLink(box)
     box.append(el('div', { class: 'row' }, boton('Agregar fuente', () => editarFuente(), 'tiny primary'), boton('Importar fuentes del equipo', async () => { const d = await post({ op: 'importar_fuentes' }); toast(d.agregadas + ' fuentes nuevas'); await cargar(true) })))
-    box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un link puntual se adapta una vez. Los enlaces pendientes de verificar se importan pausados.'))
+    box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un enlace puntual admite una sugerencia activa a la vez. Los enlaces pendientes de verificar se importan pausados.'))
     for (const f of P.datos.fuentes) {
       const trabajos = P.datos.trabajos.filter(t => t.fuente_id === f.id), t = trabajos.at(-1)
       box.append(el('article', { class: 'bloque', style: 'padding:14px 0;border-bottom:1px solid var(--line)' },
@@ -146,7 +147,8 @@
       const { urls } = await post({ op: 'vista_media', video_path: item.video_path, imagenes: item.imagenes || [] })
       if (!box.isConnected) return false
       if (item.video_path) box.append(el('video', { src: urls[0], onerror: fallo, controls: true, preload: 'none', style: 'max-width:220px;max-height:340px;border-radius:10px' }))
-      else box.append(...urls.map(src => el('img', { src, onerror: fallo, alt: 'Imagen de la publicación para revisar', loading: 'lazy', style: 'max-width:180px;max-height:250px;object-fit:contain' })))
+      else box.append(...urls.map((src, i) => el('a', { href: src, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Ampliar imagen ' + (i + 1) },
+        el('img', { src, onerror: fallo, alt: 'Imagen ' + (i + 1) + ' de ' + urls.length, loading: 'lazy', style: 'max-width:180px;max-height:250px;object-fit:contain' }))))
       return true
     } catch (e) { if (box.isConnected) box.append(el('p', { class: 'small' }, e.message)); return false }
   }
@@ -215,22 +217,55 @@
       (item.video_path || !(c.id === 'youtube' || c.id === 'tiktok')) && (tieneMedia || c.id === 'x'))
     const preview = el('div', { class: 'row', style: 'overflow:auto;flex-wrap:wrap' })
     const opciones = cuentas.map(c => {
-      const input = entrada('', { type: 'checkbox', style: 'width:auto' })
-      const modo = c.modo === 'borrador' ? ' · borrador' : c.modo === 'manual' ? ' · manual' : ' · automático'
-      return { id: c.id, input, label: campo(c.nombre + (c.cuenta_conectada || c.cuenta ? ' · ' + (c.cuenta_conectada || c.cuenta) : '') + modo, input) }
+      const input = entrada('', { type: 'checkbox' })
+      const modo = c.modo === 'borrador' ? 'Borrador' : c.modo === 'manual' ? 'Manual' : 'Automático'
+      const cuenta = c.cuenta_conectada || c.cuenta
+      const label = el('label', { class: 'pub-check' }, input,
+        el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo].filter(Boolean).join(' · '))))
+      return { id: c.id, input, label }
     })
-    const revisado = entrada('', { type: 'checkbox', style: 'width:auto' })
+    const textoPublico = String(item.descripcion || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
+    const lineaHashtags = textoPublico.match(/(?:^|\n)((?:#[\p{L}\p{N}_]+[ \t]*)+)$/u)
+    const tagsOriginales = Array.isArray(item.hashtags) ? item.hashtags : []
+    const hashtags = entrada([...new Set([...tagsOriginales, ...(lineaHashtags ? lineaHashtags[1].trim().split(/\s+/) : [])])].join(' '))
+    const titulo = entrada(String(item.titulo || item.gancho || 'Clip GTA 6').slice(0, 60), { maxlength: 60 })
+    const descripcion = el('textarea', { rows: 4, maxlength: 4000, value: lineaHashtags ? textoPublico.slice(0, lineaHashtags.index).trim() : textoPublico })
+    const revisado = entrada('', { type: 'checkbox' })
+    const tituloVista = el('h3')
+    const descripcionVista = el('p', { style: 'white-space:pre-wrap' })
+    const hashtagsVista = el('p', { class: 'small muted' })
+    const editor = el('div', { class: 'pub-review-editor', hidden: true },
+      campo('Título', titulo), campo('Descripción', descripcion), campo('Hashtags', hashtags))
+    const textoVista = el('div', { class: 'pub-review-copy' }, tituloVista, descripcionVista, hashtagsVista)
+    const editar = boton('✎ Editar texto', () => {
+      const abierto = editor.hidden
+      editor.hidden = !abierto
+      textoVista.hidden = abierto
+      editar.textContent = abierto ? 'Ver vista previa' : '✎ Editar texto'
+      editar.setAttribute('aria-expanded', String(abierto))
+      if (abierto) titulo.focus()
+    })
+    editar.setAttribute('aria-expanded', 'false')
+    function actualizarTexto() {
+      tituloVista.textContent = titulo.value
+      descripcionVista.textContent = descripcion.value
+      hashtagsVista.textContent = hashtags.value
+      revisado.checked = false
+    }
+    for (const campoTexto of [titulo, descripcion, hashtags]) campoTexto.addEventListener('input', actualizarTexto)
+    actualizarTexto()
     let vistaLista = !tieneMedia
-    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:12px' },
-      el('h3', {}, item.titulo || item.gancho), el('p', { style: 'white-space:pre-wrap' }, item.descripcion),
-      el('p', { class: 'small' }, (item.hashtags || []).join(' ')), preview,
-      el('div', { class: 'row', style: 'flex-wrap:wrap' }, opciones.map(c => c.label)),
-      !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.'),
-      campo('Revisé la publicación y el material', revisado)), async () => {
+    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:14px' },
+      el('div', { class: 'pub-review-copy-head' }, el('div', { style: 'flex:1;min-width:0' }, textoVista, editor), editar), preview,
+      el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Destinos de publicación'), opciones.map(c => c.label),
+        !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
+      el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material')), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
       const plataformas = opciones.filter(c => c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
-      await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas })
+      if (!titulo.value.trim() || !descripcion.value.trim()) throw new Error('Completá el título y la descripción.')
+      await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas,
+        titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value })
       if (clip) await window.cargar?.()
       P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
     }, 'Confirmar publicación')
@@ -238,18 +273,42 @@
   }
   function sugerencias(box) {
     box.append(boton('Traer clips aprobados', async () => { const d = await post({ op: 'sugerir_clips' }); toast(d.agregadas + ' sugerencias nuevas'); await cargar(true) }))
-    for (const s of P.datos.sugerencias.filter(s => s.estado !== 'aprobada')) {
-      const preview = el('div', { class: 'row', style: 'overflow:auto' })
+    for (const s of P.datos.sugerencias.filter(s => s.estado === 'pendiente')) {
+      const listo = Boolean(s.video_path || s.imagenes?.length)
+      const trabajo = P.datos.trabajos.find(t => t.sugerencia_id === s.id && t.tipo === 'media')
+      const ocupado = trabajo && ['pendiente', 'ejecutando'].includes(trabajo.estado)
+      const material = el('div', { class: 'card', style: 'padding:12px;margin:10px 0' }, el('h4', {}, 'Material generado'),
+        el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length + ' imágenes') + ' · versión privada para revisar'
+          : ocupado ? 'Preparación ' + (trabajo.estado === 'pendiente' ? 'en espera' : 'en curso')
+            : trabajo?.estado === 'error' ? 'La preparación quedó con error' : 'Todavía no hay material preparado.'))
+      if (trabajo?.estado === 'error' && trabajo.error) material.append(el('details', {}, el('summary', {}, 'Ver detalle'), el('p', { class: 'small' }, trabajo.error)))
+      if (listo) {
+        const galeria = el('div', { class: 'row', style: 'flex-wrap:wrap' })
+        const detalle = el('details', {}, el('summary', {}, 'Ver material'), galeria)
+        let cargada = false
+        detalle.addEventListener('toggle', async () => {
+          if (!detalle.open || cargada) return
+          cargada = true
+          galeria.replaceChildren()
+          if (!await vista(s, galeria)) cargada = false
+        })
+        material.append(detalle)
+      }
       box.append(el('article', { style: 'padding:20px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, s.titulo), el('p', { style: 'white-space:pre-wrap' }, s.descripcion),
         el('p', { class: 'small' }, (s.hashtags || []).join(' ')), el('p', { class: 'small muted' }, (s.plataformas || []).map(p => redes[p]).join(' · ')),
         s.fuente_url && el('a', { href: s.fuente_url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente'),
-        el('p', { class: 'small muted' }, s.motivo), s.recorte && el('p', { class: 'small' }, 'Recorte: ' + s.recorte), s.instrucciones_media && el('p', { class: 'small' }, s.instrucciones_media), preview,
+        el('p', { class: 'small muted' }, s.motivo), s.recorte && el('p', { class: 'small' }, 'Recorte: ' + s.recorte), s.instrucciones_media && el('p', { class: 'small' }, s.instrucciones_media), material,
         el('div', { class: 'row', style: 'margin-top:12px' }, boton('Editar y preparar', () => editarContenido(s)),
-          boton('Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
-          (s.video_path || s.imagenes?.length || !s.fuente_url) && boton('Publicar', () => publicarSugerencia(s), 'tiny primary'))))
-      vista(s, preview)
+          !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
+          boton('Descartar sugerencia', () => dialogo('Descartar sugerencia', el('p', {}, s.fuente_id
+            ? 'Se quita de Sugerencias y podés volver a generar desde el mismo enlace.'
+            : 'Se quita de Sugerencias.'), async () => {
+            await post({ op: 'sugerencia_descartar', id: s.id, version: s._version })
+            toast('Sugerencia descartada')
+          }, 'Descartar'), 'tiny ghost danger'),
+          !ocupado && (listo || !s.fuente_url) && boton('Publicar', () => publicarSugerencia(s), 'tiny primary'))))
     }
-    if (!P.datos.sugerencias.some(s => s.estado !== 'aprobada')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
+    if (!P.datos.sugerencias.some(s => s.estado === 'pendiente')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
   }
   function cola(box) {
     const items = P.datos.cola
@@ -293,40 +352,101 @@
       box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
         el('p', {}, (etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
         p.estado === 'manual' && el('p', { class: 'small muted' }, 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
-        el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('p', { class: 'small', style: 'color:var(--bad)' }, p.error),
+        el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('details', {}, el('summary', { class: 'small', style: 'color:var(--bad)' }, p.estado === 'revisar' ? 'Ver motivo y qué revisar' : 'Ver motivo del error'), el('p', { class: 'small' }, p.error)),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))
       if (p.estado === 'manual') vista(p, preview)
     }
     if (!lista.length) box.append(el('p', { class: 'small muted' }, items.length ? 'No hay envíos con ese filtro.' : 'Las publicaciones aprobadas van a aparecer acá.'))
   }
   function actividad(box) {
-    for (const t of P.datos.trabajos.filter(t => t.tipo === 'media')) box.append(el('p', { class: 'small' }, 'Preparación de material · ' + (etiquetas[t.estado] || t.estado) + (t.error ? ': ' + t.error : '')))
-    for (const e of P.datos.eventos) {
+    const activas = P.datos.trabajos.filter(t => t.tipo === 'media' && ['pendiente', 'ejecutando'].includes(t.estado))
+    for (const t of activas) box.append(el('p', { class: 'small' }, 'Preparación de material · ' + etiquetas[t.estado]))
+    const { ancla, siguiente } = P.datos.actividad || {}
+    if (P.historial?.clave !== S.clave) P.historial = { clave: S.clave, eventos: [] }
+    function fila(e) {
       const fuente = e.fuente_url || P.datos.fuentes.find(f => f.id === e.fuente_id)?.url
-      box.append(el('p', { class: 'small', style: 'border-bottom:1px solid var(--line);padding:8px 0' }, fecha(e.el) + ' · ' + e.por + ' · ' + e.accion.replaceAll('_', ' ') + (e.plataforma ? ' · ' + redes[e.plataforma] : '') + (e.aprobado_por ? ' · aprobó ' + e.aprobado_por : '') + (e.resultado ? ' · ' + e.resultado : ''), fuente && el('a', { href: fuente, target: '_blank', rel: 'noopener noreferrer', style: 'display:block' }, 'Ver fuente')))
+      const resultado = e.resultado === 'lista_para_revisar' ? 'Lista para revisar' : e.resultado
+      const cabecera = el('p', { class: 'small' }, e.accion.replaceAll('_', ' ') +
+        (e.plataforma ? ' · ' + redes[e.plataforma] : '') + (e.aprobado_por ? ' · aprobó ' + e.aprobado_por : ''))
+      return el('article', { style: 'border-bottom:1px solid var(--line);padding:6px 0' },
+        cabecera, el('p', { class: 'small muted' }, fecha(e.el) + ' · ' + e.por),
+        resultado && (String(resultado).length > 140
+          ? el('details', {}, el('summary', {}, 'Ver detalle'), el('p', { class: 'small' }, resultado))
+          : el('p', { class: 'small' }, resultado)),
+        fuente && el('a', { href: fuente, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente'))
     }
-    if (!P.datos.eventos.length) box.append(el('p', { class: 'small muted' }, 'Todavía no hay actividad registrada.'))
+    function seccion(titulo, estado, historial) {
+      const lista = el('div', {}, estado.eventos.map(fila))
+      const controles = el('div', { class: 'row' })
+      function dibujarControl() {
+        controles.replaceChildren()
+        if (!estado.cargado || estado.siguiente) controles.append(boton(estado.cargado ? 'Cargar 40 más' : 'Ver actividad anterior', async () => {
+          const d = await post({ op: 'actividad_pagina', ancla: estado.ancla, cursor: estado.siguiente, historial })
+          estado.eventos.push(...d.eventos)
+          estado.cargado = true
+          estado.siguiente = d.siguiente
+          lista.append(...d.eventos.map(fila))
+          if (!estado.eventos.length) lista.append(el('p', { class: 'small muted' }, 'No hay eventos anteriores.'))
+          dibujarControl()
+        }))
+      }
+      dibujarControl()
+      box.append(el('h3', {}, titulo), lista, controles)
+    }
+    const eventos = P.datos.eventos || []
+    if (!eventos.length) box.append(el('p', { class: 'small muted' }, 'Sin eventos en las últimas 48 horas.'))
+    const firma = JSON.stringify(eventos.map(e => [e.id, e._version]))
+    if (P.actividadReciente?.firma !== firma || P.actividadReciente?.clave !== S.clave) {
+      P.actividadReciente = { firma, clave: S.clave, eventos: [...eventos], ancla, siguiente, cargado: true }
+    }
+    seccion('Últimas 48 horas', P.actividadReciente, false)
+    if (ancla) {
+      P.historial.ancla ??= ancla
+      seccion('Historial', P.historial, true)
+    }
   }
   function metricas(box) {
     const red = selector(Object.entries(redes), P.red || 'instagram'), ventana = selector([['24h', '24 h'], ['7d', '7 días'], ['28d', '28 días'], ['historico', 'Histórico']], P.ventana || '7d')
     const resultado = el('div')
+    const acceso = el('p', { class: 'small muted', 'aria-live': 'polite' })
+    let pedido = 0
+    const ayudaAcceso = {
+      instagram: 'Insights de Instagram requiere instagram_manage_insights y acceso al perfil profesional.',
+      facebook: 'Insights de la página requiere read_insights, pages_read_engagement y acceso de análisis.',
+      x: 'Los datos de X se consultan mediante Buffer. La clave personal necesita acceso de Analytics a la organización y al canal.',
+      youtube: 'YouTube Analytics requiere la API habilitada y el permiso yt-analytics.readonly en el token del canal.',
+      tiktok: 'Display API requiere user.info.stats para la cuenta y video.list para los videos.'
+    }
     async function mostrar(sincronizar = false) {
-      P.red = red.value; P.ventana = ventana.value; resultado.replaceChildren(el('p', { class: 'small muted' }, 'Cargando métricas…'))
+      const actual = ++pedido, cuenta = red.value, periodo = ventana.value
+      P.red = cuenta; P.ventana = periodo
+      const conexion = P.datos.conexiones.find(c => c.id === cuenta)
+      const nombre = conexion?.cuenta_conectada || conexion?.cuenta || redes[cuenta]
+      acceso.textContent = nombre + ' · ' + (etiquetas[conexion?.estado] || 'Estado desconocido') +
+        (conexion?.entorno === 'sandbox' ? ' · Sandbox' : '') +
+        (conexion?.faltan_permisos?.length ? ' · Faltan permisos: ' + conexion.faltan_permisos.join(', ') : '')
+      resultado.replaceChildren(el('p', { class: 'small muted' }, 'Cargando métricas…'))
       try {
-        const { datos } = sincronizar ? await api('/api/metricas', { red: red.value, ventana: ventana.value }) : await api('/api/metricas?red=' + red.value + '&ventana=' + ventana.value)
+        const { datos } = sincronizar ? await api('/api/metricas', { red: cuenta, ventana: periodo }) : await api('/api/metricas?red=' + cuenta + '&ventana=' + periodo)
+        if (actual !== pedido || !resultado.isConnected) return
         resultado.replaceChildren()
-        if (!datos) { resultado.append(el('p', { class: 'small muted' }, 'Todavía no hay datos. Conectá la cuenta y tocá Sincronizar.')); return }
+        if (!datos) { resultado.append(el('p', { class: 'small muted' }, conexion?.estado === 'conectada' ? 'Todavía no hay un informe para esta ventana. Tocá Sincronizar.' : 'Revisá la conexión de esta cuenta y después sincronizá.')); return }
         resultado.append(el('p', { class: 'small muted' }, 'Sincronizado: ' + fecha(datos.sincronizada_el)), el('p', { class: 'small muted' }, datos.nota), el('p', { class: 'small muted' }, 'Período informado: ' + fecha(datos.rango.desde) + ' a ' + fecha(datos.rango.hasta)))
-        const nombres = { seguidores: 'Seguidores actuales', follows: 'Seguidores ganados', vistas: 'Vistas', likes: 'Likes', comentarios: 'Comentarios', compartidos: 'Compartidos', guardados: 'Guardados', alcance: 'Alcance', impresiones: 'Impresiones', tiempo_medio: 'Tiempo medio (s)', retencion: 'Porcentaje medio visto (%)', completado: 'Reproducciones completas (%)', ctr: 'CTR', clics: 'Clics al link', engagement: 'Interacciones / alcance' }
+        const nombres = { publicaciones_buffer: 'Posts incluidos por Buffer', interacciones: 'Interacciones', reacciones: 'Reacciones', seguidores: 'Seguidores actuales', follows: 'Seguidores ganados', vistas: 'Vistas', likes: 'Likes', comentarios: 'Comentarios', compartidos: 'Compartidos', guardados: 'Guardados', alcance: 'Alcance', impresiones: 'Impresiones', tiempo_medio: 'Tiempo medio (s)', retencion: 'Porcentaje medio visto (%)', completado: 'Reproducciones completas (%)', ctr: 'CTR', clics: 'Clics al link', engagement: 'Interacciones / alcance' }
         const tabla = el('table', {}, el('thead', {}, el('tr', {}, ['Métrica', 'Actual', 'Período anterior', 'Cambio'].map(t => el('th', {}, t)))))
         const cuerpo = el('tbody')
-        for (const [k, nombre] of Object.entries(nombres)) {
+        const hay = Number.isFinite
+        for (const [k, nombre] of Object.entries(nombres).filter(([k]) => hay(datos.actual?.[k]) || hay(datos.anterior?.[k]))) {
           const a = datos.actual?.[k], b = datos.anterior?.[k], cambio = typeof a === 'number' && typeof b === 'number' && b !== 0 ? ((a - b) / b * 100).toFixed(1) + '%' : '—'
           const valor = n => k === 'engagement' && typeof n === 'number' ? num(n * 100) + '%' : num(n)
           cuerpo.append(el('tr', {}, el('td', {}, nombre), el('td', { class: 'n' }, valor(a)), el('td', { class: 'n' }, valor(b)), el('td', { class: 'n' }, cambio)))
         }
-        tabla.append(cuerpo); resultado.append(el('div', { class: 'tbl' }, tabla))
-        const registradas = P.datos.cola.filter(p => p.plataforma === red.value && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
+        tabla.append(cuerpo)
+        if (cuerpo.children.length) resultado.append(el('div', { class: 'tbl' }, tabla))
+        else resultado.append(el('p', { class: 'small muted' }, 'La plataforma no devolvió totales para esta ventana.'))
+        if (datos.no_disponibles?.length) resultado.append(el('p', { class: 'small muted' },
+          'Datos no disponibles: ' + datos.no_disponibles.map(k => nombres[k] || k).join(', ')))
+        const registradas = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
         resultado.append(el('p', { class: 'small' }, registradas.length + ' publicaciones registradas en esta app durante el período.'))
         const posts = [...(datos.posts || [])].sort((a, b) => (b.vistas || 0) - (a.vistas || 0))
         if (posts.length) resultado.append(el('h3', {}, 'Publicaciones · primero la de más vistas'))
@@ -334,16 +454,22 @@
           const enlace = p.enlace || (p.video ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(p.video) : null)
           resultado.append(el('details', {}, el('summary', {}, (p.titulo || p.video || p.id) + ' · ' + num(p.vistas) + ' vistas'),
             enlace && el('a', { href: enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver publicación'),
-            ...Object.entries(nombres).filter(([k]) => k !== 'seguidores').map(([k, n]) => el('p', { class: 'small' }, n + ': ' + num(p[k])))))
+            ...Object.entries(nombres).filter(([k]) => k !== 'seguidores' && hay(p[k])).map(([k, n]) => el('p', { class: 'small' }, n + ': ' + num(p[k])))))
         }
-      } catch (e) { resultado.replaceChildren(el('p', { class: 'small' }, e.message)) }
+      } catch (e) {
+        if (actual === pedido && resultado.isConnected) resultado.replaceChildren(el('p', { class: 'small', role: 'alert' }, e.message),
+          el('p', { class: 'small muted' }, ayudaAcceso[cuenta]))
+      }
     }
     red.addEventListener('change', () => mostrar()); ventana.addEventListener('change', () => mostrar())
-    box.append(el('div', { class: 'row' }, campo('Cuenta', red), campo('Ventana', ventana), boton('Sincronizar', () => mostrar(true))), resultado)
+    box.append(el('div', { class: 'row' }, campo('Cuenta', red), campo('Ventana', ventana), boton('Sincronizar', () => mostrar(true))), acceso, resultado)
     mostrar()
   }
-  window.aprobarClipPublicacion = c => {
-    if (!P.datos) return toast('Cargá Publicaciones para ver las cuentas disponibles.')
+  window.aprobarClipPublicacion = async c => {
+    if (P.modal) return
+    if (!P.datos) await cargar(true)
+    if (P.modal) return
+    if (!P.datos) return toast(P.error || 'Las cuentas todavía están cargando. Volvé a tocar Aprobar.')
     publicarSugerencia(c, true)
   }
   $('pubActualizar').addEventListener('click', () => cargar(true))

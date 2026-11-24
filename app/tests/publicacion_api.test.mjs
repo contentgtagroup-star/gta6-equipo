@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import handler from '../api/publicacion.js'
+import { idFuente } from '../lib/publicacion.js'
+import { obtenerMetricas } from '../lib/metricas_redes.js'
 import { procesarPublicaciones } from '../lib/publicacion_worker.js'
 import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
 
@@ -19,12 +21,23 @@ globalThis.fetch = async (url, opciones = {}) => {
   const tabla = tablas[u.pathname.split('/').at(-1)]
   assert.ok(tabla, u.pathname)
   const coincide = d => [...u.searchParams].every(([k, v]) => {
+    if (k === 'datos->>el') {
+      const limite = Number(v.split('.')[1])
+      if (v.startsWith('gte.')) return d.datos.el >= limite
+      if (v.startsWith('lte.')) return d.datos.el <= limite
+      if (v.startsWith('lt.')) return d.datos.el < limite
+    }
+    if (k === 'or') {
+      const [, el, id] = v.match(/^\(datos->>el\.lt\.(\d+),and\(datos->>el\.eq\.\d+,id\.lt\.([\w-]+)\)\)$/)
+      return d.datos.el < Number(el) || d.datos.el === Number(el) && d.id < id
+    }
     if (v.startsWith('eq.')) return String(d[k]) === v.slice(3)
     if (k === 'datos->>estado' && v.startsWith('in.')) return v.slice(4, -1).split(',').includes(d.datos.estado)
     return true
   })
   const metodo = opciones.method || 'GET'
   let filas = tabla.filter(coincide)
+  if (u.searchParams.get('order') === 'datos->>el.desc,id.desc') filas.sort((a, b) => b.datos.el - a.datos.el || b.id.localeCompare(a.id))
   if (metodo === 'POST') {
     const dato = JSON.parse(opciones.body)
     if (tabla.some(d => d.id === dato.id && d.coleccion === dato.coleccion)) return new Response('{"code":"23505"}', { status: 409 })
@@ -63,6 +76,36 @@ test('aprobar crea un envío por red y la repetición no duplica la cola', async
   assert.deepEqual(cola.map(c => c.datos.plataforma), ['instagram'])
   assert.ok(cola.every(x => x.datos.aprobado_por === 'Eze'))
   assert.equal(remotas.length, 0)
+})
+test('la descripción confirmada deja las fuentes en la ficha interna', async () => {
+  reset()
+  const s = sugerencia()
+  const fuente = 'https://www.youtube.com/watch?v=test'
+  s.datos.fuente_url = fuente
+  tablas.publicacion_docs.push(s, { ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  const descripcion = '¿Cuál te voló más la cabeza?\n\nOriginales:\n' + fuente + '\n\n#GTA6'
+  const r = await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['instagram'], descripcion })
+  assert.equal(r.codigo, 200)
+  const envio = tablas.publicacion_docs.find(d => d.coleccion === 'cola')
+  assert.equal(envio.datos.fuente_url, fuente)
+  assert.equal(envio.datos.descripcion, '¿Cuál te voló más la cabeza?\n\n#GTA6')
+})
+test('aprobar desde Biblioteca conserva el copy editado en la ficha y en cada destino elegido', async () => {
+  reset()
+  tablas.docs.push({ coleccion: 'clips', id: 'c1', version: 1, datos: {
+    estado: 'listo', titulo: 'Título anterior', descripcion: 'Texto anterior', video_path: 'Eze/clip.mp4'
+  } })
+  tablas.publicacion_docs.push({ ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  const r = await llamada({ op: 'aprobar_clip', id: 'c1', version: 1, revisado: true,
+    plataformas: ['instagram'], titulo: 'Título editado', descripcion: 'Copy nuevo', hashtags: '#GTA6 #GTAVI' })
+  assert.equal(r.codigo, 200)
+  const envios = tablas.publicacion_docs.filter(d => d.coleccion === 'cola')
+  assert.deepEqual(envios.map(d => d.datos.plataforma), ['instagram'])
+  for (const datos of [tablas.docs[0].datos, envios[0].datos]) {
+    assert.equal(datos.titulo, 'Título editado')
+    assert.equal(datos.descripcion, 'Copy nuevo')
+    assert.deepEqual(datos.hashtags, ['#GTA6', '#GTAVI'])
+  }
 })
 test('no aprueba material sin revisar ni permite publicar imágenes como Short', async () => {
   reset(); const d = sugerencia(); d.datos.media_lista = false; tablas.publicacion_docs.push(d)
@@ -239,6 +282,75 @@ test('el GET devuelve ETag y responde 304 cuando nada cambió (ahorro de egress)
   await handler({ method: 'GET', query: {}, headers: { 'x-clave': 'clave-de-prueba-suficientemente-larga', 'if-none-match': h1.ETag } }, res2)
   assert.equal(res2.statusCode, 304)
   assert.ok(res2.ended, 'un 304 no manda cuerpo')
+})
+
+test('Actividad limita el poll a 48 horas y carga páginas separadas sin repetir eventos', async () => {
+  reset()
+  const ahora = Date.now()
+  const evento = (id, el) => ({ coleccion: 'eventos', id, version: 1, datos: { el, accion: 'prueba' } })
+  tablas.publicacion_docs.push(evento('viejo', ahora - 49 * 3600000))
+  for (let i = 0; i < 43; i++) tablas.publicacion_docs.push(evento('reciente-' + String(i).padStart(2, '0'), ahora - 1000))
+  const { datos: d } = await llamada(undefined, 'GET')
+  assert.equal(d.eventos.length, 40)
+  assert.ok(d.eventos.every(e => e.id.startsWith('reciente-')))
+  const { datos: mas } = await llamada({ op: 'actividad_pagina', ...d.actividad, cursor: d.actividad.siguiente })
+  assert.deepEqual(mas.eventos.map(e => e.id), ['reciente-02', 'reciente-01', 'reciente-00'])
+  const { datos: historial } = await llamada({ op: 'actividad_pagina', ancla: d.actividad.ancla, historial: true })
+  assert.deepEqual(historial.eventos.map(e => e.id), ['viejo'])
+})
+
+test('Buffer usa post(input) para el detalle y conserva las métricas agregadas', async () => {
+  const anteriorFetch = globalThis.fetch
+  const anteriorOrganizacion = process.env.BUFFER_ORGANIZATION_ID
+  process.env.BUFFER_ORGANIZATION_ID = 'organizacion-test'
+  const queries = []
+  globalThis.fetch = async (url, opciones) => {
+    assert.equal(new URL(url).hostname, 'api.buffer.com')
+    const { query } = JSON.parse(opciones.body)
+    queries.push(query)
+    const data = query.includes('aggregatedPostMetrics')
+      ? { aggregatedPostMetrics: { metrics: [{ type: 'reactions', value: 7 }] } }
+      : { p0: { externalLink: 'https://x.com/cuenta/status/1', metrics: [{ type: 'impressions', value: 12 }] } }
+    return Response.json({ data })
+  }
+  try {
+    const data = await obtenerMetricas('x', 'historico', [{ plataforma: 'x', remoto_id: 'test-post', estado: 'publicado', publicado_el: Date.now() }])
+    assert.match(queries[0], /post\(input: \{ id: "test-post" \}\)/)
+    assert.equal(data.actual.reacciones, 7)
+    assert.equal(data.posts[0].impresiones, 12)
+    assert.ok(data.rango.hasta - data.rango.desde < 365 * 86400000)
+  } finally {
+    globalThis.fetch = anteriorFetch
+    if (anteriorOrganizacion === undefined) delete process.env.BUFFER_ORGANIZATION_ID
+    else process.env.BUFFER_ORGANIZATION_ID = anteriorOrganizacion
+  }
+})
+
+test('descartar oculta la propuesta, bloquea su aprobación y habilita otra desde el mismo enlace', async () => {
+  reset()
+  const url = 'https://x.com/cuenta/status/123'
+  const fuente = idFuente(url)
+  const s = sugerencia()
+  s.id = idFuente(fuente + url)
+  Object.assign(s.datos, { fuente_id: fuente, fuente_url: url })
+  tablas.publicacion_docs.push(s, { coleccion: 'fuentes', id: fuente, version: 1,
+    datos: { url, tipo: 'publicacion', activa: true, generada_el: Date.now() } })
+  assert.equal((await llamada({ op: 'generar_link', url })).codigo, 409)
+  assert.equal((await llamada({ op: 'sugerencia_descartar', id: s.id, version: 1 })).codigo, 200)
+  assert.equal((await llamada(undefined, 'GET')).datos.sugerencias.length, 0)
+  assert.equal((await llamada({ op: 'aprobar', id: s.id, version: 2, revisado: true, plataformas: ['x'] })).codigo, 409)
+  const nuevo = await llamada({ op: 'generar_link', url, enfoque: 'Fauna' })
+  assert.equal(nuevo.codigo, 200)
+  const { trabajo } = (await llamada({ op: 'tomar_trabajo' })).datos
+  assert.match(trabajo.prompt, /Fauna/)
+  assert.match(trabajo.prompt, /pedir_enfoque_distinto/)
+  const cerrar = await llamada({ op: 'cerrar_trabajo', id: trabajo.id, run_id: trabajo.run_id,
+    resultado: { ...sugerencia().datos, fuente_url: url, titulo: 'Fauna de Vice City' } })
+  assert.equal(cerrar.codigo, 200)
+  const visibles = (await llamada(undefined, 'GET')).datos.sugerencias
+  assert.equal(visibles.length, 1)
+  assert.equal(visibles[0].titulo, 'Fauna de Vice City')
+  assert.notEqual(visibles[0].id, s.id)
 })
 
 test.after(() => { globalThis.fetch = original })

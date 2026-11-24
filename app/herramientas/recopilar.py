@@ -119,8 +119,8 @@ if a.subir:
     for f in fuentes:
         if f.get('canal') and f['canal'] not in canales:
             canales.append(f['canal'])
-    desc = (limpio.capitalize() + ' 🔥 Los mejores momentos de GTA 6.\n\nOriginales:\n'
-            + '\n'.join(f['url'] for f in fuentes if f.get('url')) + '\n\n#gta6 #gtavi #gta6clips #shorts')
+    desc = (limpio.capitalize() + f' 💀 {len(ids)} momentos que merecen replay. '
+            '¿Cuál te voló más la cabeza?\n\n#gta6 #gtavi #gta6clips')
     datos = {'tipo': 'recopilacion', 'momentos': ids, 'gancho': a.titulo, 'titulo': limpio.capitalize() + ' #gta6',
              'descripcion': desc, 'motivo': f'Recopilación: {len(ids)} momentos', 'canal': ', '.join(canales),
              'url': fuentes[0].get('url'), 'idioma': 'es', 'estado': 'listo', 'responsable': yo, 'video_path': vp,

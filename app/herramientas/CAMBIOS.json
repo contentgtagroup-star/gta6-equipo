@@ -1,6 +1,7 @@
 {
- "version": 69,
+ "version": 70,
  "cambios": [
+  {"v": 70, "fecha": "2026-11-24", "texto": "Las piezas editoriales nuevas usan la paleta y la tipografía del panel con un sello GTA6 Universo para las imágenes modeladas o regeneradas.", "manual": null},
   {"v": 69, "fecha": "2026-11-24", "texto": "Clips, correcciones y preparación editorial aplican un piso de video de 720p. Para bajar el peso, se recortan primero los tramos secundarios y se conserva el máster.", "manual": null},
   {"v": 68, "fecha": "2026-11-24", "texto": "Actividad y Sugerencias muestran el porcentaje de generación y preparación según las etapas que completó el motor, incluida la subida privada de cada imagen.", "manual": null},
   {"v": 67, "fecha": "2026-11-24", "texto": "En la revisión final, cada destino tiene su propia casilla alineada y el lápiz permite editar título, descripción y hashtags. Las recopilaciones nuevas usan un gancho propio y la descripción pública omite el bloque heredado de enlaces a originales. Podés descartar sugerencias y volver a generar desde el mismo enlace con otro enfoque.", "manual": null},

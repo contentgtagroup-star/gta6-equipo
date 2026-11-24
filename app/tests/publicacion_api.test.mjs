@@ -186,4 +186,54 @@ test('confirmar_manual publica X con un link de x.com y rechaza otros hosts', as
   assert.equal(item.datos.estado, 'publicado')
   assert.equal(item.datos.enlace, 'https://x.com/Gta6univers0/status/123')
 })
+const enCola = (id, datos) => ({ coleccion: 'cola', id, version: 1, datos: { plataforma: 'instagram', titulo: 'Envío ' + id, aprobado_por: 'Eze', creado: 1, proximo_el: 1, ...datos } })
+
+test('administración de cola: reintentar un fallado lo reencola y nunca toca un «revisar»', async () => {
+  reset()
+  tablas.publicacion_docs.push(enCola('c-err', { estado: 'error', error: 'falló la red' }), enCola('c-rev', { estado: 'revisar', error: 'se interrumpió' }))
+  const ok = await llamada({ op: 'cola_reintentar', id: 'c-err', version: 1 })
+  assert.equal(ok.codigo, 200)
+  const reencolado = tablas.publicacion_docs.find(d => d.id === 'c-err')
+  assert.equal(reencolado.datos.estado, 'pendiente')
+  assert.equal(reencolado.datos.error, '')
+  assert.ok(reencolado.datos.proximo_el > 1)
+  assert.equal((await llamada({ op: 'cola_reintentar', id: 'c-rev', version: 1 })).codigo, 409)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'c-rev').datos.estado, 'revisar')
+})
+
+test('administración de cola: reintento en masa reencola solo los fallados sin remoto_id', async () => {
+  reset()
+  tablas.publicacion_docs.push(
+    enCola('m1', { estado: 'error' }), enCola('m2', { estado: 'error' }),
+    enCola('m3', { estado: 'error', remoto_id: 'x1' }), enCola('m4', { estado: 'pendiente' }))
+  const r = await llamada({ op: 'cola_reintentar_masa' })
+  assert.equal(r.codigo, 200)
+  assert.equal(r.datos.reintentados, 2)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'm3').datos.estado, 'error')
+  assert.equal(tablas.publicacion_docs.filter(d => d.coleccion === 'cola' && d.datos.estado === 'pendiente').length, 3)
+})
+
+test('administración de cola: priorizar adelanta el proximo_el y posponer lo atrasa', async () => {
+  reset()
+  tablas.publicacion_docs.push(enCola('p1', { estado: 'pendiente', proximo_el: Date.now() + 999999 }))
+  await llamada({ op: 'cola_prioridad', id: 'p1', version: 1, cuando: 'ya' })
+  assert.ok(tablas.publicacion_docs.find(d => d.id === 'p1').datos.proximo_el <= Date.now())
+  const v = tablas.publicacion_docs.find(d => d.id === 'p1').version
+  await llamada({ op: 'cola_prioridad', id: 'p1', version: v, cuando: 'posponer' })
+  assert.ok(tablas.publicacion_docs.find(d => d.id === 'p1').datos.proximo_el > Date.now() + 1000000)
+})
+
+test('el GET devuelve ETag y responde 304 cuando nada cambió (ahorro de egress)', async () => {
+  reset()
+  const h1 = {}
+  const res1 = { setHeader (k, v) { h1[k] = v }, status (c) { this.codigo = c; return this }, json (d) { this.datos = d } }
+  await handler({ method: 'GET', query: {}, headers: { 'x-clave': 'clave-de-prueba-suficientemente-larga' } }, res1)
+  assert.equal(res1.codigo, 200)
+  assert.ok(h1.ETag, 'debe mandar ETag')
+  const res2 = { setHeader () {}, status (c) { this.codigo = c; return this }, json () {}, statusCode: 0, end () { this.ended = true } }
+  await handler({ method: 'GET', query: {}, headers: { 'x-clave': 'clave-de-prueba-suficientemente-larga', 'if-none-match': h1.ETag } }, res2)
+  assert.equal(res2.statusCode, 304)
+  assert.ok(res2.ended, 'un 304 no manda cuerpo')
+})
+
 test.after(() => { globalThis.fetch = original })

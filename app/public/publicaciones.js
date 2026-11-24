@@ -1,6 +1,6 @@
 /* Usa la conexión, componentes y paleta del panel existente. */
 (() => {
-  const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '' }
+  const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '', etag: '' }
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
   const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', conectada: 'Conectada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', manual: 'Para subir a mano a X', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
   const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
@@ -44,17 +44,31 @@
     d.addEventListener('close', () => { P.modal = false; d.remove(); antes?.focus() }, { once: true })
     return d
   }
+  async function traer() {
+    // GET condicional: si el ETag no cambió, el server responde 304 sin cuerpo y no baja todo de nuevo.
+    const headers = { 'x-clave': S.clave }
+    if (P.etag) headers['If-None-Match'] = P.etag
+    const r = await fetch('/api/publicacion', { headers })
+    if (r.status === 304) return null
+    if (r.status === 401) { window.salir?.('La clave no es correcta.'); throw new Error('clave') }
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { const e = new Error(d.error || ('Error ' + r.status)); e.status = r.status; throw e }
+    P.etag = r.headers.get('ETag') || P.etag
+    return d
+  }
   async function cargar(forzar = false) {
     if (!S.clave || P.cargando || P.modal && !forzar) return
     P.cargando = true
     P.error = ''
     if (!P.datos) render()
     try {
-      const datos = await api('/api/publicacion'), firma = JSON.stringify(datos)
-      const sinDatos = !P.datos
-      P.datos = datos
-      $('pubEstado').textContent = datos.automatico_activo ? 'Solo se envía material aprobado. YouTube y TikTok quedan en borrador.' : 'Podés preparar y revisar publicaciones. Los envíos automáticos todavía están en espera.'
-      if (firma !== P.firma || forzar || sinDatos) { P.firma = firma; render() }
+      const datos = await traer()
+      if (datos) {
+        const firma = JSON.stringify(datos), sinDatos = !P.datos
+        P.datos = datos
+        $('pubEstado').textContent = datos.automatico_activo ? 'Solo se envía material aprobado. YouTube y TikTok quedan en borrador.' : 'Podés preparar y revisar publicaciones. Los envíos automáticos todavía están en espera.'
+        if (firma !== P.firma || forzar || sinDatos) { P.firma = firma; render() }
+      } else if (forzar && P.datos) render()
     } catch (e) {
       P.error = e.message || 'No se pudieron cargar las publicaciones. Probá Actualizar.'
       P.datos = null
@@ -105,7 +119,22 @@
       el('div', { class: 'row' }, campo('Activa', activa), campo('Rastrear automáticamente el perfil o feed', auto)), campo('Revisar cada cuántas horas', horas)),
     () => post({ op: 'fuente_guardar', id: f.id, version: f._version, datos: { url: url.value, tipo: tipo.value, idioma: idioma.value, nota: nota.value, activa: activa.checked, automatica: auto.checked, intervalo_horas: Number(horas.value) } }))
   }
+  function generarDesdeLink(box) {
+    const link = entrada('', { placeholder: 'Pegá el link de un post (X, etc.) y generá la publicación', maxlength: 1000, style: 'flex:1;min-width:220px' })
+    const generar = boton('Generar desde link', async () => {
+      const url = link.value.trim()
+      if (!url) return toast('Pegá un link primero.')
+      await post({ op: 'generar_link', url }); link.value = ''
+      toast('Generando. La vas a ver en Sugerencias.'); P.tab = 'sugerencias'; await cargar(true)
+    }, 'tiny primary')
+    link.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); generar.click() } })
+    box.append(el('article', { class: 'bloque', style: 'padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:10px' },
+      el('h3', { class: 'small', style: 'margin:0 0 8px' }, 'Generar desde link'),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, generar),
+      el('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Capta el texto y las imágenes del post, lo adapta al español y deja la publicación en Sugerencias para revisar y aprobar.')))
+  }
   function fuentes(box) {
+    generarDesdeLink(box)
     box.append(el('div', { class: 'row' }, boton('Agregar fuente', () => editarFuente(), 'tiny primary'), boton('Importar fuentes del equipo', async () => { const d = await post({ op: 'importar_fuentes' }); toast(d.agregadas + ' fuentes nuevas'); await cargar(true) })))
     box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un link puntual se adapta una vez. Los enlaces pendientes de verificar se importan pausados.'))
     for (const f of P.datos.fuentes) {
@@ -126,7 +155,7 @@
     try {
       const { urls } = await post({ op: 'vista_media', video_path: item.video_path, imagenes: item.imagenes || [] })
       if (!box.isConnected) return
-      if (item.video_path) box.append(el('video', { src: urls[0], controls: true, preload: 'metadata', style: 'max-width:220px;max-height:340px;border-radius:10px' }))
+      if (item.video_path) box.append(el('video', { src: urls[0], controls: true, preload: 'none', style: 'max-width:220px;max-height:340px;border-radius:10px' }))
       else box.append(...urls.map(src => el('img', { src, alt: 'Imagen de la publicación para revisar', loading: 'lazy', style: 'max-width:180px;max-height:250px;object-fit:contain' })))
     } catch (e) { if (box.isConnected) box.append(el('p', { class: 'small' }, e.message)) }
   }
@@ -187,14 +216,35 @@
     if (!P.datos.sugerencias.some(s => s.estado !== 'aprobada')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
   }
   function cola(box) {
-    box.append(boton('Procesar próximo envío', async () => { const d = await post({ op: 'procesar' }); toast(d.activo === false ? 'Los envíos automáticos todavía están en espera.' : 'Cola revisada'); await cargar(true) }))
-    for (const p of [...P.datos.cola].sort((a, b) => b.creado - a.creado)) {
+    const items = P.datos.cola
+    const cuenta = items.reduce((a, p) => { a[p.estado] = (a[p.estado] || 0) + 1; return a }, {})
+    const trabado = p => ['error', 'revisar'].includes(p.estado) || (p.estado === 'enviando' && (p.vence || 0) < Date.now())
+    const nTrabados = items.filter(trabado).length
+    const fEstado = selector([['', 'Todos los estados'], ...[...new Set(items.map(p => p.estado))].map(e => [e, etiquetas[e] || e])], P.colaEstado || '')
+    const fRed = selector([['', 'Todas las redes'], ...Object.entries(redes)], P.colaRed || '')
+    fEstado.onchange = () => { P.colaEstado = fEstado.value; render() }
+    fRed.onchange = () => { P.colaRed = fRed.value; render() }
+    box.append(el('div', { class: 'row' }, campo('Estado', fEstado), campo('Red', fRed)))
+    box.append(el('p', { class: 'small muted' }, items.length + ' en cola · ' + (cuenta.pendiente || 0) + ' pendientes · ' + (cuenta.error || 0) + ' con error · ' + nTrabados + ' trabados'))
+    const barra = el('div', { class: 'row' })
+    barra.append(boton('Procesar próximo envío', async () => { const d = await post({ op: 'procesar' }); toast(d.activo === false ? 'Los envíos automáticos todavía están en espera.' : 'Cola revisada'); await cargar(true) }))
+    if (cuenta.error) barra.append(boton('Reintentar fallados (' + cuenta.error + ')', async () => { const d = await post({ op: 'cola_reintentar_masa' }); toast(d.reintentados + ' reencolados'); await cargar(true) }, 'tiny primary'))
+    box.append(barra)
+    const lista = items
+      .filter(p => !P.colaEstado || p.estado === P.colaEstado)
+      .filter(p => !P.colaRed || p.plataforma === P.colaRed)
+      .sort((a, b) => (a.proximo_el || a.creado || Infinity) - (b.proximo_el || b.creado || Infinity))
+    for (const p of lista) {
       const acciones = el('div', { class: 'row' })
       const confirmar = () => {
         const url = entrada('', { type: 'url', required: true })
         dialogo('Confirmar publicación manual', campo('Link público de la publicación', url), () => post({ op: 'confirmar_manual', id: p.id, version: p._version, url: url.value }), 'Confirmar')
       }
       acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
+      if (['pendiente', 'procesando'].includes(p.estado) && !p.remoto_id) acciones.append(
+        boton('Priorizar', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'ya' }); toast('Movido al frente'); await cargar(true) }),
+        boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
+      if (p.estado === 'error') acciones.append(boton('Reintentar', async () => { await post({ op: 'cola_reintentar', id: p.id, version: p._version }); await cargar(true) }, 'tiny primary'))
       if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
       if (p.remoto_id && ['procesando', 'enviando'].includes(p.estado)) acciones.append(boton('Detener reintentos', async () => { await post({ op: 'cola_detener', id: p.id, version: p._version }); await cargar(true) }))
       if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
@@ -204,13 +254,14 @@
       }), boton('Ya lo publiqué', confirmar))
       if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', confirmar))
       const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
-      box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo), el('p', {}, etiquetas[p.estado] || p.estado),
+      box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
+        el('p', {}, (etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
         p.estado === 'manual' && el('p', { class: 'small muted' }, 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
         el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('p', { class: 'small', style: 'color:var(--bad)' }, p.error),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))
       if (p.estado === 'manual') vista(p, preview)
     }
-    if (!P.datos.cola.length) box.append(el('p', { class: 'small muted' }, 'Las publicaciones aprobadas van a aparecer acá.'))
+    if (!lista.length) box.append(el('p', { class: 'small muted' }, items.length ? 'No hay envíos con ese filtro.' : 'Las publicaciones aprobadas van a aparecer acá.'))
   }
   function actividad(box) {
     for (const t of P.datos.trabajos.filter(t => t.tipo === 'media')) box.append(el('p', { class: 'small' }, 'Preparación de material · ' + (etiquetas[t.estado] || t.estado) + (t.error ? ': ' + t.error : '')))

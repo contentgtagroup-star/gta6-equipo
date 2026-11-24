@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { exigir, responder } from '../lib/comun.js'
 
-const PERMITIDAS = { 'categorias.json': 'application/json', 'procesar.py': 'text/plain', 'recopilar.py': 'text/plain', 'radar.py': 'text/plain', 'publicaciones.py': 'text/plain', 'equipo.py': 'text/plain', 'CAMBIOS.json': 'application/json', 'BowlbyOne-Regular.ttf': 'font/ttf', 'OFL.txt': 'text/plain', 'OVERLAY.png': 'image/png' }
+const PERMITIDAS = { 'categorias.json': 'application/json', 'procesar.py': 'text/plain', 'recopilar.py': 'text/plain', 'radar.py': 'text/plain', 'publicaciones.py': 'text/plain', 'capturar.py': 'text/plain', 'imagenes.py': 'text/plain', 'equipo.py': 'text/plain', 'CAMBIOS.json': 'application/json', 'BowlbyOne-Regular.ttf': 'font/ttf', 'OFL.txt': 'text/plain', 'OVERLAY.png': 'image/png', 'SELLO.png': 'image/png' }
 
 export default async function handler (req, res) {
   const yo = exigir(req, res); if (!yo) return

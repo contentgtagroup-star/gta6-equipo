@@ -86,6 +86,43 @@ test('las imágenes del envío también se consideran por path', () => {
   assert.equal(plan.bytes_total, 3 * 1024 * 1024)
 })
 
+test('retiene si falta una fecha de publicación válida en algún destino', () => {
+  for (const malo of [
+    [{ video_path: 'eze/g.mp4', plataforma: 'instagram', estado: 'publicado' }], // sin fecha
+    [{ video_path: 'eze/g.mp4', plataforma: 'instagram', estado: 'publicado', publicado_el: null }],
+    [{ video_path: 'eze/g.mp4', plataforma: 'instagram', estado: 'publicado', publicado_el: 'ayer' }],
+    [ // una red con fecha antigua, otra sin fecha
+      { video_path: 'eze/g.mp4', plataforma: 'instagram', estado: 'publicado', publicado_el: ahora - 30 * DIA },
+      { video_path: 'eze/g.mp4', plataforma: 'facebook', estado: 'publicado' }
+    ]
+  ]) {
+    const plan = planReciclaje({ cola: malo, archivos: [archivo('eze/g.mp4', 8)] }, { ahora, dias: 7 })
+    assert.equal(plan.candidatos.length, 0, JSON.stringify(malo))
+    assert.equal(plan.retenidos[0].motivo, 'falta una fecha de publicación válida en algún destino')
+  }
+})
+
+test('una sugerencia aprobada sin encolar bloquea el reciclaje; ya encolada no', () => {
+  const base = {
+    cola: [{ video_path: 'eze/h.mp4', plataforma: 'instagram', estado: 'publicado', publicado_el: ahora - 30 * DIA }],
+    archivos: [archivo('eze/h.mp4', 6)]
+  }
+  const sinEncolar = planReciclaje({ ...base, sugerencias: [{ video_path: 'eze/h.mp4', estado: 'aprobada', encolado: false }] }, { ahora, dias: 7 })
+  assert.equal(sinEncolar.candidatos.length, 0)
+  assert.match(sinEncolar.retenidos[0].motivo, /pendiente de encolar/)
+  const encolada = planReciclaje({ ...base, sugerencias: [{ video_path: 'eze/h.mp4', estado: 'aprobada', encolado: true }] }, { ahora, dias: 7 })
+  assert.equal(encolada.candidatos.length, 1)
+})
+
+test('un clip con snapshot aprobado pendiente de encolar retiene su archivo', () => {
+  const plan = planReciclaje({
+    cola: [{ video_path: 'eze/j.mp4', plataforma: 'instagram', estado: 'publicado', publicado_el: ahora - 30 * DIA }],
+    clips: [{ id: 'k3', video_path: 'eze/j.mp4', estado: 'aprobado', publicacion_cola: true, publicacion_snapshot: { video_path: 'eze/j.mp4' }, publicacion_encolada: false }],
+    archivos: [archivo('eze/j.mp4', 3)]
+  }, { ahora, dias: 7 })
+  assert.equal(plan.candidatos.length, 0)
+})
+
 test('humano formatea bytes legibles', () => {
   assert.equal(humano(0), '0 B')
   assert.equal(humano(1024), '1.0 KB')

@@ -17,8 +17,16 @@ export const EN_JUEGO = new Set(['pendiente', 'procesando', 'enviando', 'error',
 
 const pathsDe = x => [x && x.video_path, ...((x && x.imagenes) || [])].filter(Boolean)
 
-// Clip que todavía necesita su archivo: sigue en la biblioteca y no terminó de publicarse.
-const clipActivo = c => c && !['publicado', 'descartado', 'reciclado'].includes(c.estado)
+// Clip que todavía necesita su archivo: sigue en la biblioteca sin terminar de
+// publicarse, o tiene una aprobación con snapshot que el worker aún va a encolar.
+const clipActivo = c => !!c && (
+  !['publicado', 'descartado', 'reciclado'].includes(c.estado) ||
+  (c.publicacion_cola && c.publicacion_snapshot && c.publicacion_encolada !== true)
+)
+
+// Sugerencia que todavía necesita su archivo: no está aprobada, o está aprobada
+// pero el worker todavía la va a encolar (encolado !== true).
+const sugerenciaActiva = s => !!s && !(s.estado === 'aprobada' && s.encolado === true)
 
 export function planReciclaje ({ cola = [], clips = [], sugerencias = [], trabajos = [], archivos = [] } = {}, { ahora = Date.now(), dias = 7 } = {}) {
   const limite = ahora - dias * DIA
@@ -29,22 +37,27 @@ export function planReciclaje ({ cola = [], clips = [], sugerencias = [], trabaj
   const retener = (p, motivo) => { if (p && tam.has(p) && !motivoRetencion.has(p)) motivoRetencion.set(p, motivo) }
   for (const c of cola) if (EN_JUEGO.has(c.estado)) for (const p of pathsDe(c)) retener(p, 'envío de ' + (c.plataforma || 'una red') + ' en estado "' + c.estado + '"')
   for (const c of clips) if (clipActivo(c)) for (const p of pathsDe(c)) retener(p, 'clip "' + (c.id || c.titulo || '') + '" todavía en publicación')
-  for (const s of sugerencias) if (s.estado !== 'aprobada') for (const p of pathsDe(s)) retener(p, 'sugerencia sin cerrar necesita el archivo')
+  for (const s of sugerencias) if (sugerenciaActiva(s)) for (const p of pathsDe(s)) retener(p, s.estado === 'aprobada' ? 'aprobación pendiente de encolar necesita el archivo' : 'sugerencia sin cerrar necesita el archivo')
   for (const t of trabajos) if (['pendiente', 'ejecutando'].includes(t.estado)) for (const p of pathsDe(t)) retener(p, 'trabajo en curso usa el archivo')
 
-  // 2) Última publicación confirmada por path (entre los envíos ya publicados).
-  const ultimoPub = new Map()
+  // 2) Última publicación confirmada por path. Si algún destino publicado no
+  // trae una fecha válida, no se puede afirmar que pasaron los días: se retiene.
+  const pub = new Map() // path -> { ultimo, faltaFecha }
   for (const c of cola) if (c.estado === 'publicado') for (const p of pathsDe(c)) {
-    const t = Number(c.publicado_el) || 0
-    if (t >= (ultimoPub.get(p) || 0)) ultimoPub.set(p, t)
+    const info = pub.get(p) || { ultimo: 0, faltaFecha: false }
+    const t = Number(c.publicado_el)
+    if (Number.isFinite(t) && t > 0) info.ultimo = Math.max(info.ultimo, t)
+    else info.faltaFecha = true
+    pub.set(p, info)
   }
 
   // 3) Clasificar cada archivo real del bucket.
   const candidatos = [], retenidos = []
   for (const [path, bytes] of tam) {
-    if (!ultimoPub.has(path)) continue // nunca se publicó desde la app: fuera del alcance de este reciclaje
+    if (!pub.has(path)) continue // nunca se publicó desde la app: fuera del alcance de este reciclaje
     if (motivoRetencion.has(path)) { retenidos.push({ path, bytes, motivo: motivoRetencion.get(path) }); continue }
-    const publicado_el = ultimoPub.get(path)
+    const { ultimo: publicado_el, faltaFecha } = pub.get(path)
+    if (faltaFecha) { retenidos.push({ path, bytes, motivo: 'falta una fecha de publicación válida en algún destino' }); continue }
     if (publicado_el > limite) { retenidos.push({ path, bytes, motivo: 'publicado hace menos de ' + dias + ' días', publicado_el }); continue }
     candidatos.push({ path, bytes, publicado_el, motivo: 'publicado en todos sus destinos hace más de ' + dias + ' días' })
   }

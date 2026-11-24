@@ -1,6 +1,7 @@
 {
- "version": 61,
+ "version": 62,
  "cambios": [
+  {"v": 62, "fecha": "2026-11-24", "texto": "Los reels de Facebook se cierran con la forma real del estado de Graph (processing_phase.status = complete, publish_status = published y wrapper video_status). Si un envío sigue procesando más de 30 minutos, pasa a «Revisar en la red» en vez de reconsultar sin parar, y el panel permite detener reintentos de un envío con remoto_id sin borrar su identificador.", "manual": "Si hay un reel viejo trabado, actualizá el panel: el worker lo cierra si ya se publicó o lo pasa a revisión. Verificá en Facebook antes de reenviar."},
   {"v": 61, "fecha": "2026-11-23", "texto": "La limpieza de espacio la ejecuta solo el dueño de datos y almacenamiento. Si falla el borrado o el registro, el clip vuelve a su estado anterior o se reintenta con la versión actual, para no dejar archivos borrados sin metadata.", "manual": "Ninguna: es una operación administrativa."},
   {"v": 60, "fecha": "2026-11-23", "texto": "La limpieza de espacio puede detectar clips que llevan al menos 14 días sin aprobar ni usar y descartarlos por lotes. Conserva stock, recopilaciones, material compartido y cualquier archivo que todavía figure en Publicaciones; antes de borrar vuelve a comprobar que el clip no haya cambiado y deja la metadata del descarte registrada.", "manual": "La limpieza es administrativa y requiere confirmación explícita; primero se consulta la simulación."},
   {"v": 59, "fecha": "2026-11-23", "texto": "Los fallos de la base de Publicaciones quedan registrados en el servidor para diagnosticarlos sin exponer el error interno en el panel.", "manual": "Ninguna: es solo diagnóstico interno."},

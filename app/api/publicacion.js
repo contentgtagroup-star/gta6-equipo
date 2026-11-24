@@ -187,6 +187,11 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: REDES[d.datos.plataforma]?.modo === 'manual' ? 'manual' : 'pendiente', error: '', proximo_el: Date.now() }, d.version)
       }
       await eventoPub(b.op, yo, { item_id: d.id, aprobado_por: yo })
+    } else if (b.op === 'cola_detener') {
+      const d = await exigirItem('cola', b.id, b.version)
+      if (!['procesando', 'enviando'].includes(d.datos.estado) || !d.datos.remoto_id) throw errorPublicacion('Ese envío no se puede detener.', 409)
+      await guardarPub('cola', d.id, { ...d.datos, estado: 'revisar', error: 'Detenido por el equipo. Verificá en la red si ya se publicó antes de reintentar.', proximo_el: 0 }, d.version)
+      await eventoPub('envio_detenido', yo, { item_id: d.id, aprobado_por: d.datos.aprobado_por, remoto_id: d.datos.remoto_id, plataforma: d.datos.plataforma })
     } else if (b.op === 'confirmar_manual') {
       const d = await exigirItem('cola', b.id, b.version)
       const esBorrador = d.datos.estado === 'borrador' && ['youtube', 'tiktok'].includes(d.datos.plataforma)

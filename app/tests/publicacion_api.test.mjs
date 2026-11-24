@@ -6,10 +6,15 @@ import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
 
 Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: '{"Eze":"clave-de-prueba-suficientemente-larga"}', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 2).toString('base64'), BUFFER_API_KEY: 'buffer-privado', BUFFER_CHANNEL_ID: 'canal-x' })
 const tablas = { docs: [], publicacion_docs: [] }, remotas = []
+let estadoGraph = 'processing', publishReel = false
 const original = globalThis.fetch
 globalThis.fetch = async (url, opciones = {}) => {
   const u = new URL(url)
   if (u.hostname === 'oauth2.googleapis.com') { remotas.push(u.href); return new Response('{"access_token":"fixture-renovado","refresh_token":"fixture-refresco","expires_in":3600}', { status: 200, headers: { 'Content-Type': 'application/json' } }) }
+  if (u.hostname === 'graph.facebook.com') {
+    remotas.push(u.href)
+    return new Response(JSON.stringify({ status: { processing_phase: { status: estadoGraph }, publishing_phase: { publish_status: publishReel ? 'published' : 'draft' } } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
   if (u.hostname !== 'unit.supabase.co') { remotas.push(u.href); throw new Error('La prueba no permite llamadas a redes.') }
   const tabla = tablas[u.pathname.split('/').at(-1)]
   assert.ok(tabla, u.pathname)
@@ -37,8 +42,9 @@ async function llamada(body, method = 'POST', clave = true) {
   await handler({ method, query: {}, headers: clave ? { 'x-clave': 'clave-de-prueba-suficientemente-larga' } : {}, body }, res)
   return salida
 }
-function reset() { tablas.docs.length = 0; tablas.publicacion_docs.length = 0; remotas.length = 0; delete process.env.PUBLICACION_ACTIVA }
+function reset() { tablas.docs.length = 0; tablas.publicacion_docs.length = 0; remotas.length = 0; estadoGraph = 'processing'; publishReel = false; delete process.env.PUBLICACION_ACTIVA }
 const sugerencia = () => ({ coleccion: 'sugerencias', id: 's1', version: 1, datos: { titulo: 'Una caja en GTA 6', descripcion: '¿Qué tiene adentro?', plataformas: ['instagram', 'youtube'], hashtags: ['#GTA6'], media: 'reusar', video_path: 'Eze/clip.mp4', imagenes: [], estado: 'pendiente', media_lista: true } })
+const conexionMeta = () => ({ coleccion: 'conexiones', id: 'meta', version: 1, datos: { sobre: cifrarConexion('meta', { access_token: 'fixture', page_id: 'pagina', expira_el: Date.now() + 9999999 }) } })
 
 test('publicaciones exige la clave del equipo antes de leer o escribir', async () => {
   reset(); assert.equal((await llamada({ op: 'importar_fuentes' }, 'POST', false)).codigo, 401)
@@ -139,6 +145,37 @@ test('X aprobado vuelve a la cola automática y el worker intenta publicarlo', a
   process.env.PUBLICACION_ACTIVA = '1'
   await procesarPublicaciones('Eze')
   assert.ok(remotas.some(u => u.includes('api.buffer.com')), 'el worker debe consultar Buffer')
+})
+test('un reel viejo se cierra como publicado si Graph ya lo confirmó', async () => {
+  reset(); process.env.PUBLICACION_ACTIVA = '1'; estadoGraph = 'complete'; publishReel = true
+  const viejo = Date.now() - 31 * 60000
+  tablas.publicacion_docs.push(conexionMeta(), { coleccion: 'cola', id: 'fb-viejo', version: 1, datos: { estado: 'procesando', aprobado_por: 'Eze', plataforma: 'facebook', remoto_id: '1506599864725142', etapa: 'procesando', creado: viejo, aprobado_el: viejo } })
+  await procesarPublicaciones('Eze')
+  const item = tablas.publicacion_docs.find(d => d.id === 'fb-viejo')
+  assert.equal(item.datos.estado, 'publicado')
+  assert.ok(tablas.publicacion_docs.some(u => u.coleccion === 'eventos' && u.datos.accion === 'publicado'))
+  assert.ok(!tablas.publicacion_docs.some(u => u.coleccion === 'eventos' && u.datos.accion === 'procesando_vencido'))
+})
+test('un reel que sigue procesando después del timeout pasa a revisar', async () => {
+  reset(); process.env.PUBLICACION_ACTIVA = '1'; estadoGraph = 'processing'; publishReel = false
+  const viejo = Date.now() - 31 * 60000
+  tablas.publicacion_docs.push(conexionMeta(), { coleccion: 'cola', id: 'fb-viejo', version: 1, datos: { estado: 'procesando', aprobado_por: 'Eze', plataforma: 'facebook', remoto_id: '1506599864725142', etapa: 'procesando', creado: viejo, aprobado_el: viejo } })
+  await procesarPublicaciones('Eze')
+  const item = tablas.publicacion_docs.find(d => d.id === 'fb-viejo')
+  assert.equal(item.datos.estado, 'revisar')
+  assert.match(item.datos.error, /no confirmó la publicación a tiempo/)
+  assert.ok(tablas.publicacion_docs.some(u => u.coleccion === 'eventos' && u.datos.accion === 'procesando_vencido'))
+  assert.ok(remotas.some(u => u.includes('graph.facebook.com')))
+})
+test('detener reintentos deja el envío con remoto_id en revisar', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cola', id: 'fb-stop', version: 1, datos: { estado: 'procesando', aprobado_por: 'Eze', plataforma: 'facebook', remoto_id: '1506599864725142' } })
+  assert.equal((await llamada({ op: 'cola_detener', id: 'fb-stop', version: 1 })).codigo, 200)
+  const item = tablas.publicacion_docs.find(d => d.id === 'fb-stop')
+  assert.equal(item.datos.estado, 'revisar')
+  assert.equal(item.datos.remoto_id, '1506599864725142')
+  assert.equal((await llamada({ op: 'cola_detener', id: 'fb-stop', version: 2 })).codigo, 409)
+  assert.equal(remotas.length, 0)
 })
 test('confirmar_manual publica X con un link de x.com y rechaza otros hosts', async () => {
   reset()

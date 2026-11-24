@@ -26,17 +26,24 @@ jobs:
           set -euo pipefail
           test -n "$VERCEL_TOKEN" || { echo 'Falta configurar GTADEPLOY en GitHub Actions.'; exit 1; }
 
-          # `vercel pull` no baja secretos; se leen por ID con la API y no se imprimen.
-          curl -fsS "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
+          # `vercel pull` no baja secretos; se leen con la API y no se imprimen.
+          curl -fsS "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}&decrypt=true" \
             -H "Authorization: Bearer $VERCEL_TOKEN" > "$RUNNER_TEMP/vars.json"
+          echo "Variables visibles: $(jq -r '(.envs // .) | map(.key) | join(", ")' "$RUNNER_TEMP/vars.json")"
+          echo "Ocultas de producción: $(jq -r '.hiddenProductionEnvCount // 0' "$RUNNER_TEMP/vars.json")"
           id_de() {
             jq -r --arg key "$1" '
               def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
-              .[] | select(.key == $key and es_prod) | .id
+              (.envs // .) | .[] | select(.key == $key and es_prod) | .id
             ' "$RUNNER_TEMP/vars.json" | head -n 1
           }
           valor_de() {
-            local id
+            local id valor
+            valor=$(jq -r --arg key "$1" '
+              def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;
+              (.envs // .) | .[] | select(.key == $key and es_prod) | (.value // empty)
+            ' "$RUNNER_TEMP/vars.json" | head -n 1)
+            if [ -n "$valor" ]; then printf '%s' "$valor"; return 0; fi
             id=$(id_de "$1")
             test -n "$id" || return 1
             curl -fsS "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/env/${id}?teamId=${VERCEL_ORG_ID}" \

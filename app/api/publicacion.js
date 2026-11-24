@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { db, exigir, responder, BUCKET } from '../lib/comun.js'
-import { REDES, TERMINALES, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, errorPublicacion } from '../lib/publicacion.js'
+import { REDES, TERMINALES, esPublicacionFotos, estadoInicialEnvio, prefijoFotosTikTok, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, errorPublicacion } from '../lib/publicacion.js'
 import { leerPub, listarPub, listarActividad, guardarPub, eventoPub, encolarPub as encolar } from '../lib/publicacion_store.js'
 import { estadosConexiones } from '../lib/conexiones.js'
 import { procesarPublicaciones, actualizarClipPublicado } from '../lib/publicacion_worker.js'
@@ -13,9 +13,15 @@ async function exigirItem (col, id, version) {
   if (version !== undefined && Number(version) !== d.version) throw errorPublicacion('El item cambió. Actualizá antes de guardar.', 409)
   return d
 }
-async function destinosPublicacion (seleccion) {
+async function destinosPublicacion (seleccion, item = {}) {
   const plataformas = redesValidas(seleccion)
-  const disponibles = new Set((await estadosConexiones()).filter(c => c.estado === 'conectada' || c.modo === 'manual').map(c => c.id))
+  const conexiones = await estadosConexiones()
+  const fotos = esPublicacionFotos(item)
+  const disponibles = new Set(conexiones.filter(c => c.estado === 'conectada' || c.modo === 'manual' || (fotos && c.id === 'youtube')).map(c => c.id))
+  if (fotos && plataformas.includes('tiktok')) {
+    if (!prefijoFotosTikTok() || !conexiones.find(c => c.id === 'tiktok')?.permisos.includes('video.upload')) throw errorPublicacion('TikTok Fotos requiere un prefijo verificado y el permiso video.upload.', 422)
+    if (item.imagenes.some(p => !/\.(jpe?g|webp)$/i.test(p))) throw errorPublicacion('Para TikTok Fotos, prepará las placas en JPEG o WebP.', 422)
+  }
   if (plataformas.some(p => !disponibles.has(p))) throw errorPublicacion('Alguna cuenta seleccionada ya no está disponible. Actualizá y elegí de nuevo.', 422)
   return plataformas
 }
@@ -54,6 +60,7 @@ export default async function handler (req, res) {
       out.sugerencias = out.sugerencias.filter(s => s.estado !== 'descartada')
       out.fuentes = out.fuentes.filter(f => !f.eliminada)
       out.conexiones = await estadosConexiones()
+      out.tiktok_fotos_configurado = !!prefijoFotosTikTok()
       out.automatico_activo = process.env.PUBLICACION_ACTIVA === '1'
       // Respuesta condicional para ahorrar egress en el poll de 30 s.
       // La etiqueta se calcula con datos ESTABLES (versiones de cada doc + estado de conexiones),
@@ -64,6 +71,7 @@ export default async function handler (req, res) {
         eventos: actividad.filas.map(r => r.id + '@' + r.version),
         siguienteEvento: actividad.siguiente,
         conexiones: out.conexiones,
+        tiktokFotos: out.tiktok_fotos_configurado,
         automatico: out.automatico_activo
       })
       const etag = 'W/"' + createHash('sha1').update(firmaEstable).digest('base64url').slice(0, 27) + '"'
@@ -229,9 +237,8 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       if (d.datos.estado !== 'aprobada') {
         if (b.version !== d.version || b.revisado !== true) throw errorPublicacion('Revisá el material y confirmá la publicación.', 422)
         const plataformas = redesValidas(b.plataformas)
-        if (!d.datos.video_path && plataformas.some(p => ['youtube', 'tiktok'].includes(p))) throw errorPublicacion('YouTube y TikTok requieren un video en este flujo.', 422)
         if (!d.datos.video_path && !d.datos.imagenes?.length && (d.datos.fuente_url || plataformas.some(p => p !== 'x'))) throw errorPublicacion('Prepará el material antes de publicar.', 422)
-        await destinosPublicacion(plataformas)
+        await destinosPublicacion(plataformas, d.datos)
         const { titulo, descripcion, hashtags } = contenidoValido({ ...d.datos, plataformas,
           titulo: b.titulo ?? d.datos.titulo, descripcion: b.descripcion ?? d.datos.descripcion, hashtags: b.hashtags ?? d.datos.hashtags })
         d = await guardarPub('sugerencias', d.id, { ...d.datos, titulo, descripcion, hashtags, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now() }, d.version)
@@ -265,7 +272,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       } else {
         const contenido = contenidoValido({ ...d.datos, ...b.datos, plataformas: [d.datos.plataforma] })
         if (['video_path', 'imagenes', 'recorte', 'instrucciones_media', 'media'].some(k => JSON.stringify(contenido[k] || '') !== JSON.stringify(d.datos[k] || ''))) throw errorPublicacion('El cambio de material necesita preparación y una nueva revisión.', 422)
-        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: REDES[d.datos.plataforma]?.modo === 'manual' ? 'manual' : 'pendiente', error: '', proximo_el: Date.now() }, d.version)
+        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: estadoInicialEnvio(d.datos.plataforma, contenido), error: '', proximo_el: Date.now() }, d.version)
       }
       await eventoPub(b.op, yo, { item_id: d.id, aprobado_por: yo })
     } else if (b.op === 'cola_detener') {
@@ -296,10 +303,13 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       const d = await exigirItem('cola', b.id, b.version)
       const esBorrador = d.datos.estado === 'borrador' && ['youtube', 'tiktok'].includes(d.datos.plataforma)
       const esManualX = d.datos.estado === 'manual' && d.datos.plataforma === 'x'
-      if (!esBorrador && !esManualX) throw errorPublicacion('Solo se confirma un borrador o un envío manual.', 409)
+      const esCarruselYouTube = d.datos.estado === 'manual' && d.datos.plataforma === 'youtube' && esPublicacionFotos(d.datos)
+      if (!esBorrador && !esManualX && !esCarruselYouTube) throw errorPublicacion('Solo se confirma un borrador o un envío manual.', 409)
       const hosts = esManualX ? ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'] : ['youtube.com', 'www.youtube.com', 'youtu.be', 'tiktok.com', 'www.tiktok.com']
-      const url = new URL(b.url || '')
-      if (url.protocol !== 'https:' || !hosts.includes(url.hostname)) throw errorPublicacion(esManualX ? 'Pegá el link público del posteo en X.' : 'Pegá el link público de YouTube o TikTok.')
+      let url
+      try { url = new URL(b.url || '') } catch { throw errorPublicacion('Pegá un link público válido.') }
+      if (esCarruselYouTube && (!['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname) || !/^\/post\/[\w-]+\/?$/.test(url.pathname))) throw errorPublicacion('Pegá el enlace de la Publicación de YouTube (/post/…).')
+      if (url.protocol !== 'https:' || url.username || url.password || (!esCarruselYouTube && !hosts.includes(url.hostname))) throw errorPublicacion(esManualX ? 'Pegá el link público del posteo en X.' : 'Pegá el link público de YouTube o TikTok.')
       await guardarPub('cola', d.id, { ...d.datos, estado: 'publicado', enlace: url.href, confirmado_por: yo, publicado_el: Date.now() }, d.version)
       await eventoPub('publicacion_manual_confirmada', yo, { item_id: d.id, enlace: url.href })
       try { await actualizarClipPublicado(d.datos.clip_id, yo) } catch {}

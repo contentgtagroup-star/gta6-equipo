@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './comun.js'
-import { errorPublicacion, redesValidas, REDES } from './publicacion.js'
+import { errorPublicacion, redesValidas, estadoInicialEnvio } from './publicacion.js'
 
 const TABLA = 'publicacion_docs'
 function falloLectura (error) {
@@ -54,7 +54,7 @@ export async function encolarPub (origen, d, por) {
   for (const plataforma of redesValidas(d.plataformas)) {
     const id = origen + '-' + plataforma
     if (!await leerPub('cola', id)) {
-      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: REDES[plataforma]?.modo === 'manual' ? 'manual' : 'pendiente', creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, proximo_el: creado }) }
+      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, proximo_el: creado }) }
       catch (e) { if (e.status !== 409) throw e }
     }
     try { await guardarPub('eventos', 'encolado-' + id, { accion: 'encolado', por, el: creado, item_id: id, plataforma, fuente_url: d.fuente_url || '', aprobado_por: por }) }

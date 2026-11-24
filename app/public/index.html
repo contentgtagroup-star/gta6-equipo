@@ -30,15 +30,50 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15.5px;line-height:1.5;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.wrap{max-width:1240px;margin:0 auto;padding-block:28px 72px}
+.wrap{max-width:1440px;margin:0 auto;padding-block:28px 72px}
 .app{display:grid;grid-template-columns:196px minmax(0,1fr);gap:22px;align-items:start}
-.sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
-.sidebar b{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);padding:6px 10px 4px}
-.sidebar button{text-align:left;background:transparent;border-color:transparent;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.sidebar button:hover{background:var(--surface2)}
-.sidebar button[aria-current="page"]{background:var(--surface2);border-color:var(--pink)}
-.sidebar .num{font-family:var(--mono);font-size:11px;color:var(--sun)}
-@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}.sidebar{position:static;flex-direction:row;overflow-x:auto;gap:6px}.sidebar b{display:none}.sidebar button{white-space:nowrap}}
+.sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:5px;background:linear-gradient(155deg,var(--surface2),var(--surface) 55%);border:1px solid var(--line);border-radius:16px;padding:8px}
+.sidebar button{text-align:left;background:transparent;border-color:transparent;display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 10px;color:var(--muted)}
+.sidebar button:hover{background:var(--surface2);color:var(--fg)}
+.sidebar button[aria-current="page"]{background:var(--surface2);border-color:var(--line);box-shadow:inset 3px 0 var(--pink);color:var(--fg)}
+.sidebar .nav-icon{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+.sidebar [aria-current="page"] .nav-icon{color:var(--pink)}
+.sidebar .num{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--sun)}
+.sidebar button:focus-visible,#pubTabs button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}.sidebar{position:static;flex-direction:row;overflow-x:auto;gap:6px}.sidebar button{white-space:nowrap}}
+#pubTabs{gap:4px;border-bottom:1px solid var(--line);padding-bottom:5px}
+#pubTabs button{background:transparent;border-color:transparent;border-radius:8px;color:var(--muted);min-height:38px;padding-inline:12px}
+#pubTabs button:hover,#pubTabs [aria-pressed="true"]{background:var(--surface2);color:var(--fg)}
+#pubTabs [aria-pressed="true"]{box-shadow:inset 0 -2px var(--pink)}
+.pub-suggestion{margin:14px 0;border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
+.pub-suggestion h3{font-size:clamp(18px,2.2vw,24px)}
+.pub-suggestion-content{min-width:0;padding:clamp(14px,3vw,24px);display:grid;gap:14px;overflow-wrap:anywhere}
+.pub-suggestion-copy{display:grid;gap:12px;align-content:start;min-width:0}
+.pub-suggestion-content p{margin:0}
+.pub-suggestion-meta{align-items:center;gap:8px 14px}
+.pub-suggestion-material{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:8px}
+.pub-suggestion-material h4{margin:0}
+.pub-suggestion-notes{color:var(--muted)}
+.pub-suggestion-notes p{margin-top:10px;max-width:85ch}
+.pub-suggestion-actions{justify-content:space-between;gap:10px;padding:12px clamp(14px,3vw,24px);border-top:1px solid var(--line);background:var(--bg)}
+.pub-suggestion-actions button{min-height:36px}
+.pub-suggestion-material details{min-width:0}
+.pub-review-layout{display:grid;gap:18px}
+.pub-review-main,.pub-review-routing{display:grid;gap:12px;min-width:0;align-content:start}
+.pub-review-media{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.pub-review-media img,.pub-review-media video{max-width:min(100%,220px)!important}
+@media(min-width:1100px){
+  .pub-suggestion-content{grid-template-columns:minmax(0,1fr) minmax(0,.95fr);align-items:start}
+}
+@media(min-width:850px){
+  dialog.pub-review-dialog{width:min(1040px,94vw)!important}
+  .pub-review-layout{grid-template-columns:minmax(0,1.35fr) minmax(250px,1fr)}
+  .pub-review-routing{border-left:1px solid var(--line);padding-left:16px}
+}
+@media(max-width:550px){
+  .pub-review-copy-head{flex-wrap:wrap}
+  .pub-suggestion-actions>button{width:100%}
+}
 h1,h2,h3{font-family:var(--display);line-height:1.15;margin:0;text-wrap:balance}
 h1{font-size:clamp(28px,4.4vw,40px);font-weight:800}
 h1 span{color:var(--pink)}
@@ -168,12 +203,11 @@ html{-webkit-text-size-adjust:100%}
 
   <div class="app">
   <nav class="sidebar" id="sidebar" aria-label="Secciones">
-    <b>Secciones</b>
-    <button type="button" data-ir="crear" aria-current="page">Crear clips</button>
-    <button type="button" data-ir="biblioteca">Biblioteca <span class="num" id="navLibCount"></span></button>
-    <button type="button" data-ir="publicaciones">Publicaciones</button>
-    <button type="button" data-ir="links">Links del equipo</button>
-    <button type="button" data-ir="ayuda">Ayuda y compu</button>
+    <button type="button" data-ir="crear" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>Crear clips</button>
+    <button type="button" data-ir="biblioteca"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4h12M4 7h16"/><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M9 14h6"/></svg>Biblioteca <span class="num" id="navLibCount"></span></button>
+    <button type="button" data-ir="publicaciones"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v12H9l-5 4zM8 8h8m-8 4h6"/></svg>Publicaciones</button>
+    <button type="button" data-ir="links"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m10 7 2-2a4 4 0 0 1 6 6l-2 2m-2 4-2 2a4 4 0 0 1-6-6l2-2m1 4 6-6"/></svg>Links del equipo</button>
+    <button type="button" data-ir="ayuda"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8m-6-11 2 2-2 2m4 0h2"/></svg>Ayuda y compu</button>
   </nav>
   <main class="contenido">
   <section id="seccionCrearLink" data-seccion="crear">

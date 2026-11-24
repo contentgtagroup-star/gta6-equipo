@@ -1,6 +1,6 @@
 import { db, BUCKET } from './comun.js'
 import { GRAPH, jsonRemoto, tokenConexion } from './conexiones.js'
-import { REDES, errorPublicacion } from './publicacion.js'
+import { REDES, errorPublicacion, esPublicacionFotos, prefijoFotosTikTok } from './publicacion.js'
 
 const bearer = token => ({ Authorization: 'Bearer ' + token })
 const json = (body, token) => ({ method: 'POST', headers: { ...bearer(token), 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -138,6 +138,23 @@ export async function pasoPublicacion (item, checkpoint) {
       if (d.data?.status === 'SEND_TO_USER_INBOX') return { estado: 'borrador', enlace: 'https://www.tiktok.com/' }
       if (d.data?.status === 'FAILED') throw errorPublicacion('TikTok no pudo preparar el borrador. Revisá la cuenta y el formato.', 422)
       return { etapa: 'procesando' }
+    }
+    if (esPublicacionFotos(item)) {
+      const prefijo = prefijoFotosTikTok()
+      const urls = await imagenes(item)
+      if (!prefijo || urls.length !== item.imagenes.length || urls.some(u => !u.startsWith(prefijo))) {
+        throw errorPublicacion('Las placas no están en el prefijo de imágenes verificado por TikTok.', 422)
+      }
+      const descripcion = [item.descripcion, (item.hashtags || []).join(' ')].filter(Boolean).join('\n\n')
+      if (descripcion.length > 4000) throw errorPublicacion('Acortá la descripción y los hashtags a 4000 caracteres para TikTok.', 422)
+      await checkpoint({ etapa: 'subiendo_borrador' })
+      const d = await jsonRemoto('https://open.tiktokapis.com/v2/post/publish/content/init/', json({
+        media_type: 'PHOTO', post_mode: 'MEDIA_UPLOAD',
+        post_info: { title: item.titulo, description: descripcion },
+        source_info: { source: 'PULL_FROM_URL', photo_images: urls, photo_cover_index: 0 }
+      }, t.access_token))
+      if (!d.data?.publish_id) throw errorPublicacion('TikTok no devolvió un identificador. Revisá la bandeja antes de reintentar.', 502)
+      return { remoto_id: d.data.publish_id, etapa: 'procesando' }
     }
     const bytes = await video(item, true)
     const d = await jsonRemoto('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', json({ source_info: { source: 'FILE_UPLOAD', video_size: bytes.length, chunk_size: bytes.length, total_chunk_count: 1 } }, t.access_token))

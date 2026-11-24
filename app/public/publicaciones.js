@@ -212,20 +212,62 @@
     }, esCola ? 'Guardar y aprobar cambios' : 'Guardar para revisar')
     modal.addEventListener('close', limpiarPreviewLocal, { once: true })
   }
+  const limpiarCopy = texto => String(texto || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
+  async function copiarCopy (titulo, descripcion, hashtags) {
+    const texto = limpiarCopy(descripcion)
+    const tags = hashtags.trim()
+    const ultimo = texto.split(/\r?\n/).at(-1)?.trim()
+    await navigator.clipboard.writeText([titulo, texto, ultimo === tags ? '' : tags].map(t => String(t || '').trim()).filter(Boolean).join('\n\n'))
+    toast('Copy copiado')
+  }
+  function botonCopiarCopy (item) {
+    return boton('Copiar copy', () => copiarCopy(item.titulo, item.descripcion, (item.hashtags || []).join(' ')))
+  }
+  function botonDescargarImagenes (item) {
+    return boton('Descargar imágenes', async () => {
+      const { urls } = await post({ op: 'vista_media', imagenes: item.imagenes })
+      const [{ zipSync }, ...placas] = await Promise.all([
+        import('/vendor/fflate-zip.js'),
+        ...urls.map(async url => {
+          const respuesta = await fetch(url)
+          if (!respuesta.ok) throw new Error('No se pudo descargar todo el carrusel. Volvé a intentar.')
+          return new Uint8Array(await respuesta.arrayBuffer())
+        })
+      ])
+      if (placas.length !== item.imagenes.length) throw new Error('Faltan imágenes en el carrusel.')
+      const archivos = Object.fromEntries(placas.map((placa, i) => {
+        const extension = item.imagenes[i].split('.').pop()
+        return ['placa-' + String(i + 1).padStart(2, '0') + '.' + extension, placa]
+      }))
+      const url = URL.createObjectURL(new Blob([zipSync(archivos, { level: 0 })], { type: 'application/zip' }))
+      const enlace = el('a', { href: url, download: 'gta6-placas.zip' })
+      enlace.click()
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+    })
+  }
   function publicarSugerencia(item, clip = false) {
-    const tieneMedia = !!(item.video_path || item.imagenes?.length)
-    const cuentas = P.datos.conexiones.filter(c => (c.estado === 'conectada' || c.modo === 'manual') &&
-      (item.video_path || !(c.id === 'youtube' || c.id === 'tiktok')) && (tieneMedia || c.id === 'x'))
-    const preview = el('div', { class: 'row', style: 'overflow:auto;flex-wrap:wrap' })
+    const fotos = !item.video_path && !!item.imagenes?.length
+    const tieneMedia = !!item.video_path || fotos
+    const cuentas = P.datos.conexiones.filter(c => (fotos && ['youtube', 'tiktok'].includes(c.id)) ||
+      ((c.estado === 'conectada' || c.modo === 'manual') && (tieneMedia || c.id === 'x')))
+    const preview = el('div', { class: 'pub-review-media' })
     const opciones = cuentas.map(c => {
+      let motivo = ''
+      if (fotos && c.id === 'tiktok') {
+        if (c.estado !== 'conectada' || !c.permisos?.includes('video.upload')) motivo = 'Falta conectar TikTok con permiso de subida.'
+        else if (!P.datos.tiktok_fotos_configurado) motivo = 'Falta verificar el prefijo de imágenes en TikTok.'
+        else if (item.imagenes.some(p => !/\.(jpe?g|webp)$/i.test(p))) motivo = 'TikTok requiere placas JPEG o WebP.'
+      }
       const input = entrada('', { type: 'checkbox' })
-      const modo = c.modo === 'borrador' ? 'Borrador' : c.modo === 'manual' ? 'Manual' : 'Automático'
+      input.disabled = !!motivo
+      const modo = fotos && c.id === 'youtube' ? 'Publicación manual' : fotos && c.id === 'tiktok' ? 'Enviar a bandeja' :
+        c.modo === 'borrador' ? 'Borrador' : c.modo === 'manual' ? 'Manual' : 'Automático'
       const cuenta = c.cuenta_conectada || c.cuenta
       const label = el('label', { class: 'pub-check' }, input,
-        el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo].filter(Boolean).join(' · '))))
+        el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo, motivo].filter(Boolean).join(' · '))))
       return { id: c.id, input, label }
     })
-    const textoPublico = String(item.descripcion || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
+    const textoPublico = limpiarCopy(item.descripcion)
     const lineaHashtags = textoPublico.match(/(?:^|\n)((?:#[\p{L}\p{N}_]+[ \t]*)+)$/u)
     const tagsOriginales = Array.isArray(item.hashtags) ? item.hashtags : []
     const hashtags = entrada([...new Set([...tagsOriginales, ...(lineaHashtags ? lineaHashtags[1].trim().split(/\s+/) : [])])].join(' '))
@@ -256,13 +298,17 @@
     for (const campoTexto of [titulo, descripcion, hashtags]) campoTexto.addEventListener('input', actualizarTexto)
     actualizarTexto()
     let vistaLista = !tieneMedia
-    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:14px' },
-      el('div', { class: 'pub-review-copy-head' }, el('div', { style: 'flex:1;min-width:0' }, textoVista, editor), editar), preview,
+    const modal = dialogo('Revisar y publicar', el('div', { class: 'pub-review-layout' },
+      el('div', { class: 'pub-review-main' },
+        el('div', { class: 'pub-review-copy-head' }, el('div', { style: 'flex:1;min-width:0' }, textoVista, editor), editar),
+        el('div', { class: 'row' }, boton('Copiar copy', () => copiarCopy(titulo.value, descripcion.value, hashtags.value)),
+          fotos && botonDescargarImagenes(item)), tieneMedia && preview),
+      el('div', { class: 'pub-review-routing' },
       el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Destinos de publicación'), opciones.map(c => c.label),
         !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
-      el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material')), async () => {
+      el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material'))), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
-      const plataformas = opciones.filter(c => c.input.checked).map(c => c.id)
+      const plataformas = opciones.filter(c => !c.input.disabled && c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
       if (!titulo.value.trim() || !descripcion.value.trim()) throw new Error('Completá el título y la descripción.')
       await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas,
@@ -270,6 +316,7 @@
       if (clip) await window.cargar?.()
       P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
     }, 'Confirmar publicación')
+    modal.classList.add('pub-review-dialog')
     if (tieneMedia) vista(item, preview, () => { vistaLista = false }).then(lista => { vistaLista = lista })
   }
   const trabajoActivo = t => ['pendiente', 'ejecutando'].includes(t.estado)
@@ -295,9 +342,9 @@
       const listo = Boolean(s.video_path || s.imagenes?.length)
       const trabajo = P.datos.trabajos.find(t => t.sugerencia_id === s.id && t.tipo === 'media')
       const ocupado = trabajo && trabajoActivo(trabajo)
-      const material = el('div', { class: 'card', style: 'padding:12px;margin:10px 0' }, el('h4', {}, 'Material generado'),
-        el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length + ' imágenes') + ' · versión privada para revisar'
-          : trabajo ? '' : 'Todavía no hay material preparado.'))
+      const material = el('section', { class: 'pub-suggestion-material', 'aria-label': 'Material generado' }, el('h4', {}, 'Material generado'),
+        el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length === 1 ? '1 imagen' : s.imagenes.length + ' imágenes') + ' · vista privada'
+          : ocupado ? 'En preparación' : 'Todavía no hay material preparado.'))
       if (trabajo && trabajo.estado !== 'cancelado') material.append(progresoTrabajo(trabajo, 'Preparación de material'))
       if (trabajo?.estado === 'error' && trabajo.error) material.append(el('details', {}, el('summary', {}, 'Ver detalle'), el('p', { class: 'small' }, trabajo.error)))
       if (listo) {
@@ -312,19 +359,28 @@
         })
         material.append(detalle)
       }
-      box.append(el('article', { style: 'padding:20px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, s.titulo), el('p', { style: 'white-space:pre-wrap' }, s.descripcion),
-        el('p', { class: 'small' }, (s.hashtags || []).join(' ')), el('p', { class: 'small muted' }, (s.plataformas || []).map(p => redes[p]).join(' · ')),
-        s.fuente_url && el('a', { href: s.fuente_url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente'),
-        el('p', { class: 'small muted' }, s.motivo), s.recorte && el('p', { class: 'small' }, 'Recorte: ' + s.recorte), s.instrucciones_media && el('p', { class: 'small' }, s.instrucciones_media), material,
-        el('div', { class: 'row', style: 'margin-top:12px' }, boton('Editar y preparar', () => editarContenido(s)),
+      const notas = [s.motivo, s.recorte && 'Recorte: ' + s.recorte, s.instrucciones_media].filter(Boolean)
+      box.append(el('article', { class: 'pub-suggestion' },
+        el('div', { class: 'pub-suggestion-content' },
+          el('div', { class: 'pub-suggestion-copy' }, el('h3', {}, s.titulo),
+          el('p', { style: 'white-space:pre-wrap' }, s.descripcion),
+          s.hashtags?.length && el('p', { class: 'small muted' }, s.hashtags.join(' ')),
+          el('div', { class: 'row pub-suggestion-meta' },
+            el('span', { class: 'small muted' }, (s.plataformas || []).map(p => redes[p]).join(' · ')),
+            s.fuente_url && el('a', { class: 'small', href: s.fuente_url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente')),
+          el('div', { class: 'row' }, botonCopiarCopy(s), !s.video_path && s.imagenes?.length && botonDescargarImagenes(s)),
+          notas.length > 0 && el('details', { class: 'pub-suggestion-notes' }, el('summary', {}, 'Notas de producción'),
+            notas.map(nota => el('p', { class: 'small' }, nota)))), material),
+        el('div', { class: 'row pub-suggestion-actions' },
+          el('div', { class: 'row' }, boton('Editar y preparar', () => editarContenido(s)),
           !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
           boton('Descartar sugerencia', () => dialogo('Descartar sugerencia', el('p', {}, s.fuente_id
             ? 'Se quita de Sugerencias y podés volver a generar desde el mismo enlace.'
             : 'Se quita de Sugerencias.'), async () => {
             await post({ op: 'sugerencia_descartar', id: s.id, version: s._version })
             toast('Sugerencia descartada')
-          }, 'Descartar'), 'tiny ghost danger'),
-          !ocupado && (listo || !s.fuente_url) && boton('Publicar', () => publicarSugerencia(s), 'tiny primary'))))
+          }, 'Descartar'), 'tiny ghost danger')),
+          !ocupado && (listo || !s.fuente_url) && boton('Revisar y publicar', () => publicarSugerencia(s), 'tiny primary'))))
     }
     if (!P.datos.sugerencias.some(s => s.estado === 'pendiente')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
   }
@@ -349,18 +405,23 @@
       .sort((a, b) => (a.proximo_el || a.creado || Infinity) - (b.proximo_el || b.creado || Infinity))
     for (const p of lista) {
       const acciones = el('div', { class: 'row' })
+      const youtubeFotos = p.estado === 'manual' && p.plataforma === 'youtube' && !p.video_path && p.imagenes?.length
+      const tiktokFotos = p.estado === 'borrador' && p.plataforma === 'tiktok' && !p.video_path && p.imagenes?.length
       const confirmar = () => {
         const url = entrada('', { type: 'url', required: true })
         dialogo('Confirmar publicación manual', campo('Link público de la publicación', url), () => post({ op: 'confirmar_manual', id: p.id, version: p._version, url: url.value }), 'Confirmar')
       }
-      acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
+      acciones.append(botonCopiarCopy(p))
+      if (!p.video_path && p.imagenes?.length) acciones.append(botonDescargarImagenes(p))
       if (['pendiente', 'procesando'].includes(p.estado) && !p.remoto_id) acciones.append(
         boton('Priorizar', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'ya' }); toast('Movido al frente'); await cargar(true) }),
         boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
       if (p.estado === 'error') acciones.append(boton('Reintentar', async () => { await post({ op: 'cola_reintentar', id: p.id, version: p._version }); await cargar(true) }, 'tiny primary'))
       if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
       if (p.remoto_id && ['procesando', 'enviando'].includes(p.estado)) acciones.append(boton('Detener reintentos', async () => { await post({ op: 'cola_detener', id: p.id, version: p._version }); await cargar(true) }))
-      if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
+      if (youtubeFotos) {
+        acciones.append(boton('Ya lo publiqué', confirmar))
+      } else if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
         if (!p.video_path && !p.imagenes?.length) return toast('Esta publicación no tiene video ni imágenes.')
         const { urls } = await post({ op: 'vista_media', video_path: p.video_path, imagenes: p.imagenes || [] })
         urls.forEach(u => window.open(u, '_blank', 'noopener'))
@@ -368,8 +429,8 @@
       if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', confirmar))
       const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
       box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
-        el('p', {}, (etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
-        p.estado === 'manual' && el('p', { class: 'small muted' }, 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
+        el('p', {}, (youtubeFotos ? 'Pendiente manual' : tiktokFotos ? 'En bandeja de TikTok' : etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
+        p.estado === 'manual' && el('p', { class: 'small muted' }, youtubeFotos ? 'Bajá las placas en orden, copiá el texto y subilo desde + → Publicación en YouTube. Después pegá el enlace.' : 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
         el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('details', {}, el('summary', { class: 'small', style: 'color:var(--bad)' }, p.estado === 'revisar' ? 'Ver motivo y qué revisar' : 'Ver motivo del error'), el('p', { class: 'small' }, p.error)),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))
       if (p.estado === 'manual') vista(p, preview)

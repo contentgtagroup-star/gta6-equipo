@@ -155,8 +155,12 @@ export async function estadosConexiones () {
     // Instagram no tiene conexión propia: solo aparece conectada si la página de Meta trajo una cuenta de negocio.
     const d = id === 'instagram' ? (cache.meta?.ig_id ? cache.meta : {}) : (cache[r.proveedor] || {})
     const vencido = d.expira_el && d.expira_el <= Date.now()
+    let permisos = d.permisos || []
+    if (id === 'tiktok' && d.sobre) {
+      try { permisos = String(descifrarConexion('tiktok', d.sobre).scope || '').split(/[\s,]+/).filter(Boolean) } catch {}
+    }
     return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '',
-      metodo: d.origen || (d.sobre ? 'oauth' : undefined), permisos: d.permisos || [], faltan_permisos: d.faltan_permisos || [], falta_config: d.falta_config || '',
+      metodo: d.origen || (d.sobre ? 'oauth' : undefined), permisos, faltan_permisos: d.faltan_permisos || [], falta_config: d.falta_config || '',
       ...(id === 'tiktok' ? { entorno: process.env.TIKTOK_ENV === 'sandbox' ? 'sandbox' : 'production' } : {}) }
   })
 }

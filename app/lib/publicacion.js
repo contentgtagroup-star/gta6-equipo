@@ -9,6 +9,17 @@ export const REDES = {
 }
 export const TERMINALES = new Set(['publicado', 'borrador', 'cancelado'])
 export function errorPublicacion (mensaje, status = 400) { return Object.assign(new Error(mensaje), { status }) }
+export function esPublicacionFotos (item) { return !item.video_path && !!item.imagenes?.length }
+export function estadoInicialEnvio (plataforma, item) {
+  return REDES[plataforma]?.modo === 'manual' || (plataforma === 'youtube' && esPublicacionFotos(item)) ? 'manual' : 'pendiente'
+}
+export function prefijoFotosTikTok () {
+  try {
+    const u = new URL(process.env.TIKTOK_PHOTO_URL_PREFIX || '')
+    if (u.protocol === 'https:' && !u.username && !u.password && !u.search && !u.hash) return u.href.replace(/\/?$/, '/')
+  } catch {}
+  return ''
+}
 export function redesValidas (lista) {
   if (!Array.isArray(lista) || !lista.length || lista.some(x => !REDES[x])) throw errorPublicacion('Elegí al menos una red válida.')
   return [...new Set(lista)]

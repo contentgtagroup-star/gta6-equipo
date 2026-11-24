@@ -10,7 +10,9 @@ export default async function handler (req, res) {
   // las compus con la versión vieja todavía piden este archivo al actualizarse: se manda vacío y la versión nueva lo borra
   if (nombre === 'consumo_statusline.py') { res.setHeader('Content-Type', 'text/plain'); return res.status(200).send('# ya no se usa\n') }
   if (!PERMITIDAS[nombre]) return responder(res, 404, { error: 'No existe' })
-  const buf = await readFile(path.join(process.cwd(), 'herramientas', nombre))
+  let buf
+  try { buf = await readFile(path.join(process.cwd(), 'herramientas', nombre)) }
+  catch (e) { return responder(res, 404, { error: 'La herramienta no está disponible en el servidor.' }) }
   res.setHeader('Content-Type', PERMITIDAS[nombre])
   res.setHeader('Cache-Control', 'no-store')
   res.status(200).send(buf)

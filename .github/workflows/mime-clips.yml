@@ -31,6 +31,7 @@ jobs:
             -H "Authorization: Bearer $VERCEL_TOKEN" > "$RUNNER_TEMP/vars.json"
           echo "Variables visibles: $(jq -r '(.envs // .) | map(.key) | join(", ")' "$RUNNER_TEMP/vars.json")"
           echo "Ocultas de producción: $(jq -r '.hiddenProductionEnvCount // 0' "$RUNNER_TEMP/vars.json")"
+          jq -r '(.envs // .)[] | select(.key == "SUPABASE_URL" or .key == "SUPABASE_SERVICE_KEY") | "\(.key) target=\(.target) type=\(.type) decrypted=\(.decrypted) tieneValor=\((.value // "") | length > 0)"' "$RUNNER_TEMP/vars.json"
           id_de() {
             jq -r --arg key "$1" '
               def es_prod: if (.target | type) == "array" then (.target | index("production") != null) else .target == "production" end;

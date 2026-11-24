@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: arriba "mi turno" y el reparto del día; el centro es la biblioteca de clips (grilla de videos verticales con filtros); abajo radar, cómo funciona y preparar compu */
+/* Layout: arriba "mi turno" y el reparto del día; una barra lateral elige la sección. Biblioteca y Publicaciones cargan solo al entrar, para no molestar al crear clips. */
 :root{
   --bg:#120d1a; --surface:#1b1426; --surface2:#241a33; --line:#3a2c4f;
   --fg:#f3ecf8; --muted:#b6a7c7; --dim:#8a7a9c;
@@ -31,6 +31,14 @@
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15.5px;line-height:1.5;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .wrap{max-width:1240px;margin:0 auto;padding-block:28px 72px}
+.app{display:grid;grid-template-columns:196px minmax(0,1fr);gap:22px;align-items:start}
+.sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
+.sidebar b{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);padding:6px 10px 4px}
+.sidebar button{text-align:left;background:transparent;border-color:transparent;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sidebar button:hover{background:var(--surface2)}
+.sidebar button[aria-current="page"]{background:var(--surface2);border-color:var(--pink)}
+.sidebar .num{font-family:var(--mono);font-size:11px;color:var(--sun)}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}.sidebar{position:static;flex-direction:row;overflow-x:auto;gap:6px}.sidebar b{display:none}.sidebar button{white-space:nowrap}}
 h1,h2,h3{font-family:var(--display);line-height:1.15;margin:0;text-wrap:balance}
 h1{font-size:clamp(28px,4.4vw,40px);font-weight:800}
 h1 span{color:var(--pink)}
@@ -139,7 +147,17 @@ html{-webkit-text-size-adjust:100%}
     </div>
   </div>
 
-  <section id="seccionCrearLink">
+  <div class="app">
+  <nav class="sidebar" id="sidebar" aria-label="Secciones">
+    <b>Secciones</b>
+    <button type="button" data-ir="crear" aria-current="page">Crear clips</button>
+    <button type="button" data-ir="biblioteca">Biblioteca <span class="num" id="navLibCount"></span></button>
+    <button type="button" data-ir="publicaciones">Publicaciones</button>
+    <button type="button" data-ir="links">Links del equipo</button>
+    <button type="button" data-ir="ayuda">Ayuda y compu</button>
+  </nav>
+  <main class="contenido">
+  <section id="seccionCrearLink" data-seccion="crear">
     <h2>Pegá un link</h2>
     <p class="small dim" style="margin:4px 0 0">ALIMENTAR lo guarda como referencia para la IA. CREAR CLIP hace un short con ese material específico en tu compu (YouTube, Twitch o Kick).</p>
     <form id="clipDirectoForm" class="row" style="margin:10px 0 0;gap:8px">
@@ -151,7 +169,7 @@ html{-webkit-text-size-adjust:100%}
     <div class="small" id="clipDirectoFeedback" style="margin-top:6px" aria-live="polite"></div>
   </section>
 
-  <section>
+  <section data-seccion="crear">
     <details class="guia" id="pasosBox" open>
       <summary>Paso a paso</summary>
       <div class="pasos">
@@ -177,7 +195,7 @@ html{-webkit-text-size-adjust:100%}
     </details>
   </section>
 
-  <section>
+  <section data-seccion="crear">
     <div class="turno">
       <div>
         <h2>Crear clips</h2>
@@ -200,19 +218,19 @@ html{-webkit-text-size-adjust:100%}
     </div>
   </section>
 
-  <section>
+  <section id="biblioteca" data-seccion="biblioteca" hidden>
     <header><h2>Biblioteca de clips</h2><div class="filtros" id="filtros" role="group" aria-label="Filtrar"></div></header>
     <div class="lib" id="lib"></div>
   </section>
 
-  <section id="publicaciones">
+  <section id="publicaciones" data-seccion="publicaciones" hidden>
     <header><h2>Publicaciones</h2><button class="tiny" id="pubActualizar">Actualizar</button></header>
     <div class="row" id="pubTabs" role="group" aria-label="Sección de publicaciones" style="margin:14px 0;flex-wrap:wrap"></div>
     <p class="small" id="pubEstado" role="status" aria-live="polite"></p>
     <div id="pubContenido"></div>
   </section>
 
-  <section>
+  <section data-seccion="ayuda">
     <details class="guia" id="guiaBox">
       <summary>Cómo funciona</summary>
       <p><b>La idea:</b> los clips se hacen solos y caen en la biblioteca. Cada uno pone su parte de trabajo corriendo su turno con su propio Claude Code. Nosotros elegimos qué sale y lo publicamos.</p>
@@ -226,17 +244,19 @@ html{-webkit-text-size-adjust:100%}
     </details>
   </section>
 
-  <section>
+  <section data-seccion="links">
     <details id="radarBox">
       <summary>Links del equipo</summary>
       <div id="radar"></div>
     </details>
   </section>
 
-  <section>
+  <section data-seccion="ayuda">
     <header><h2>Preparar mi compu</h2><p>Una sola vez. Solo hace falta Python, yt-dlp y ffmpeg.</p></header>
     <div id="setup"></div>
   </section>
+  </main>
+  </div>
 </div>
 <div id="modalRoot"></div>
 
@@ -260,7 +280,7 @@ const FILTROS = [
   {k:'stock', t:'Stock', est:null},
 ];
 const hoy = new Date();
-document.getElementById('hoyTxt').textContent = 'Biblioteca de clips · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+document.getElementById('hoyTxt').textContent = 'Clips y publicaciones del equipo · ' + hoy.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
 
 const S = {versionActual:51, categoria:'', categorias:[], clave:null, yo:'', clips:[], feedback:[], escucha:{}, radar:null, turnos:[], pidiendo:false, cambiandoPausa:false, filtro:'nuevos', abiertos:{}, offset:0};
 const $ = id => document.getElementById(id);
@@ -542,6 +562,8 @@ function lista(){
 }
 function renderFiltros(){
   const box = $('filtros'); box.replaceChildren();
+  const badge = $('navLibCount');
+  if(badge){ const n = S.clips.filter(c=>FILTROS[0].est.includes(c.estado)).length; badge.textContent = n ? String(n) : ''; }
   for(const F of FILTROS){
     const n = F.est ? S.clips.filter(c=>F.est.includes(c.estado)).length : S.clips.filter(c=>c.stock).length;
     box.append(el('button', {class:'tiny', 'aria-pressed': S.filtro===F.k ? 'true':'false', onclick:()=>{ S.filtro=F.k; render(); }}, `${F.t} (${n})`));
@@ -589,7 +611,7 @@ function tarjeta(c){
   if(c.estado==='aprobado'){
     acc.append(el('button', {class:'tiny primary', onclick:()=>{ S.abiertos[c.id]='pub'; render(); }}, 'Título y descripción'),
       el('button', {class:'tiny', onclick:()=>bajar(c)}, 'Bajar'),
-      c.publicacion_cola ? el('button', {class:'tiny', onclick:()=>{ location.hash='publicaciones'; document.getElementById('publicaciones').scrollIntoView({behavior:'smooth'}); }}, 'Ver cola de publicación') : el('button', {class:'tiny', onclick:()=>upd(c,{estado:'publicado', publicado_el:ahora(), publicado_por:S.yo},'Marcado como publicado')}, 'Ya lo publiqué'));
+      c.publicacion_cola ? el('button', {class:'tiny', onclick:()=>irA('publicaciones')}, 'Ver cola de publicación') : el('button', {class:'tiny', onclick:()=>upd(c,{estado:'publicado', publicado_el:ahora(), publicado_por:S.yo},'Marcado como publicado')}, 'Ya lo publiqué'));
   }
   if(c.estado==='publicado') acc.append(el('button', {class:'tiny', disabled: !c.video_path && !c.stock, 'aria-pressed':c.stock?'true':'false', onclick:()=>upd(c,{stock:!c.stock})}, c.stock ? 'En stock' : 'Guardar en stock'));
   if(['listo','aprobado','corregir'].includes(c.estado)) acc.append(el('button', {class:'tiny ghost danger', onclick:()=>descartar(c)}, 'Descartar'));
@@ -759,7 +781,27 @@ function renderSetup(){
   box.append(el('p', {class:'small muted', style:'margin:0 0 10px'}, 'Elegí tu sistema: se abre el prompt para copiar y pegar en Claude Code.'),
     el('div', {class:'row'}, ['Mac','Windows','Linux'].map(so => el('button', {onclick:()=>{ if(!S.clave){ toast('Primero entrá con tu clave'); return; } abrirPrompt('Preparar ' + so, promptSetup(so)); }}, so))));
 }
-function render(){ renderPeople(); renderTurno(); renderFiltros(); renderLib(); renderRadar(); }
+/* ---------- secciones: lo pesado se dibuja solo cuando entrás ---------- */
+const SECCIONES = ['crear','biblioteca','publicaciones','links','ayuda'];
+function estoyEn(k){ return S.seccion === k; }
+function irA(k, fijar = true){
+  if(!SECCIONES.includes(k)) k = 'crear';
+  S.seccion = k;
+  document.querySelectorAll('[data-seccion]').forEach(sec => { sec.hidden = sec.dataset.seccion !== k; });
+  document.querySelectorAll('#sidebar button').forEach(b => b.setAttribute('aria-current', b.dataset.ir === k ? 'page' : 'false'));
+  ls('gta6_seccion', k);
+  if(fijar && location.hash.slice(1) !== k) history.replaceState(null, '', '#' + k);
+  if(k === 'biblioteca') renderLib();
+  if(k === 'links') renderRadar();
+  if(k === 'publicaciones') window.publicacionesAlEntrar?.();
+  window.scrollTo({top:0, behavior:fijar ? 'smooth' : 'auto'});
+}
+window.estoyEn = estoyEn;
+function render(){
+  renderPeople(); renderTurno(); renderFiltros();
+  if(S.seccion === 'biblioteca') renderLib();
+  if(S.seccion === 'links') renderRadar();
+}
 
 $('btnTurno').addEventListener('click', () => { if(S.yo && !S.pidiendo) elegirFuente(); });
 $('btnActualizar').addEventListener('click', () => { if(S.yo) abrirPrompt('Actualizar mi sistema', promptActualizar()); });
@@ -769,6 +811,9 @@ for(const [id, key] of [['pasosBox','gta6_pasos'],['guiaBox','gta6_guia']]){
 }
 renderSetup();
 renderTurno();
+$('sidebar').addEventListener('click', e => { const b = e.target.closest('button[data-ir]'); if(b) irA(b.dataset.ir); });
+window.addEventListener('hashchange', () => irA(location.hash.slice(1), false));
+irA(location.hash.slice(1) || ls('gta6_seccion') || 'crear', false);
 S.clave = ls('gta6_clave');
 if(!S.clave) $('login').hidden = false; else cargar();
 // Con pedidos en curso se refresca seguido; si no, más espaciado para no gastar cuota del backend

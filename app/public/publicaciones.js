@@ -313,6 +313,9 @@
     }, 'Aprobar y enviar a cola')
   }
   $('pubActualizar').addEventListener('click', () => cargar(true))
-  render(); cargar()
-  setInterval(() => { if (!document.hidden) cargar() }, 30000)
+  // Publicaciones se consulta solo cuando el panel abre esa sección: crear clips no debe esperar a la base.
+  const enSeccion = () => !window.estoyEn || window.estoyEn('publicaciones')
+  window.publicacionesAlEntrar = () => cargar()
+  render(); if (enSeccion()) cargar()
+  setInterval(() => { if (!document.hidden && enSeccion()) cargar() }, 30000)
 })()

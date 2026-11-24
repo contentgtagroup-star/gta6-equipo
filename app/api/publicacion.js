@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { db, exigir, responder, BUCKET } from '../lib/comun.js'
 import { REDES, TERMINALES, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, errorPublicacion } from '../lib/publicacion.js'
-import { leerPub, listarPub, guardarPub, eventoPub, encolarPub as encolar } from '../lib/publicacion_store.js'
+import { leerPub, listarPub, listarActividad, guardarPub, eventoPub, encolarPub as encolar } from '../lib/publicacion_store.js'
 import { estadosConexiones } from '../lib/conexiones.js'
 import { procesarPublicaciones, actualizarClipPublicado } from '../lib/publicacion_worker.js'
 
@@ -40,11 +40,13 @@ export default async function handler (req, res) {
   const yo = exigir(req, res); if (!yo) return
   try {
     if (req.method === 'GET') {
-      const cols = ['fuentes', 'sugerencias', 'cola', 'trabajos', 'eventos']
-      const filas = await Promise.all(cols.map(listar => listarPub(listar)))
+      const ancla = Date.now()
+      const cols = ['fuentes', 'sugerencias', 'cola', 'trabajos']
+      const [filas, actividad] = await Promise.all([Promise.all(cols.map(listar => listarPub(listar))), listarActividad({ ancla })])
       const out = Object.fromEntries(cols.map((col, i) => [col, filas[i].map(plano)]))
       out.trabajos = out.trabajos.map(({ prompt, run_id, ...d }) => d)
-      out.eventos = out.eventos.sort((a, b) => b.el - a.el).slice(0, 100)
+      out.eventos = actividad.filas.map(plano)
+      out.actividad = { ancla, siguiente: actividad.siguiente }
       out.fuentes = out.fuentes.filter(f => !f.eliminada)
       out.conexiones = await estadosConexiones()
       out.automatico_activo = process.env.PUBLICACION_ACTIVA === '1'
@@ -54,6 +56,8 @@ export default async function handler (req, res) {
       // Cuando Cuervo publique el helper compartido (responderConETag/etagDe en comun.js) se reemplaza esto.
       const firmaEstable = JSON.stringify({
         docs: cols.map((c, i) => [c, filas[i].map(r => r.id + '@' + r.version)]),
+        eventos: actividad.filas.map(r => r.id + '@' + r.version),
+        siguienteEvento: actividad.siguiente,
         conexiones: out.conexiones,
         automatico: out.automatico_activo
       })
@@ -67,7 +71,15 @@ export default async function handler (req, res) {
     const b = req.body || {}
     if (JSON.stringify(b).length > 100000) throw errorPublicacion('El pedido es demasiado grande.', 413)
     let salida = { ok: true }
-    if (b.op === 'subir_media') {
+    if (b.op === 'actividad_pagina') {
+      const ancla = Number(b.ancla), cursor = b.cursor
+      if (!Number.isSafeInteger(ancla) || ancla <= 0 || ancla > Date.now() || (cursor &&
+        (!Number.isSafeInteger(cursor.el) || cursor.el <= 0 || !/^[a-zA-Z0-9_-]{1,180}$/.test(cursor.id || '')))) {
+        throw errorPublicacion('Actualizá Actividad y volvé a intentar.')
+      }
+      const pagina = await listarActividad({ ancla, historial: b.historial === true, cursor })
+      salida = { eventos: pagina.filas.map(plano), siguiente: pagina.siguiente }
+    } else if (b.op === 'subir_media') {
       const extensiones = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4' }
       if (!extensiones[b.tipo] || !Number.isInteger(b.peso) || b.peso < 1 || b.peso > 14 * 1024 * 1024) throw errorPublicacion('Usá una imagen PNG, JPG o WebP, o un MP4, de hasta 14 MB.')
       const path = yo + '/pub-' + randomUUID() + '.' + extensiones[b.tipo]

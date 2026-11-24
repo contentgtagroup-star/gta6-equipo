@@ -23,6 +23,22 @@ export async function listarPub (col, sb = db()) {
     if ((data || []).length < 1000) return filas
   }
 }
+export const ACTIVIDAD_VENTANA = 48 * 60 * 60 * 1000
+export const ACTIVIDAD_PAGINA = 40
+
+export async function listarActividad ({ ancla, historial = false, cursor } = {}) {
+  const fecha = 'datos->>el', corte = ancla - ACTIVIDAD_VENTANA
+  let consulta = db().from(TABLA).select('id,datos,version').eq('coleccion', 'eventos')
+  consulta = historial ? consulta.lt(fecha, String(corte)) : consulta.gte(fecha, String(corte)).lte(fecha, String(ancla))
+  if (cursor) consulta = consulta.or(fecha + '.lt.' + cursor.el + ',and(' + fecha + '.eq.' + cursor.el + ',id.lt.' + cursor.id + ')')
+  const { data, error } = await consulta.order(fecha, { ascending: false }).order('id', { ascending: false }).limit(ACTIVIDAD_PAGINA + 1)
+  if (error) throw falloLectura(error)
+  const filas = (data || []).slice(0, ACTIVIDAD_PAGINA)
+  const ultimo = filas.at(-1)
+  const siguiente = data?.length > ACTIVIDAD_PAGINA ? { el: ultimo.datos.el, id: ultimo.id } : null
+  return { filas, siguiente }
+}
+
 export async function guardarPub (col, id, datos, version = 0, sb = db()) {
   const { data, error } = version
     ? await sb.from(TABLA).update({ datos, version: version + 1, actualizado: new Date().toISOString() }).eq('coleccion', col).eq('id', id).eq('version', version).select('version')

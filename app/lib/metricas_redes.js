@@ -10,13 +10,17 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
   const t = await tokenConexion(REDES[red].proveedor), v = ventanaMetricas(ventana)
   const hasta = Date.now(), desde = ventana === 'historico' ? Date.UTC(2020, 0, 1) : v.desde
   if (red === 'youtube') {
+    const errorAcceso = e => {
+      if (e.status === 424) throw errorPublicacion('YouTube Analytics rechazó el acceso. Verificá que la API esté habilitada y que el token del canal tenga yt-analytics.readonly.', 424)
+      throw e
+    }
     const hastaDia = new Date(hasta); hastaDia.setUTCHours(0, 0, 0, 0)
     const dur = ventana === 'historico' ? hastaDia.getTime() - desde : hasta - desde
     const rango = { desde: Math.max(Date.UTC(2020, 0, 1), hastaDia.getTime() - dur), hasta: hastaDia.getTime() - 1 }
     async function reporte (a, b, detalle) {
       const q = { ids: 'channel==MINE', startDate: fecha(a), endDate: fecha(b), metrics: Object.keys(mapaYT).join(',') }
       if (detalle) Object.assign(q, { dimensions: 'video', sort: '-views', maxResults: '25' })
-      const d = await jsonRemoto(params('https://youtubeanalytics.googleapis.com/v2/reports', q), auth(t))
+      const d = await jsonRemoto(params('https://youtubeanalytics.googleapis.com/v2/reports', q), auth(t)).catch(errorAcceso)
       return (d.rows || []).map(f => filaYouTube(d, f))
     }
     const [cuenta, posts, anterior, canal] = await Promise.all([
@@ -30,21 +34,28 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
   }
   if (red === 'x') {
     if (!t.organization_id) throw errorPublicacion('Configurá la organización de Buffer para leer sus métricas.', 424)
+    const inicio = Math.max(desde, hasta - 364 * 86400000)
+    const nombres = { postcount: 'publicaciones_buffer', reactions: 'reacciones', impressions: 'impresiones', reach: 'alcance', likes: 'likes', comments: 'comentarios', shares: 'compartidos', saves: 'guardados', clicks: 'clics', views: 'vistas' }
+    const mapear = metricas => Object.fromEntries((metricas || []).filter(m => nombres[m.type.toLowerCase()] && m.value != null && Number.isFinite(Number(m.value))).map(m => [nombres[m.type.toLowerCase()], Number(m.value)]))
     async function agregado (a, b) {
       const query = `query { aggregatedPostMetrics(input: { organizationId: ${JSON.stringify(t.organization_id)}, channelIds: [${JSON.stringify(t.channel_id)}], startDateTime: ${JSON.stringify(new Date(a).toISOString())}, endDateTime: ${JSON.stringify(new Date(b).toISOString())} }) { metrics { type value unit } metricsUpdatedAt } }`
       const d = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { ...auth(t).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) })
-      const nombres = { impressions: 'impresiones', reach: 'alcance', likes: 'likes', comments: 'comentarios', shares: 'compartidos', saves: 'guardados', clicks: 'clics', views: 'vistas' }
-      return Object.fromEntries((d.data?.aggregatedPostMetrics?.metrics || []).filter(m => nombres[m.type.toLowerCase()]).map(m => [nombres[m.type.toLowerCase()], Number(m.value)]))
+      return mapear(d.data?.aggregatedPostMetrics?.metrics)
     }
-    const ids = publicaciones.filter(p => p.plataforma === 'x' && p.remoto_id && p.estado === 'publicado' && p.publicado_el >= desde).slice(0, 10)
+    let detalleParcial = false
+    const ids = publicaciones.filter(p => p.plataforma === 'x' && p.remoto_id && p.estado === 'publicado' && p.publicado_el >= inicio).sort((a, b) => b.publicado_el - a.publicado_el).slice(0, 10)
     let posts = []
     if (ids.length) {
-      const query = 'query {' + ids.map((p, i) => ' p' + i + ': post(id: ' + JSON.stringify(p.remoto_id) + ') { id externalLink metrics { type value unit } }').join(' ') + ' }'
-      const d = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { ...auth(t).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) })
-      const nombres = { impressions: 'impresiones', reach: 'alcance', likes: 'likes', comments: 'comentarios', shares: 'compartidos', saves: 'guardados', clicks: 'clics', views: 'vistas' }
-      posts = ids.map((p, i) => ({ id: p.remoto_id, titulo: p.titulo, enlace: d.data?.['p' + i]?.externalLink, ...Object.fromEntries((d.data?.['p' + i]?.metrics || []).filter(m => nombres[m.type.toLowerCase()]).map(m => [nombres[m.type.toLowerCase()], Number(m.value)])) }))
+      const query = 'query {' + ids.map((p, i) => ' p' + i + ': post(input: { id: ' + JSON.stringify(p.remoto_id) + ' }) { id externalLink metrics { type value unit } }').join(' ') + ' }'
+      try {
+        const d = await jsonRemoto('https://api.buffer.com', { method: 'POST', headers: { ...auth(t).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) })
+        posts = ids.map((p, i) => ({ id: p.remoto_id, titulo: p.titulo, enlace: d.data?.['p' + i]?.externalLink || p.enlace, ...mapear(d.data?.['p' + i]?.metrics) }))
+      } catch (e) {
+        if (!e.status) throw e
+        detalleParcial = true
+      }
     }
-    return { actual: await agregado(desde, hasta), anterior: ventana === 'historico' ? null : await agregado(v.anterior_desde, v.anterior_hasta), posts, rango: { desde, hasta }, nota: 'Buffer sincroniza aproximadamente una vez por día. El detalle incluye hasta 10 publicaciones registradas por esta app; sus contadores son acumulados.' }
+    return { actual: await agregado(inicio, hasta), anterior: ventana === 'historico' ? null : await agregado(v.anterior_desde, v.anterior_hasta), posts, rango: { desde: inicio, hasta }, nota: 'Buffer sincroniza aproximadamente una vez por día. El detalle incluye hasta 10 publicaciones registradas por esta app; sus contadores son acumulados.' + (detalleParcial ? ' Buffer no devolvió el detalle por publicación en esta sincronización.' : '') }
   }
   if (red === 'tiktok') {
     const [u, videos] = await Promise.all([
@@ -65,8 +76,13 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
       try {
         const q = { metric: m, period: 'day', since: Math.floor(a / 1000), until: Math.floor(b / 1000) }
         if (red === 'instagram') q.metric_type = 'total_value'
+        if (red === 'facebook' && nombre === 'alcance') {
+          if (ventana === 'historico') { noDisponibles.push(nombre); return }
+          q.period = { '24h': 'day', '7d': 'week', '28d': 'days_28' }[ventana]
+        }
         const d = await jsonRemoto(params(GRAPH + '/' + id + '/insights', q), auth(t)), valor = d.data?.[0]
         if (valor?.total_value?.value !== undefined) out[nombre] = valor.total_value.value
+        else if (red === 'facebook' && nombre === 'alcance' && typeof valor?.values?.at(-1)?.value === 'number') out[nombre] = valor.values.at(-1).value
         else if (valor?.values?.length && !(nombre === 'alcance' && valor.values.length > 1)) out[nombre] = valor.values.reduce((s, x) => s + (typeof x.value === 'number' ? x.value : 0), 0)
         else noDisponibles.push(nombre)
       } catch (e) { if (e.remoto === 401 || e.remoto === 403) throw e; noDisponibles.push(nombre) }

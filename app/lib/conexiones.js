@@ -154,7 +154,9 @@ export async function estadosConexiones () {
   return Object.entries(REDES).map(([id, r]) => {
     // Instagram no tiene conexión propia: solo aparece conectada si la página de Meta trajo una cuenta de negocio.
     const d = id === 'instagram' ? (cache.meta?.ig_id ? cache.meta : {}) : (cache[r.proveedor] || {})
-    const vencido = d.expira_el && d.expira_el <= Date.now()
+    // YouTube con refresh token se renueva solo al publicar: un access token de 1 h vencido no es una desconexión real.
+    const renovable = r.proveedor === 'google' && usarYoutubeTokens() && !!d.sobre
+    const vencido = !renovable && d.expira_el && d.expira_el <= Date.now()
     return { id, ...r, estado: vencido ? 'token_vencido' : d.estado || 'sin_conectar', sincronizada_el: d.sincronizada_el || null, cuenta_conectada: d.cuenta || '',
       metodo: d.origen || (d.sobre ? 'oauth' : undefined), permisos: d.permisos || [], faltan_permisos: d.faltan_permisos || [], falta_config: d.falta_config || '',
       ...(id === 'tiktok' ? { entorno: process.env.TIKTOK_ENV === 'sandbox' ? 'sandbox' : 'production' } : {}) }

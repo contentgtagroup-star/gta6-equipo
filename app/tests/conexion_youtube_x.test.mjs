@@ -104,6 +104,14 @@ test('el acceso vencido de YouTube se renueva con las variables de Vercel', asyn
   assert.equal(inspeccion.body.get('refresh_token'), refresh)
   assert.doesNotMatch(JSON.stringify(filas), /yt-refresh-privado/)
 })
+test('YouTube con el access token de 1 h vencido sigue "conectada" porque se renueva solo', async () => {
+  reset(); await conectar('google')
+  const registro = guardada('google')
+  registro.datos.expira_el = 1 // el access token de 1 h venció, pero el refresh token sigue
+  const yt = (await estadosConexiones()).find(c => c.id === 'youtube')
+  assert.equal(yt.estado, 'conectada')
+  assert.equal(yt.metodo, 'refresh_token')
+})
 test('X conecta con Buffer y sin la clave dice qué variable falta', async () => {
   reset()
   assert.equal((await conectar('buffer')).codigo, 200)

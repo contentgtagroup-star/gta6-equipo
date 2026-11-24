@@ -51,12 +51,16 @@ test('publicaciones exige la clave del equipo antes de leer o escribir', async (
   assert.equal(tablas.publicacion_docs.length, 0)
 })
 test('aprobar crea un envío por red y la repetición no duplica la cola', async () => {
-  reset(); tablas.publicacion_docs.push(sugerencia())
-  const a = await llamada({ op: 'aprobar', id: 's1', version: 1 })
+  reset()
+  tablas.publicacion_docs.push(sugerencia(), { ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1, plataformas: ['instagram'] })).codigo, 422)
+  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['youtube'] })).codigo, 422)
+  assert.equal(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').length, 0)
+  const a = await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['instagram'] })
   assert.equal(a.codigo, 200)
   assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 3 })).codigo, 200)
   const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola')
-  assert.equal(cola.length, 2)
+  assert.deepEqual(cola.map(c => c.datos.plataforma), ['instagram'])
   assert.ok(cola.every(x => x.datos.aprobado_por === 'Eze'))
   assert.equal(remotas.length, 0)
 })
@@ -64,7 +68,7 @@ test('no aprueba material sin revisar ni permite publicar imágenes como Short',
   reset(); const d = sugerencia(); d.datos.media_lista = false; tablas.publicacion_docs.push(d)
   assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1 })).codigo, 422)
   d.datos.media_lista = true; d.datos.video_path = ''; d.datos.imagenes = ['Eze/uno.png']
-  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1 })).codigo, 422)
+  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['youtube'] })).codigo, 422)
   assert.equal(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').length, 0)
 })
 test('una edición vieja no pisa la de otro integrante', async () => {
@@ -138,7 +142,8 @@ test('rastreo automático y publicaciones de otro integrante esperan a su compu'
 test('X aprobado vuelve a la cola automática y el worker intenta publicarlo', async () => {
   reset()
   tablas.publicacion_docs.push({ coleccion: 'sugerencias', id: 'sx', version: 1, datos: { titulo: 'Caja en GTA 6', descripcion: '¿Qué hay adentro?', plataformas: ['x'], hashtags: ['#GTA6'], media: 'reusar', video_path: '', imagenes: [], estado: 'pendiente', media_lista: true } })
-  assert.equal((await llamada({ op: 'aprobar', id: 'sx', version: 1 })).codigo, 200)
+  tablas.publicacion_docs.push({ coleccion: 'conexiones', id: 'buffer', version: 1, datos: { estado: 'conectada' } })
+  assert.equal((await llamada({ op: 'aprobar', id: 'sx', version: 1, revisado: true, plataformas: ['x'] })).codigo, 200)
   const item = tablas.publicacion_docs.find(d => d.coleccion === 'cola')
   assert.equal(item.datos.plataforma, 'x')
   assert.equal(item.datos.estado, 'pendiente')

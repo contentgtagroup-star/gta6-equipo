@@ -86,15 +86,10 @@ def subir(archivo):
     import importlib
     sys.path.insert(0, AQUI)
     equipo = importlib.import_module('equipo')
-    d = equipo.pedir('POST', '/api/publicacion', {
-        'op': 'subir_media', 'tipo': 'image/jpeg', 'peso': os.path.getsize(archivo)})
-    import urllib.request
-    with open(archivo, 'rb') as f:
-        req = urllib.request.Request(d['url'], data=f.read(), method='PUT',
-                                     headers={'Content-Type': 'image/jpeg'})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        r.read()
-    return d['path']
+    try:
+        return equipo.subir_media_publicacion(archivo, 'image/jpeg')
+    except ValueError as e:
+        fail(str(e))
 
 
 def main():
@@ -122,8 +117,8 @@ def main():
         salida = os.path.join(carpeta, f'pub_{i}.jpg')
         modelar(origen, salida, w, h, a.sello == 'si', a.texto if i == 0 else '')
         archivos.append(salida)
-        if a.subir:
-            paths.append(subir(salida))
+    if a.subir:
+        paths = [subir(archivo) for archivo in archivos]
     out = {'ok': True, 'formato': a.formato, 'archivos': archivos, 'n': len(archivos)}
     if a.subir:
         out['imagenes'] = paths

@@ -19,16 +19,6 @@
     const s = el('select', {}, opciones.map(([value, text]) => el('option', { value }, text)))
     s.value = valor; return s
   }
-  function checksRedes(valor = Object.keys(redes)) {
-    const inputs = Object.entries(redes).map(([id, nombre]) => {
-      const input = entrada('', { type: 'checkbox', checked: valor.includes(id), style: 'width:auto' })
-      input.dataset.red = id
-      return campo(nombre + (id === 'x' ? ' · a mano' : ['youtube', 'tiktok'].includes(id) ? ' · borrador' : ' · automático'), input)
-    })
-    const box = el('div', { class: 'row', style: 'flex-wrap:wrap' }, inputs)
-    box.valores = () => [...box.querySelectorAll('input:checked')].map(i => i.dataset.red)
-    return box
-  }
   function dialogo(titulo, contenido, guardar, texto = 'Guardar') {
     const antes = document.activeElement, d = el('dialog', { class: 'card', style: 'width:min(680px,95vw);max-height:90vh;overflow:auto;color:var(--fg);background:var(--surface);border:1px solid var(--line)' })
     const form = el('form', { style: 'display:grid;gap:16px' }, el('h2', {}, titulo), contenido)
@@ -150,14 +140,15 @@
     }
     if (!P.datos.fuentes.length) box.append(el('p', { class: 'small muted' }, 'Todavía no hay fuentes. Agregá una o importá el CSV del equipo.'))
   }
-  async function vista(item, box) {
+  async function vista(item, box, fallo = () => {}) {
     if (!item.video_path && !item.imagenes?.length) return
     try {
       const { urls } = await post({ op: 'vista_media', video_path: item.video_path, imagenes: item.imagenes || [] })
-      if (!box.isConnected) return
-      if (item.video_path) box.append(el('video', { src: urls[0], controls: true, preload: 'none', style: 'max-width:220px;max-height:340px;border-radius:10px' }))
-      else box.append(...urls.map(src => el('img', { src, alt: 'Imagen de la publicación para revisar', loading: 'lazy', style: 'max-width:180px;max-height:250px;object-fit:contain' })))
-    } catch (e) { if (box.isConnected) box.append(el('p', { class: 'small' }, e.message)) }
+      if (!box.isConnected) return false
+      if (item.video_path) box.append(el('video', { src: urls[0], onerror: fallo, controls: true, preload: 'none', style: 'max-width:220px;max-height:340px;border-radius:10px' }))
+      else box.append(...urls.map(src => el('img', { src, onerror: fallo, alt: 'Imagen de la publicación para revisar', loading: 'lazy', style: 'max-width:180px;max-height:250px;object-fit:contain' })))
+      return true
+    } catch (e) { if (box.isConnected) box.append(el('p', { class: 'small' }, e.message)); return false }
   }
   function editarContenido(item, esCola = false) {
     const titulo = entrada(item.titulo || '', { maxlength: 60, required: true })
@@ -166,39 +157,84 @@
     const media = selector([['reusar', 'Reusar'], ['modificar', 'Modificar'], ['regenerar', 'Regenerar']], item.media || 'reusar')
     const recorte = entrada(item.recorte || '', { maxlength: 300 })
     const instrucciones = el('textarea', { rows: 3, maxlength: 2000 }, item.instrucciones_media || '')
-    const destinos = checksRedes(item.plataformas || [item.plataforma])
-    const revisado = entrada('', { type: 'checkbox', checked: !!item.media_lista, style: 'width:auto' })
     let video_path = item.video_path || '', imagenes = [...(item.imagenes || [])]
     const propio = selector([['', 'Sin video de la biblioteca'], ...S.clips.filter(c => c.video_path).map(c => [c.video_path, c.titulo || c.gancho || c.id])], video_path)
     const archivos = entrada('', { type: 'file', accept: 'video/mp4,image/png,image/jpeg,image/webp', multiple: true })
     const carga = el('p', { class: 'small muted' }, '')
-    propio.addEventListener('change', () => { video_path = propio.value; if (video_path) imagenes = []; revisado.checked = false })
+    const previewLocal = el('div', { class: 'row', style: 'flex-wrap:wrap' })
+    let urlsLocales = []
+    function limpiarPreviewLocal() {
+      for (const url of urlsLocales) URL.revokeObjectURL(url)
+      urlsLocales = []
+      previewLocal.replaceChildren()
+    }
+    archivos.addEventListener('change', () => {
+      limpiarPreviewLocal()
+      for (const f of [...archivos.files].slice(0, 10)) {
+        const src = URL.createObjectURL(f)
+        urlsLocales.push(src)
+        previewLocal.append(f.type === 'video/mp4'
+          ? el('video', { src, controls: true, preload: 'none', style: 'max-width:220px' })
+          : el('img', { src, alt: f.name, style: 'max-width:180px;max-height:220px;object-fit:contain' }))
+      }
+    })
+    propio.addEventListener('change', () => { video_path = propio.value; if (video_path) imagenes = [] })
+    let archivosSubidos = null
+    archivos.addEventListener('change', () => { archivosSubidos = null })
     async function subir() {
-      if (!archivos.files.length) return
+      if (!archivos.files.length || archivos.files === archivosSubidos) return
       const paths = []
       const files = [...archivos.files]
       if (files.length > 10 || files.some(f => f.type === 'video/mp4') && files.length > 1) throw new Error('Elegí un video o hasta 10 imágenes.')
       for (const f of files) {
         const d = await post({ op: 'subir_media', tipo: f.type, peso: f.size })
-        const r = await fetch(d.url, { method: 'PUT', headers: { 'Content-Type': f.type }, body: f })
+        const r = await fetch(d.url, { method: 'PUT', headers: { 'Content-Type': f.type, 'x-upsert': 'false', 'Cache-Control': 'max-age=3600' }, body: f })
         if (!r.ok) throw new Error('No se pudo subir ' + f.name)
         paths.push(d.path)
       }
       if (files[0].type === 'video/mp4') { video_path = paths[0]; imagenes = [] } else { video_path = ''; imagenes = paths }
       carga.textContent = 'Material subido. Revisá la vista previa antes de aprobar.'
-      revisado.checked = false; archivos.value = ''
+      archivosSubidos = archivos.files
     }
     const contenido = el('div', { style: 'display:grid;gap:12px' }, campo('Título', titulo), campo('Descripción en español', descripcion), campo('Hashtags', hashtags),
-      !esCola && destinos, campo('Material', media), campo('Video de la biblioteca', propio), campo('Subir video o imágenes preparadas', archivos), carga,
-      campo('Recorte pedido', recorte), campo('Qué hay que modificar o regenerar', instrucciones), !esCola && campo('Revisé el material y está listo', revisado))
-    dialogo(esCola ? 'Editar y aprobar este envío' : 'Preparar publicación', contenido, async () => {
+      campo('Material', media), campo('Video de la biblioteca', propio), campo('Subir video o imágenes preparadas', archivos), previewLocal, carga,
+      campo('Recorte pedido', recorte), campo('Qué hay que modificar o regenerar', instrucciones))
+    const modal = dialogo(esCola ? 'Editar y aprobar este envío' : 'Preparar publicación', contenido, async () => {
       await subir()
-      const datos = { titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value, plataformas: esCola ? [item.plataforma] : destinos.valores(), media: media.value,
-        video_path, imagenes, recorte: recorte.value, instrucciones_media: instrucciones.value, media_lista: revisado.checked }
+      const datos = { titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value, plataformas: esCola ? [item.plataforma] : item.plataformas, media: media.value,
+        video_path, imagenes, recorte: recorte.value, instrucciones_media: instrucciones.value, media_lista: false }
       const cambiaMedia = ['video_path', 'imagenes', 'recorte', 'instrucciones_media', 'media'].some(k => JSON.stringify(datos[k] || '') !== JSON.stringify(item[k] || ''))
       await post({ op: esCola ? (cambiaMedia ? 'cola_preparar' : 'cola_editar') : 'sugerencia_guardar', id: item.id, version: item._version, datos })
       if (esCola && cambiaMedia) { P.tab = 'sugerencias'; toast('El material vuelve a preparación para revisarlo antes de aprobar.') }
     }, esCola ? 'Guardar y aprobar cambios' : 'Guardar para revisar')
+    modal.addEventListener('close', limpiarPreviewLocal, { once: true })
+  }
+  function publicarSugerencia(item, clip = false) {
+    const tieneMedia = !!(item.video_path || item.imagenes?.length)
+    const cuentas = P.datos.conexiones.filter(c => (c.estado === 'conectada' || c.modo === 'manual') &&
+      (item.video_path || !(c.id === 'youtube' || c.id === 'tiktok')) && (tieneMedia || c.id === 'x'))
+    const preview = el('div', { class: 'row', style: 'overflow:auto;flex-wrap:wrap' })
+    const opciones = cuentas.map(c => {
+      const input = entrada('', { type: 'checkbox', style: 'width:auto' })
+      const modo = c.modo === 'borrador' ? ' · borrador' : c.modo === 'manual' ? ' · manual' : ' · automático'
+      return { id: c.id, input, label: campo(c.nombre + (c.cuenta_conectada || c.cuenta ? ' · ' + (c.cuenta_conectada || c.cuenta) : '') + modo, input) }
+    })
+    const revisado = entrada('', { type: 'checkbox', style: 'width:auto' })
+    let vistaLista = !tieneMedia
+    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:12px' },
+      el('h3', {}, item.titulo || item.gancho), el('p', { style: 'white-space:pre-wrap' }, item.descripcion),
+      el('p', { class: 'small' }, (item.hashtags || []).join(' ')), preview,
+      el('div', { class: 'row', style: 'flex-wrap:wrap' }, opciones.map(c => c.label)),
+      !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.'),
+      campo('Revisé la publicación y el material', revisado)), async () => {
+      if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
+      const plataformas = opciones.filter(c => c.input.checked).map(c => c.id)
+      if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
+      await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas })
+      if (clip) await window.cargar?.()
+      P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
+    }, 'Confirmar publicación')
+    if (tieneMedia) vista(item, preview, () => { vistaLista = false }).then(lista => { vistaLista = lista })
   }
   function sugerencias(box) {
     box.append(boton('Traer clips aprobados', async () => { const d = await post({ op: 'sugerir_clips' }); toast(d.agregadas + ' sugerencias nuevas'); await cargar(true) }))
@@ -210,7 +246,7 @@
         el('p', { class: 'small muted' }, s.motivo), s.recorte && el('p', { class: 'small' }, 'Recorte: ' + s.recorte), s.instrucciones_media && el('p', { class: 'small' }, s.instrucciones_media), preview,
         el('div', { class: 'row', style: 'margin-top:12px' }, boton('Editar y preparar', () => editarContenido(s)),
           boton('Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
-          boton('Aprobar y enviar a cola', async () => { await post({ op: 'aprobar', id: s.id, version: s._version }); toast('Aprobada y en cola'); P.tab = 'cola'; await cargar(true) }, 'tiny primary'))))
+          (s.video_path || s.imagenes?.length || !s.fuente_url) && boton('Publicar', () => publicarSugerencia(s), 'tiny primary'))))
       vista(s, preview)
     }
     if (!P.datos.sugerencias.some(s => s.estado !== 'aprobada')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
@@ -307,10 +343,8 @@
     mostrar()
   }
   window.aprobarClipPublicacion = c => {
-    const destinos = checksRedes()
-    dialogo('Aprobar clip', el('div', {}, el('p', {}, c.titulo || c.gancho), el('p', { class: 'small' }, 'Elegí dónde publicarlo. Instagram y Facebook se envían automáticamente cuando las conexiones están habilitadas. X queda para subir a mano, y YouTube y TikTok quedan en borrador.'), destinos), async () => {
-      await post({ op: 'aprobar_clip', id: c.id, version: c._version, plataformas: destinos.valores() }); toast('Clip aprobado y en cola'); await window.cargar?.()
-    }, 'Aprobar y enviar a cola')
+    if (!P.datos) return toast('Cargá Publicaciones para ver las cuentas disponibles.')
+    publicarSugerencia(c, true)
   }
   $('pubActualizar').addEventListener('click', () => cargar(true))
   render(); cargar()

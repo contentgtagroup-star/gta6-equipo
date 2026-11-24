@@ -45,6 +45,29 @@ def conf():
     return json.load(open(CONF))
 
 
+def subir_media_publicacion(archivo, tipo):
+    d = pedir('POST', '/api/publicacion', {
+        'op': 'subir_media', 'tipo': tipo, 'peso': os.path.getsize(archivo)})
+    with open(archivo, 'rb') as f:
+        req = urllib.request.Request(d['url'], data=f.read(), method='PUT',
+                                     headers={'Content-Type': tipo, 'x-upsert': 'false',
+                                              'Cache-Control': 'max-age=3600'})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            r.read()
+    except urllib.error.HTTPError as e:
+        detalle = ''
+        try:
+            cuerpo = json.loads(e.read(4096))
+            codigo = cuerpo.get('code') or cuerpo.get('error')
+            if isinstance(codigo, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,49}', codigo):
+                detalle = f' ({codigo})'
+        except (ValueError, AttributeError):
+            pass
+        raise ValueError(f'Supabase rechazó la subida de {tipo}: HTTP {e.code}{detalle}.') from None
+    return d['path']
+
+
 def pedir(metodo, ruta, cuerpo=None, crudo=False, timeout=60):
     c = conf()
     datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
@@ -761,12 +784,11 @@ def main():
     if a.cmd == 'publicacion-subir':
         import mimetypes
         tipo = mimetypes.guess_type(a.archivo)[0]
-        d = pedir('POST', '/api/publicacion', {'op': 'subir_media', 'tipo': tipo, 'peso': os.path.getsize(a.archivo)})
-        with open(a.archivo, 'rb') as f:
-            req = urllib.request.Request(d['url'], data=f.read(), method='PUT', headers={'Content-Type': tipo})
-        with urllib.request.urlopen(req, timeout=120) as r:
-            r.read()
-        print(json.dumps({'path': d['path']}))
+        try:
+            path = subir_media_publicacion(a.archivo, tipo)
+        except ValueError as e:
+            fail(str(e))
+        print(json.dumps({'path': path}))
         return
     if a.cmd in ('tomar-link', 'empezar-busqueda', 'cargar-links'):
         turno_actual = comprobar_turno()

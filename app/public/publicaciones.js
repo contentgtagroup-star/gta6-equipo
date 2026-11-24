@@ -111,22 +111,23 @@
   }
   function generarDesdeLink(box) {
     const link = entrada('', { placeholder: 'Pegá el link de un post (X, etc.) y generá la publicación', maxlength: 1000, style: 'flex:1;min-width:220px' })
+    const enfoque = entrada('', { placeholder: 'Enfoque distinto (opcional)', maxlength: 400 })
     const generar = boton('Generar desde link', async () => {
       const url = link.value.trim()
       if (!url) return toast('Pegá un link primero.')
-      await post({ op: 'generar_link', url }); link.value = ''
+      await post({ op: 'generar_link', url, enfoque: enfoque.value }); link.value = ''; enfoque.value = ''
       toast('Generando. La vas a ver en Sugerencias.'); P.tab = 'sugerencias'; await cargar(true)
     }, 'tiny primary')
     link.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); generar.click() } })
     box.append(el('article', { class: 'bloque', style: 'padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:10px' },
       el('h3', { class: 'small', style: 'margin:0 0 8px' }, 'Generar desde link'),
-      el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, generar),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, enfoque, generar),
       el('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Capta el texto y las imágenes del post, lo adapta al español y deja la publicación en Sugerencias para revisar y aprobar.')))
   }
   function fuentes(box) {
     generarDesdeLink(box)
     box.append(el('div', { class: 'row' }, boton('Agregar fuente', () => editarFuente(), 'tiny primary'), boton('Importar fuentes del equipo', async () => { const d = await post({ op: 'importar_fuentes' }); toast(d.agregadas + ' fuentes nuevas'); await cargar(true) })))
-    box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un link puntual se adapta una vez. Los enlaces pendientes de verificar se importan pausados.'))
+    box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un enlace puntual admite una sugerencia activa a la vez. Los enlaces pendientes de verificar se importan pausados.'))
     for (const f of P.datos.fuentes) {
       const trabajos = P.datos.trabajos.filter(t => t.fuente_id === f.id), t = trabajos.at(-1)
       box.append(el('article', { class: 'bloque', style: 'padding:14px 0;border-bottom:1px solid var(--line)' },
@@ -272,7 +273,7 @@
   }
   function sugerencias(box) {
     box.append(boton('Traer clips aprobados', async () => { const d = await post({ op: 'sugerir_clips' }); toast(d.agregadas + ' sugerencias nuevas'); await cargar(true) }))
-    for (const s of P.datos.sugerencias.filter(s => s.estado !== 'aprobada')) {
+    for (const s of P.datos.sugerencias.filter(s => s.estado === 'pendiente')) {
       const listo = Boolean(s.video_path || s.imagenes?.length)
       const trabajo = P.datos.trabajos.find(t => t.sugerencia_id === s.id && t.tipo === 'media')
       const ocupado = trabajo && ['pendiente', 'ejecutando'].includes(trabajo.estado)
@@ -299,9 +300,15 @@
         el('p', { class: 'small muted' }, s.motivo), s.recorte && el('p', { class: 'small' }, 'Recorte: ' + s.recorte), s.instrucciones_media && el('p', { class: 'small' }, s.instrucciones_media), material,
         el('div', { class: 'row', style: 'margin-top:12px' }, boton('Editar y preparar', () => editarContenido(s)),
           !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
+          boton('Descartar sugerencia', () => dialogo('Descartar sugerencia', el('p', {}, s.fuente_id
+            ? 'Se quita de Sugerencias y podés volver a generar desde el mismo enlace.'
+            : 'Se quita de Sugerencias.'), async () => {
+            await post({ op: 'sugerencia_descartar', id: s.id, version: s._version })
+            toast('Sugerencia descartada')
+          }, 'Descartar'), 'tiny ghost danger'),
           !ocupado && (listo || !s.fuente_url) && boton('Publicar', () => publicarSugerencia(s), 'tiny primary'))))
     }
-    if (!P.datos.sugerencias.some(s => s.estado !== 'aprobada')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
+    if (!P.datos.sugerencias.some(s => s.estado === 'pendiente')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
   }
   function cola(box) {
     const items = P.datos.cola

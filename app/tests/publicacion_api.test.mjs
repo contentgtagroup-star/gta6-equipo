@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import handler from '../api/publicacion.js'
+import { idFuente } from '../lib/publicacion.js'
 import { obtenerMetricas } from '../lib/metricas_redes.js'
 import { procesarPublicaciones } from '../lib/publicacion_worker.js'
 import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
@@ -323,6 +324,33 @@ test('Buffer usa post(input) para el detalle y conserva las métricas agregadas'
     if (anteriorOrganizacion === undefined) delete process.env.BUFFER_ORGANIZATION_ID
     else process.env.BUFFER_ORGANIZATION_ID = anteriorOrganizacion
   }
+})
+
+test('descartar oculta la propuesta, bloquea su aprobación y habilita otra desde el mismo enlace', async () => {
+  reset()
+  const url = 'https://x.com/cuenta/status/123'
+  const fuente = idFuente(url)
+  const s = sugerencia()
+  s.id = idFuente(fuente + url)
+  Object.assign(s.datos, { fuente_id: fuente, fuente_url: url })
+  tablas.publicacion_docs.push(s, { coleccion: 'fuentes', id: fuente, version: 1,
+    datos: { url, tipo: 'publicacion', activa: true, generada_el: Date.now() } })
+  assert.equal((await llamada({ op: 'generar_link', url })).codigo, 409)
+  assert.equal((await llamada({ op: 'sugerencia_descartar', id: s.id, version: 1 })).codigo, 200)
+  assert.equal((await llamada(undefined, 'GET')).datos.sugerencias.length, 0)
+  assert.equal((await llamada({ op: 'aprobar', id: s.id, version: 2, revisado: true, plataformas: ['x'] })).codigo, 409)
+  const nuevo = await llamada({ op: 'generar_link', url, enfoque: 'Fauna' })
+  assert.equal(nuevo.codigo, 200)
+  const { trabajo } = (await llamada({ op: 'tomar_trabajo' })).datos
+  assert.match(trabajo.prompt, /Fauna/)
+  assert.match(trabajo.prompt, /pedir_enfoque_distinto/)
+  const cerrar = await llamada({ op: 'cerrar_trabajo', id: trabajo.id, run_id: trabajo.run_id,
+    resultado: { ...sugerencia().datos, fuente_url: url, titulo: 'Fauna de Vice City' } })
+  assert.equal(cerrar.codigo, 200)
+  const visibles = (await llamada(undefined, 'GET')).datos.sugerencias
+  assert.equal(visibles.length, 1)
+  assert.equal(visibles[0].titulo, 'Fauna de Vice City')
+  assert.notEqual(visibles[0].id, s.id)
 })
 
 test.after(() => { globalThis.fetch = original })

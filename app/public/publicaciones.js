@@ -295,9 +295,9 @@
       const listo = Boolean(s.video_path || s.imagenes?.length)
       const trabajo = P.datos.trabajos.find(t => t.sugerencia_id === s.id && t.tipo === 'media')
       const ocupado = trabajo && trabajoActivo(trabajo)
-      const material = el('div', { class: 'card', style: 'padding:12px;margin:10px 0' }, el('h4', {}, 'Material generado'),
-        el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length + ' imágenes') + ' · versión privada para revisar'
-          : trabajo ? '' : 'Todavía no hay material preparado.'))
+      const material = el('section', { class: 'pub-suggestion-material', 'aria-label': 'Material generado' }, el('h4', {}, 'Material generado'),
+        el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length === 1 ? '1 imagen' : s.imagenes.length + ' imágenes') + ' · vista privada'
+          : ocupado ? 'En preparación' : 'Todavía no hay material preparado.'))
       if (trabajo && trabajo.estado !== 'cancelado') material.append(progresoTrabajo(trabajo, 'Preparación de material'))
       if (trabajo?.estado === 'error' && trabajo.error) material.append(el('details', {}, el('summary', {}, 'Ver detalle'), el('p', { class: 'small' }, trabajo.error)))
       if (listo) {
@@ -312,19 +312,26 @@
         })
         material.append(detalle)
       }
-      box.append(el('article', { style: 'padding:20px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, s.titulo), el('p', { style: 'white-space:pre-wrap' }, s.descripcion),
-        el('p', { class: 'small' }, (s.hashtags || []).join(' ')), el('p', { class: 'small muted' }, (s.plataformas || []).map(p => redes[p]).join(' · ')),
-        s.fuente_url && el('a', { href: s.fuente_url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente'),
-        el('p', { class: 'small muted' }, s.motivo), s.recorte && el('p', { class: 'small' }, 'Recorte: ' + s.recorte), s.instrucciones_media && el('p', { class: 'small' }, s.instrucciones_media), material,
-        el('div', { class: 'row', style: 'margin-top:12px' }, boton('Editar y preparar', () => editarContenido(s)),
+      const notas = [s.motivo, s.recorte && 'Recorte: ' + s.recorte, s.instrucciones_media].filter(Boolean)
+      box.append(el('article', { class: 'pub-suggestion' },
+        el('div', { class: 'pub-suggestion-content' }, el('h3', {}, s.titulo),
+          el('p', { style: 'white-space:pre-wrap' }, s.descripcion),
+          s.hashtags?.length && el('p', { class: 'small muted' }, s.hashtags.join(' ')),
+          el('div', { class: 'row pub-suggestion-meta' },
+            el('span', { class: 'small muted' }, (s.plataformas || []).map(p => redes[p]).join(' · ')),
+            s.fuente_url && el('a', { class: 'small', href: s.fuente_url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente')),
+          material, notas.length > 0 && el('details', { class: 'pub-suggestion-notes' }, el('summary', {}, 'Notas de producción'),
+            notas.map(nota => el('p', { class: 'small' }, nota)))),
+        el('div', { class: 'row pub-suggestion-actions' },
+          el('div', { class: 'row' }, boton('Editar y preparar', () => editarContenido(s)),
           !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
           boton('Descartar sugerencia', () => dialogo('Descartar sugerencia', el('p', {}, s.fuente_id
             ? 'Se quita de Sugerencias y podés volver a generar desde el mismo enlace.'
             : 'Se quita de Sugerencias.'), async () => {
             await post({ op: 'sugerencia_descartar', id: s.id, version: s._version })
             toast('Sugerencia descartada')
-          }, 'Descartar'), 'tiny ghost danger'),
-          !ocupado && (listo || !s.fuente_url) && boton('Publicar', () => publicarSugerencia(s), 'tiny primary'))))
+          }, 'Descartar'), 'tiny ghost danger')),
+          !ocupado && (listo || !s.fuente_url) && boton('Revisar y publicar', () => publicarSugerencia(s), 'tiny primary'))))
     }
     if (!P.datos.sugerencias.some(s => s.estado === 'pendiente')) box.append(el('p', { class: 'small muted' }, 'Generá trabajo desde una fuente o traé clips aprobados.'))
   }

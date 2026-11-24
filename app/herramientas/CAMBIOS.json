@@ -1,6 +1,7 @@
 {
- "version": 71,
+ "version": 72,
  "cambios": [
+  {"v": 72, "fecha": "2026-11-24", "texto": "Navegación con iconos propios y sugerencias que priorizan la vista del material generado y agrupan las notas de producción.", "manual": null},
   {"v": 71, "fecha": "2026-11-24", "texto": "Los carruseles tienen un destino manual para YouTube y un envío a bandeja para TikTok cuando está configurado el prefijo de fotos.", "manual": null},
   {"v": 70, "fecha": "2026-11-24", "texto": "Las piezas editoriales nuevas usan la paleta y la tipografía del panel con un sello GTA6 Universo para las imágenes modeladas o regeneradas.", "manual": null},
   {"v": 69, "fecha": "2026-11-24", "texto": "Clips, correcciones y preparación editorial aplican un piso de video de 720p. Para bajar el peso, se recortan primero los tramos secundarios y se conserva el máster.", "manual": null},

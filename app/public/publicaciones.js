@@ -212,12 +212,45 @@
     }, esCola ? 'Guardar y aprobar cambios' : 'Guardar para revisar')
     modal.addEventListener('close', limpiarPreviewLocal, { once: true })
   }
+  const limpiarCopy = texto => String(texto || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
+  async function copiarCopy (titulo, descripcion, hashtags) {
+    const texto = limpiarCopy(descripcion)
+    const tags = hashtags.trim()
+    const ultimo = texto.split(/\r?\n/).at(-1)?.trim()
+    await navigator.clipboard.writeText([titulo, texto, ultimo === tags ? '' : tags].map(t => String(t || '').trim()).filter(Boolean).join('\n\n'))
+    toast('Copy copiado')
+  }
+  function botonCopiarCopy (item) {
+    return boton('Copiar copy', () => copiarCopy(item.titulo, item.descripcion, (item.hashtags || []).join(' ')))
+  }
+  function botonDescargarImagenes (item) {
+    return boton('Descargar imágenes', async () => {
+      const { urls } = await post({ op: 'vista_media', imagenes: item.imagenes })
+      const [{ zipSync }, ...placas] = await Promise.all([
+        import('/vendor/fflate-zip.js'),
+        ...urls.map(async url => {
+          const respuesta = await fetch(url)
+          if (!respuesta.ok) throw new Error('No se pudo descargar todo el carrusel. Volvé a intentar.')
+          return new Uint8Array(await respuesta.arrayBuffer())
+        })
+      ])
+      if (placas.length !== item.imagenes.length) throw new Error('Faltan imágenes en el carrusel.')
+      const archivos = Object.fromEntries(placas.map((placa, i) => {
+        const extension = item.imagenes[i].split('.').pop()
+        return ['placa-' + String(i + 1).padStart(2, '0') + '.' + extension, placa]
+      }))
+      const url = URL.createObjectURL(new Blob([zipSync(archivos, { level: 0 })], { type: 'application/zip' }))
+      const enlace = el('a', { href: url, download: 'gta6-placas.zip' })
+      enlace.click()
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+    })
+  }
   function publicarSugerencia(item, clip = false) {
     const fotos = !item.video_path && !!item.imagenes?.length
     const tieneMedia = !!item.video_path || fotos
     const cuentas = P.datos.conexiones.filter(c => (fotos && ['youtube', 'tiktok'].includes(c.id)) ||
       ((c.estado === 'conectada' || c.modo === 'manual') && (tieneMedia || c.id === 'x')))
-    const preview = el('div', { class: 'row', style: 'overflow:auto;flex-wrap:wrap' })
+    const preview = el('div', { class: 'pub-review-media' })
     const opciones = cuentas.map(c => {
       let motivo = ''
       if (fotos && c.id === 'tiktok') {
@@ -234,7 +267,7 @@
         el('span', {}, el('strong', {}, c.nombre), el('small', {}, [cuenta, modo, motivo].filter(Boolean).join(' · '))))
       return { id: c.id, input, label }
     })
-    const textoPublico = String(item.descripcion || '').replace(/^[ \t]*(?:original(?:es)?|fuentes?)[ \t]*:[ \t]*(?:https?:[^\s]+[ \t]*)?(?:\r?\n[ \t]*https?:[^\s]+[ \t]*)*[ \t]*(?:\r?\n|$)/gim, '').replace(/(?:\r?\n){3,}/g, '\n\n').trim()
+    const textoPublico = limpiarCopy(item.descripcion)
     const lineaHashtags = textoPublico.match(/(?:^|\n)((?:#[\p{L}\p{N}_]+[ \t]*)+)$/u)
     const tagsOriginales = Array.isArray(item.hashtags) ? item.hashtags : []
     const hashtags = entrada([...new Set([...tagsOriginales, ...(lineaHashtags ? lineaHashtags[1].trim().split(/\s+/) : [])])].join(' '))
@@ -265,11 +298,15 @@
     for (const campoTexto of [titulo, descripcion, hashtags]) campoTexto.addEventListener('input', actualizarTexto)
     actualizarTexto()
     let vistaLista = !tieneMedia
-    dialogo('Revisar y publicar', el('div', { style: 'display:grid;gap:14px' },
-      el('div', { class: 'pub-review-copy-head' }, el('div', { style: 'flex:1;min-width:0' }, textoVista, editor), editar), preview,
+    const modal = dialogo('Revisar y publicar', el('div', { class: 'pub-review-layout' },
+      el('div', { class: 'pub-review-main' },
+        el('div', { class: 'pub-review-copy-head' }, el('div', { style: 'flex:1;min-width:0' }, textoVista, editor), editar),
+        el('div', { class: 'row' }, boton('Copiar copy', () => copiarCopy(titulo.value, descripcion.value, hashtags.value)),
+          fotos && botonDescargarImagenes(item)), tieneMedia && preview),
+      el('div', { class: 'pub-review-routing' },
       el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Destinos de publicación'), opciones.map(c => c.label),
         !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
-      el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material')), async () => {
+      el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material'))), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
       const plataformas = opciones.filter(c => !c.input.disabled && c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
@@ -279,6 +316,7 @@
       if (clip) await window.cargar?.()
       P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
     }, 'Confirmar publicación')
+    modal.classList.add('pub-review-dialog')
     if (tieneMedia) vista(item, preview, () => { vistaLista = false }).then(lista => { vistaLista = lista })
   }
   const trabajoActivo = t => ['pendiente', 'ejecutando'].includes(t.estado)
@@ -323,14 +361,16 @@
       }
       const notas = [s.motivo, s.recorte && 'Recorte: ' + s.recorte, s.instrucciones_media].filter(Boolean)
       box.append(el('article', { class: 'pub-suggestion' },
-        el('div', { class: 'pub-suggestion-content' }, el('h3', {}, s.titulo),
+        el('div', { class: 'pub-suggestion-content' },
+          el('div', { class: 'pub-suggestion-copy' }, el('h3', {}, s.titulo),
           el('p', { style: 'white-space:pre-wrap' }, s.descripcion),
           s.hashtags?.length && el('p', { class: 'small muted' }, s.hashtags.join(' ')),
           el('div', { class: 'row pub-suggestion-meta' },
             el('span', { class: 'small muted' }, (s.plataformas || []).map(p => redes[p]).join(' · ')),
             s.fuente_url && el('a', { class: 'small', href: s.fuente_url, target: '_blank', rel: 'noopener noreferrer' }, 'Ver fuente')),
-          material, notas.length > 0 && el('details', { class: 'pub-suggestion-notes' }, el('summary', {}, 'Notas de producción'),
-            notas.map(nota => el('p', { class: 'small' }, nota)))),
+          el('div', { class: 'row' }, botonCopiarCopy(s), !s.video_path && s.imagenes?.length && botonDescargarImagenes(s)),
+          notas.length > 0 && el('details', { class: 'pub-suggestion-notes' }, el('summary', {}, 'Notas de producción'),
+            notas.map(nota => el('p', { class: 'small' }, nota)))), material),
         el('div', { class: 'row pub-suggestion-actions' },
           el('div', { class: 'row' }, boton('Editar y preparar', () => editarContenido(s)),
           !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
@@ -371,7 +411,8 @@
         const url = entrada('', { type: 'url', required: true })
         dialogo('Confirmar publicación manual', campo('Link público de la publicación', url), () => post({ op: 'confirmar_manual', id: p.id, version: p._version, url: url.value }), 'Confirmar')
       }
-      acciones.append(boton('Copiar título y descripción', async () => { await navigator.clipboard.writeText([p.titulo, p.descripcion, (p.hashtags || []).join(' ')].filter(Boolean).join('\n\n')); toast('Texto copiado') }))
+      acciones.append(botonCopiarCopy(p))
+      if (!p.video_path && p.imagenes?.length) acciones.append(botonDescargarImagenes(p))
       if (['pendiente', 'procesando'].includes(p.estado) && !p.remoto_id) acciones.append(
         boton('Priorizar', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'ya' }); toast('Movido al frente'); await cargar(true) }),
         boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
@@ -379,13 +420,6 @@
       if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
       if (p.remoto_id && ['procesando', 'enviando'].includes(p.estado)) acciones.append(boton('Detener reintentos', async () => { await post({ op: 'cola_detener', id: p.id, version: p._version }); await cargar(true) }))
       if (youtubeFotos) {
-        p.imagenes.forEach((ruta, i) => acciones.append(boton('Bajar placa ' + (i + 1), async () => {
-          const { urls } = await post({ op: 'vista_media', imagenes: [ruta] })
-          const descarga = new URL(urls[0])
-          descarga.searchParams.set('download', 'placa-' + String(i + 1).padStart(2, '0') + '.' + ruta.split('.').pop())
-          const enlace = el('a', { href: descarga.href, download: '' })
-          enlace.click()
-        })))
         acciones.append(boton('Ya lo publiqué', confirmar))
       } else if (p.estado === 'manual') acciones.append(boton('Bajar video', async () => {
         if (!p.video_path && !p.imagenes?.length) return toast('Esta publicación no tiene video ni imágenes.')

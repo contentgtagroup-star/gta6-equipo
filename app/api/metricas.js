@@ -2,6 +2,7 @@ import { exigir, responder } from '../lib/comun.js'
 import { REDES, errorPublicacion } from '../lib/publicacion.js'
 import { leerPub, listarPub, guardarPub, eventoPub } from '../lib/publicacion_store.js'
 import { obtenerMetricas } from '../lib/metricas_redes.js'
+import { avanceMonetizacion } from '../lib/monetizacion.js'
 
 export default async function handler (req, res) {
   const yo = exigir(req, res); if (!yo) return
@@ -14,6 +15,16 @@ export default async function handler (req, res) {
         .filter(m => m.id.startsWith('dia-') && (!datos.red || m.datos.red === datos.red))
         .map(m => m.datos).sort((a, b) => (a.dia < b.dia ? -1 : a.dia > b.dia ? 1 : 0))
       return responder(res, 200, { serie })
+    }
+    // Monetización: avance por red hacia los requisitos, usando el último informe sincronizado de cada red.
+    if (req.method === 'GET' && datos.monetizacion) {
+      const docs = await listarPub('metricas')
+      const monetizacion = Object.fromEntries(Object.keys(REDES).map(red => {
+        const mejor = docs.filter(m => m.id.startsWith(red + '-') && m.datos.actual)
+          .sort((a, b) => (b.datos.sincronizada_el || 0) - (a.datos.sincronizada_el || 0))[0]
+        return [red, avanceMonetizacion(red, mejor?.datos.actual || {})]
+      }))
+      return responder(res, 200, { monetizacion })
     }
     const red = datos.red, ventana = datos.ventana || '7d'
     if (!REDES[red] || !['24h', '7d', '28d', 'historico'].includes(ventana)) throw errorPublicacion('Elegí una cuenta y una ventana válidas.')

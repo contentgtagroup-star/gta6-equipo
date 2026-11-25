@@ -1,6 +1,7 @@
 {
- "version": 81,
+ "version": 82,
  "cambios": [
+  {"v": 82, "fecha": "2026-11-25", "texto": "Nueva sección Monetización arriba de Resultados: muestra, por red, el avance (%) hacia los requisitos de cada programa (YouTube Partner, TikTok Creator Rewards, Instagram, Facebook, X), con cuánto tenemos y cuánto falta de seguidores, vistas o impresiones. Se calcula con el último informe sincronizado de cada red.", "manual": null},
   {"v": 81, "fecha": "2026-11-25", "texto": "Resultados suma un «Histórico por día» por red: una tabla con la evolución diaria (seguidores, vistas, likes, alcance, etc.) armada con los snapshots que se guardan en cada sincronización. Muestra los últimos 30 días; sincronizá seguido para ir completando la serie.", "manual": null},
   {"v": 80, "fecha": "2026-11-25", "texto": "Cada red se reconoce a la vista por su color de marca: en la Cola y en la Trazabilidad el nombre de la plataforma (Instagram, Facebook, X, YouTube, TikTok) aparece con su color y un punto, para ubicarlas de un vistazo sin leer.", "manual": null},
   {"v": 79, "fecha": "2026-11-25", "texto": "Resultados distingue los totales tardíos de YouTube Analytics de los contadores actuales de sus videos, suma los videos recientes de TikTok sin presentar sus valores acumulados como ganancias del período y aclara que las impresiones de X abarcan todos los posts incluidos por Buffer.", "manual": "Sincronizá YouTube, TikTok y X en Resultados para renovar los informes."},

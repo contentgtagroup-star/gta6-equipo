@@ -601,7 +601,28 @@
       seccion('Historial', P.historial, true)
     }
   }
+  async function panelMonetizacion(box) {
+    const cont = el('section', { class: 'bloque', style: 'margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)' }, el('h3', { style: 'margin:0 0 6px' }, 'Monetización'), el('p', { class: 'small muted' }, 'Cargando avance…'))
+    box.append(cont)
+    try {
+      const { monetizacion } = await api('/api/metricas?monetizacion=1')
+      if (!box.isConnected) return
+      cont.replaceChildren(el('h3', { style: 'margin:0 0 6px' }, 'Monetización'),
+        el('p', { class: 'small muted' }, 'Avance hacia los requisitos de cada red, con el último informe sincronizado. Sincronizá en Resultados para actualizar los números.'))
+      for (const [red, m] of Object.entries(monetizacion)) {
+        if (!m) continue
+        cont.append(el('article', { style: 'padding:12px 0;border-top:1px solid var(--line)' },
+          el('div', { style: 'display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap' },
+            el('span', { style: 'display:flex;align-items:center;gap:8px' }, redChip(red), el('span', { class: 'small muted' }, m.programa)),
+            el('strong', { style: 'color:' + (redColor[red] || 'var(--fg)') }, m.pct + '%')),
+          el('div', { style: 'height:8px;border-radius:5px;background:var(--surface2);overflow:hidden;margin:6px 0' }, el('div', { style: 'height:100%;width:' + m.pct + '%;background:' + (redColor[red] || 'var(--acento,#E1306C)') })),
+          el('div', { class: 'small muted' }, m.metas.map(mt => el('div', {}, mt.nombre + ': ' + num(mt.valor) + ' / ' + num(mt.meta) + (mt.falta > 0 ? ' · faltan ' + num(mt.falta) : ' ✓')))),
+          el('p', { class: 'small muted', style: 'margin:6px 0 0' }, m.nota)))
+      }
+    } catch { if (box.isConnected) cont.replaceChildren(el('h3', {}, 'Monetización'), el('p', { class: 'small muted' }, 'No se pudo cargar el avance de monetización.')) }
+  }
   function metricas(box) {
+    panelMonetizacion(box)
     const red = selector(Object.entries(redes), P.red || 'instagram'), ventana = selector([['24h', '24 h'], ['7d', '7 días'], ['28d', '28 días'], ['historico', 'Histórico']], P.ventana || '7d')
     const resultado = el('div')
     const acceso = el('p', { class: 'small muted', 'aria-live': 'polite' })

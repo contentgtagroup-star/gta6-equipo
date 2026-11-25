@@ -45,6 +45,15 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15.5
 #pubTabs button{background:transparent;border-color:transparent;border-radius:8px;color:var(--muted);min-height:38px;padding-inline:12px}
 #pubTabs button:hover,#pubTabs [aria-pressed="true"]{background:var(--surface2);color:var(--fg)}
 #pubTabs [aria-pressed="true"]{box-shadow:inset 0 -2px var(--pink)}
+.pub-metric-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+.pub-metric-card{display:grid;gap:8px;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.pub-metric-card strong{font:800 clamp(24px,3vw,36px) var(--display)}
+#pubResultadosContenido .row>input[type="search"]{flex:2 1 220px;width:auto}
+#pubResultadosContenido .row>label{flex:0 1 160px}
+#pubResultadosContenido .row>select{flex:1 1 180px;width:auto}
+#pubResultadosContenido .tbl{overflow:auto;margin-top:12px}
+#pubResultadosContenido table{min-width:840px;width:100%}
+#pubResultadosContenido td:first-child{min-width:180px;max-width:280px;overflow-wrap:anywhere}
 .pub-suggestion{margin:14px 0;border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
 .pub-suggestion h3{font-size:clamp(18px,2.2vw,24px)}
 .pub-suggestion-content{min-width:0;padding:clamp(14px,3vw,24px);display:grid;gap:14px;overflow-wrap:anywhere}
@@ -206,6 +215,8 @@ html{-webkit-text-size-adjust:100%}
     <button type="button" data-ir="crear" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>Crear clips</button>
     <button type="button" data-ir="biblioteca"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4h12M4 7h16"/><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M9 14h6"/></svg>Biblioteca <span class="num" id="navLibCount"></span></button>
     <button type="button" data-ir="publicaciones"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v12H9l-5 4zM8 8h8m-8 4h6"/></svg>Publicaciones</button>
+    <button type="button" data-ir="resultados"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg>Resultados</button>
+    <button type="button" data-ir="trazabilidad"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5"/></svg>Trazabilidad</button>
     <button type="button" data-ir="links"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m10 7 2-2a4 4 0 0 1 6 6l-2 2m-2 4-2 2a4 4 0 0 1-6-6l2-2m1 4 6-6"/></svg>Links del equipo</button>
     <button type="button" data-ir="ayuda"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8m-6-11 2 2-2 2m4 0h2"/></svg>Ayuda y compu</button>
   </nav>
@@ -281,6 +292,14 @@ html{-webkit-text-size-adjust:100%}
     <div class="row" id="pubTabs" role="group" aria-label="Sección de publicaciones" style="margin:14px 0;flex-wrap:wrap"></div>
     <p class="small" id="pubEstado" role="status" aria-live="polite"></p>
     <div id="pubContenido"></div>
+  </section>
+  <section id="resultados" data-seccion="resultados" hidden>
+    <header><h2>Resultados</h2><p>Métricas y publicaciones por red</p></header>
+    <div id="pubResultadosContenido"></div>
+  </section>
+  <section id="trazabilidad" data-seccion="trazabilidad" hidden>
+    <header><h2>Trazabilidad</h2><p>Historial de acciones del equipo</p></header>
+    <div id="pubTrazabilidadContenido"></div>
   </section>
 
   <section data-seccion="ayuda">
@@ -893,7 +912,7 @@ function renderSetup(){
     el('div', {class:'row'}, ['Mac','Windows','Linux'].map(so => el('button', {onclick:()=>{ if(!S.clave){ toast('Primero entrá con tu clave'); return; } abrirPrompt('Preparar ' + so, promptSetup(so)); }}, so))));
 }
 /* ---------- secciones: lo pesado se dibuja solo cuando entrás ---------- */
-const SECCIONES = ['crear','biblioteca','publicaciones','links','ayuda'];
+const SECCIONES = ['crear','biblioteca','publicaciones','resultados','trazabilidad','links','ayuda'];
 function estoyEn(k){ return S.seccion === k; }
 function irA(k, fijar = true){
   if(!SECCIONES.includes(k)) k = 'crear';
@@ -904,7 +923,7 @@ function irA(k, fijar = true){
   if(fijar && location.hash.slice(1) !== k) history.replaceState(null, '', '#' + k);
   if(k === 'biblioteca') renderLib();
   if(k === 'links') renderRadar();
-  if(k === 'publicaciones') window.publicacionesAlEntrar?.();
+  if(k === 'publicaciones' || k === 'resultados' || k === 'trazabilidad') window.publicacionesAlEntrar?.();
   window.scrollTo({top:0, behavior:fijar ? 'smooth' : 'auto'});
 }
 window.estoyEn = estoyEn;

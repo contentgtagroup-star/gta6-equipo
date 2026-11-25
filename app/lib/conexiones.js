@@ -119,7 +119,7 @@ export function configOAuth (p) {
   const configs = {
     meta: { id: process.env.META_APP_ID, secret: process.env.META_APP_SECRET, auth: 'https://www.facebook.com/' + (process.env.META_GRAPH_VERSION || 'v27.0') + '/dialog/oauth', token: GRAPH + '/oauth/access_token', scope: 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_manage_insights,read_insights' },
     google: { id: process.env.GOOGLE_CLIENT_ID, secret: process.env.GOOGLE_CLIENT_SECRET, auth: 'https://accounts.google.com/o/oauth2/v2/auth', token: 'https://oauth2.googleapis.com/token', scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly' },
-    tiktok: { id: sandboxTikTok ? process.env.TIKTOK_SANDBOX_CLIENT_KEY : process.env.TIKTOK_CLIENT_KEY, secret: sandboxTikTok ? process.env.TIKTOK_SANDBOX_CLIENT_SECRET : process.env.TIKTOK_CLIENT_SECRET, auth: 'https://www.tiktok.com/v2/auth/authorize/', token: 'https://open.tiktokapis.com/v2/oauth/token/', scope: sandboxTikTok ? 'user.info.basic,video.upload' : 'user.info.basic,user.info.stats,video.upload,video.list' }
+    tiktok: { id: sandboxTikTok ? process.env.TIKTOK_SANDBOX_CLIENT_KEY : process.env.TIKTOK_CLIENT_KEY, secret: sandboxTikTok ? process.env.TIKTOK_SANDBOX_CLIENT_SECRET : process.env.TIKTOK_CLIENT_SECRET, auth: 'https://www.tiktok.com/v2/auth/authorize/', token: 'https://open.tiktokapis.com/v2/oauth/token/', scope: 'user.info.basic,user.info.stats,video.upload,video.list' }
   }
   const c = configs[p]
   if (!c?.id || !c.secret) throw errorPublicacion('Falta configurar la app de ' + p + ' en el servidor.', 503)

@@ -387,4 +387,26 @@ test('el avance editorial sube por etapas y llega a 100 solo al guardar el resul
   assert.equal(actual().estado, 'terminado')
 })
 
+test('generar_subido crea un trabajo editorial para un video propio y cierra sin exigir URL', async () => {
+  reset()
+  const video = 'Eze/pub-abc.mp4'
+  assert.equal((await llamada({ op: 'generar_subido', video_path: video, nota: 'resaltá el choque' })).codigo, 200)
+  const fuente = tablas.publicacion_docs.find(d => d.coleccion === 'fuentes')
+  assert.equal(fuente.datos.tipo, 'subido')
+  assert.equal(fuente.datos.video_subido, video)
+  const { trabajo } = (await llamada({ op: 'tomar_trabajo' })).datos
+  assert.match(trabajo.prompt, /resaltá el choque/)
+  assert.match(trabajo.prompt, /video PROPIO/)
+  const cerrar = await llamada({ op: 'cerrar_trabajo', id: trabajo.id, run_id: trabajo.run_id, resultado: { ...sugerencia().datos, video_path: video, fuente_url: '', titulo: 'Mirá este choque' } })
+  assert.equal(cerrar.codigo, 200)
+  const sugs = (await llamada(undefined, 'GET')).datos.sugerencias
+  assert.equal(sugs.length, 1)
+  assert.equal(sugs[0].video_path, video)
+})
+
+test('generar_subido rechaza un video_path inválido', async () => {
+  reset()
+  assert.equal((await llamada({ op: 'generar_subido', video_path: 'http://malo/x' })).codigo, 400)
+})
+
 test.after(() => { globalThis.fetch = original })

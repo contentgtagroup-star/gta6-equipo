@@ -2,7 +2,7 @@
 (() => {
   const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '', etag: '' }
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
-  const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', conectada: 'Conectada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', manual: 'Para subir a mano a X', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
+  const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', config_incompleta: 'Configuración incompleta', conectada: 'Conectada', pausada: 'Cola pausada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', manual: 'Para subir a mano a X', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
   const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
   const num = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'
   const post = cuerpo => api('/api/publicacion', cuerpo)
@@ -124,16 +124,20 @@
     for (const c of P.datos.conexiones) {
       grid.append(el('article', { class: 'person' }, el('h3', {}, c.nombre), el('p', { class: 'small' }, c.cuenta_conectada || c.cuenta),
         el('p', {}, etiquetas[c.estado] || c.estado), el('p', { class: 'small muted' }, c.modo === 'automatico' ? 'Publica después de aprobar.' : c.modo === 'manual' ? 'Se sube a mano: copiás el texto y el video, y lo publicás en X.' : c.id === 'tiktok' ? 'Llega al Inbox: terminás de publicar en TikTok.' : 'Se sube como privado: revisás el Short en YouTube Studio.'),
+        c.estado === 'pausada' && el('p', { class: 'small' }, 'La cola de X está pausada en Buffer. Reanudala allí y tocá Verificar.'),
         c.entorno === 'sandbox' && el('p', { class: 'small muted' }, 'TikTok sandbox: conexión de prueba, con las cuentas autorizadas en esa app.'),
         c.metodo === 'system_user' && el('p', { class: 'small muted' }, 'Conexión con el usuario del sistema de Meta. Si se renueva el token en Vercel, tocá Reconectar.'),
         c.metodo === 'refresh_token' && el('p', { class: 'small muted' }, 'YouTube usa el token renovable configurado en Vercel. Si se renueva, tocá Reconectar.'),
         c.faltan_permisos?.length > 0 && el('p', { class: 'small' }, 'Faltan permisos para métricas: ' + c.faltan_permisos.join(', ') + '. La publicación sigue funcionando.'),
         c.falta_config && el('p', { class: 'small' }, 'Falta configurar en Vercel: ' + c.falta_config + '.'),
         el('p', { class: 'small muted' }, 'Última sincronización: ' + fecha(c.sincronizada_el)),
-        boton(c.estado === 'conectada' ? 'Reconectar' : 'Conectar', async () => {
-          const d = await api('/api/conexion/' + c.proveedor, { op: 'iniciar' })
+        boton(['conectada', 'pausada'].includes(c.estado) ? 'Verificar' : 'Conectar', async () => {
+          const d = await api('/api/conexion/' + c.proveedor, { op: ['conectada', 'pausada'].includes(c.estado) ? 'verificar' : 'iniciar' })
           if (d.url) location.assign(d.url); else { toast('Conexión verificada'); await cargar(true) }
-        })))
+        }), c.metodo === 'oauth' && ['conectada', 'pausada'].includes(c.estado) && boton('Reconectar', async () => {
+          const d = await api('/api/conexion/' + c.proveedor, { op: 'iniciar' })
+          if (d.url) location.assign(d.url)
+        }, 'tiny ghost')))
     }
     box.append(grid)
   }

@@ -144,6 +144,15 @@ test('sin META_AUTH_MODE usa el token del sistema en vez de volver a OAuth', asy
   assert.equal(r.headers['Set-Cookie'], undefined)
   assert.equal(guardada().datos.origen, 'system_user')
 })
+test('Meta ya conectado con usuario del sistema no vuelve a OAuth si falta el token del servidor', async () => {
+  reset(); await conectar()
+  delete process.env.META_AUTH_MODE; delete process.env.META_SYSTEM_USER_TOKEN
+  const r = await conectar()
+  assert.equal(r.codigo, 503)
+  assert.match(r.body.error, /META_SYSTEM_USER_TOKEN/)
+  assert.equal(r.body.url, undefined)
+  assert.equal((await estadosConexiones()).find(c => c.id === 'facebook').estado, 'config_incompleta')
+})
 test('META_AUTH_MODE=oauth fuerza el flujo anterior aunque exista el token', async () => {
   reset(); process.env.META_AUTH_MODE = 'oauth'
   const r = await conectar()

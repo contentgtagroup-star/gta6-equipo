@@ -1,6 +1,7 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { db } from './comun.js'
 import { errorPublicacion, redesValidas, estadoInicialEnvio } from './publicacion.js'
+import { proximaFranja, proximaFranjaShort } from './agenda_cola.js'
 
 const TABLA = 'publicacion_docs'
 function falloLectura (error) {
@@ -66,12 +67,128 @@ export async function guardarPub (col, id, datos, version = 0, sb = db()) {
 export async function eventoPub (accion, por, detalle = {}) {
   return guardarPub('eventos', Date.now() + '-' + randomUUID(), { accion, por, el: Date.now(), ...detalle })
 }
+// Un único documento CAS serializa las reservas entre computadoras del equipo.
+async function reservarHorario (id, red, desde) {
+  for (let intento = 0; intento < 12; intento++) {
+    const config = (await leerPub('cadencia', 'global'))?.datos
+    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba', programado: false }
+    if (!config.por_red?.[red]?.por_dia) throw errorPublicacion('La cadencia de esta red está en 0 publicaciones por día.', 422)
+    const actual = await leerPub('programacion', 'global')
+    const reservas = Object.fromEntries(Object.entries(actual?.datos?.reservas || {}).filter(([, r]) => r.fecha >= Date.now() - 2 * 86400000))
+    if (reservas[id]) return { fecha: reservas[id].fecha, zona: reservas[id].zona }
+    const ocupados = Object.values(reservas).filter(r => r.red === red).map(r => r.fecha)
+    const fecha = proximaFranja(config, red, ocupados, desde)
+    try {
+      await guardarPub('programacion', 'global', { reservas: { ...reservas, [id]: { red, fecha, zona: config.zona_horaria } } }, actual?.version || 0)
+      return { fecha, zona: config.zona_horaria, programado: true }
+    } catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda está ocupada. Volvé a intentar.', 409)
+}
+async function reservarShort (origen, redes, desde) {
+  const minuto = createHash('sha256').update(origen).digest()[0] % 60
+  for (let intento = 0; intento < 20; intento++) {
+    const config = (await leerPub('cadencia', 'global'))?.datos
+    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba', programado: false }
+    if (redes.some(red => !config.por_red?.[red]?.por_dia)) throw errorPublicacion('Una red del short tiene cadencia de 0 publicaciones por día.', 422)
+    const actual = await leerPub('programacion', 'global')
+    const reservas = Object.fromEntries(Object.entries(actual?.datos?.reservas || {}).filter(([, r]) => r.fecha >= Date.now() - 2 * 86400000))
+    const previa = Object.values(reservas).find(r => r.short && r.origen === origen)
+    const { fecha, franja } = previa || proximaFranjaShort(config, reservas, redes, desde, minuto)
+    const nuevas = { ...reservas }
+    for (const red of redes) nuevas[origen + '-' + red] = { red, fecha, zona: config.zona_horaria, origen, short: true, franja }
+    if (redes.every(red => reservas[origen + '-' + red]?.fecha === fecha)) return { fecha, zona: config.zona_horaria, programado: true }
+    try {
+      await guardarPub('programacion', 'global', { reservas: nuevas }, actual?.version || 0)
+      return { fecha, zona: config.zona_horaria, programado: true }
+    } catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda compartida cambió. Volvé a intentar.', 409)
+}
+export async function posponerHorario (item, desde) {
+  if (item.datos.video_path && item.datos.origen_id) throw errorPublicacion('Para mantener el mismo horario en todas las redes, un short no se pospone por destino.', 422)
+  const config = (await leerPub('cadencia', 'global'))?.datos
+  if (!config?.activo) return { fecha: desde, zona: item.datos.zona_horaria }
+  for (let intento = 0; intento < 12; intento++) {
+    const actual = await leerPub('programacion', 'global')
+    const reservas = actual?.datos?.reservas || {}
+    const ocupados = Object.entries(reservas).filter(([id, r]) => id !== item.id && r.red === item.datos.plataforma).map(([, r]) => r.fecha)
+    const fecha = proximaFranja(config, item.datos.plataforma, ocupados, desde)
+    try {
+      await guardarPub('programacion', 'global', { reservas: { ...reservas, [item.id]: { red: item.datos.plataforma, fecha, zona: config.zona_horaria } } }, actual?.version || 0)
+      return { fecha, zona: config.zona_horaria }
+    } catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda cambió. Volvé a intentar.', 409)
+}
+export async function liberarHorario (id) {
+  for (let intento = 0; intento < 12; intento++) {
+    const actual = await leerPub('programacion', 'global')
+    if (!actual?.datos?.reservas?.[id]) return
+    const reservas = { ...actual.datos.reservas }
+    delete reservas[id]
+    try { await guardarPub('programacion', 'global', { reservas }, actual.version); return }
+    catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda cambió. Volvé a intentar.', 409)
+}
+export async function mantenerAgendaCola () {
+  const config = (await leerPub('cadencia', 'global'))?.datos
+  if (!config?.activo) return false
+  const filas = await listarPub('cola')
+  const grupos = new Map()
+  for (const fila of filas.filter(f => f.datos.video_path && f.datos.origen_id)) {
+    const grupo = grupos.get(fila.datos.origen_id) || []
+    grupo.push(fila); grupos.set(fila.datos.origen_id, grupo)
+  }
+  for (const [origen, grupo] of grupos) {
+    const pendientes = grupo.filter(f => f.datos.estado === 'pendiente')
+    if (pendientes.length && pendientes.some(f => !f.datos.programado_el)) {
+      await reservarShort(origen, pendientes.map(f => f.datos.plataforma), Date.now())
+      continue
+    }
+    if (!grupo.every(f => f.datos.estado === 'pendiente') || grupo.some(f => f.datos.reintento_el)) continue
+    const fechaVieja = grupo[0].datos.programado_el
+    if (!fechaVieja || fechaVieja >= Date.now() - 15 * 60000) continue
+    const redes = grupo.map(f => f.datos.plataforma)
+    const minuto = createHash('sha256').update(origen).digest()[0] % 60
+    for (let intento = 0; intento < 12; intento++) {
+      const actual = await leerPub('programacion', 'global')
+      const reservas = actual?.datos?.reservas || {}
+      const previas = grupo.map(f => reservas[f.id]).filter(Boolean)
+      if (!previas.length || previas[0].fecha !== fechaVieja) break
+      const otras = Object.fromEntries(Object.entries(reservas).filter(([, r]) => r.origen !== origen))
+      const { fecha, franja } = proximaFranjaShort(config, otras, redes, Date.now(), minuto)
+      const nuevas = { ...otras }
+      for (const fila of grupo) nuevas[fila.id] = { red: fila.datos.plataforma, fecha, zona: config.zona_horaria, origen, short: true, franja }
+      try { await guardarPub('programacion', 'global', { reservas: nuevas }, actual.version); break }
+      catch (e) { if (e.status !== 409) throw e }
+    }
+  }
+  const agenda = (await leerPub('programacion', 'global'))?.datos?.reservas || {}
+  for (const fila of filas.filter(f => f.datos.estado === 'pendiente' && f.datos.video_path && !f.datos.reintento_el)) {
+    const reserva = agenda[fila.id]
+    if (reserva && fila.datos.programado_el !== reserva.fecha) {
+      try { await guardarPub('cola', fila.id, { ...fila.datos, programado_el: reserva.fecha, proximo_el: reserva.fecha, zona_horaria: reserva.zona }, fila.version) }
+      catch (e) { if (e.status !== 409) throw e }
+    }
+  }
+  for (const fila of filas.filter(f => f.datos.estado === 'pendiente' && !f.datos.video_path && !f.datos.programado_el)) {
+    const { fecha, zona } = await reservarHorario(fila.id, fila.datos.plataforma, Date.now())
+    try { await guardarPub('cola', fila.id, { ...fila.datos, programado_el: fecha, proximo_el: fecha, zona_horaria: zona }, fila.version) }
+    catch (e) { if (e.status !== 409) throw e }
+  }
+  return true
+}
 export async function encolarPub (origen, d, por) {
   const creado = Date.now(), ids = []
-  for (const plataforma of redesValidas(d.plataformas)) {
+  const plataformas = redesValidas(d.plataformas)
+  const turnoShort = d.video_path ? await reservarShort(origen, plataformas, creado) : null
+  for (const plataforma of plataformas) {
     const id = origen + '-' + plataforma
     if (!await leerPub('cola', id)) {
-      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, proximo_el: creado }) }
+      const { fecha, zona, programado } = turnoShort || await reservarHorario(id, plataforma, creado)
+      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, programado_el: programado === false ? 0 : fecha, zona_horaria: zona, proximo_el: fecha }) }
       catch (e) { if (e.status !== 409) throw e }
     }
     try { await guardarPub('eventos', 'encolado-' + id, { accion: 'encolado', por, el: creado, item_id: id, plataforma, fuente_url: d.fuente_url || '', aprobado_por: por }) }

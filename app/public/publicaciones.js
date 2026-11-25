@@ -418,6 +418,34 @@
   }
   function cola(box) {
     const items = P.datos.cola
+    const cadencia = P.datos.cadencia
+    const controles = el('details', {}, el('summary', {}, 'Cadencia de publicaciones'))
+    const activo = el('input', { type: 'checkbox' }); activo.checked = !!cadencia?.activo
+    controles.append(campo('Agenda activa', activo))
+    const filasCadencia = {}
+    for (const [red, nombre] of Object.entries(redes)) {
+      const c = cadencia?.por_red?.[red] || { por_dia: 0, horarios: [] }
+      const tope = entrada(String(c.por_dia), { type: 'number', min: '0', max: '50' })
+      const horarios = entrada((c.horarios || []).join(', '), { placeholder: '09:00, 15:00, 20:00' })
+      filasCadencia[red] = { tope, horarios }
+      controles.append(el('div', { class: 'row' }, campo(nombre + ' por día', tope), campo('Horarios (opcionales)', horarios)))
+    }
+    controles.append(el('p', { class: 'small muted' }, 'Si definís horarios, cada uno admite un envío diario. Sin horarios, el cupo se reparte entre las 9 y las 21 h. Los shorts comparten seis franjas globales de 9 a 21 h y usan la misma hora en todas sus redes.'))
+    controles.append(boton('Guardar cadencia', async () => {
+      const por_red = Object.fromEntries(Object.entries(filasCadencia).map(([red, f]) => [red, {
+        por_dia: Number(f.tope.value), horarios: f.horarios.value.split(',').map(x => x.trim()).filter(Boolean)
+      }]))
+      await post({ op: 'cadencia_guardar', datos: { activo: activo.checked, zona_horaria: cadencia?.zona_horaria || 'America/Argentina/Buenos_Aires', por_red } })
+      toast('Cadencia guardada'); await cargar(true)
+    }, 'tiny primary'))
+    box.append(controles)
+    if (cadencia?.activo) {
+      const resumen = Object.entries(redes).map(([red, nombre]) => {
+        const cupo = P.datos.cupos?.[red] || { libres: 0, tope: 0 }
+        return nombre + ': ' + cupo.libres + '/' + cupo.tope + ' libres hoy'
+      })
+      box.append(el('p', { class: 'small muted' }, 'Shorts del equipo: ' + (P.datos.cupos_short?.libres ?? 6) + '/6 libres hoy · ' + resumen.join(' · ')))
+    }
     const cuenta = items.reduce((a, p) => { a[p.estado] = (a[p.estado] || 0) + 1; return a }, {})
     const trabado = p => ['error', 'revisar'].includes(p.estado) || (p.estado === 'enviando' && (p.vence || 0) < Date.now())
     const nTrabados = items.filter(trabado).length
@@ -434,7 +462,7 @@
     const lista = items
       .filter(p => !P.colaEstado || p.estado === P.colaEstado)
       .filter(p => !P.colaRed || p.plataforma === P.colaRed)
-      .sort((a, b) => (a.proximo_el || a.creado || Infinity) - (b.proximo_el || b.creado || Infinity))
+      .sort((a, b) => (a.proximo_el || a.creado || Infinity) - (b.proximo_el || b.creado || Infinity) || (b.prioridad || 0) - (a.prioridad || 0))
     for (const p of lista) {
       const acciones = el('div', { class: 'row' })
       const youtubeFotos = p.estado === 'manual' && p.plataforma === 'youtube' && !p.video_path && p.imagenes?.length
@@ -447,7 +475,7 @@
       if (!p.video_path && p.imagenes?.length) acciones.append(botonDescargarImagenes(p))
       if (['pendiente', 'procesando'].includes(p.estado) && !p.remoto_id) acciones.append(
         boton('Priorizar', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'ya' }); toast('Movido al frente'); await cargar(true) }),
-        boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
+        !p.video_path && boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
       if (['error', 'revisar'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Reintentar subida', async () => { await post({ op: 'cola_reintentar', id: p.id, version: p._version }); toast('Reencolado'); await cargar(true) }, 'tiny primary'))
       if (['pendiente', 'error', 'manual', 'revisar'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)))
       if (!['publicado', 'borrador', 'cancelado'].includes(p.estado) && !(['enviando', 'procesando'].includes(p.estado) && p.remoto_id)) acciones.append(boton('Detener subida', async () => { await post({ op: 'cola_desestimar', id: p.id, version: p._version }); toast('Subida detenida'); await cargar(true) }, 'tiny ghost danger'))
@@ -463,6 +491,7 @@
       const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
       box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
         el('p', {}, (youtubeFotos ? 'Pendiente manual' : tiktokFotos ? 'En bandeja de TikTok' : etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
+        p.programado_el && el('p', { class: 'small muted' }, 'Programado: ' + new Intl.DateTimeFormat('es-AR', { timeZone: p.zona_horaria || 'America/Argentina/Cordoba', dateStyle: 'short', timeStyle: 'short' }).format(new Date(p.programado_el)) + ' · ' + (p.zona_horaria || 'Argentina')),
         p.estado === 'manual' && el('p', { class: 'small muted' }, youtubeFotos ? 'Bajá las placas en orden, copiá el texto y subilo desde + → Publicación en YouTube. Después pegá el enlace.' : 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
         el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('details', {}, el('summary', { class: 'small', style: 'color:var(--bad)' }, p.estado === 'revisar' ? 'Ver motivo y qué revisar' : 'Ver motivo del error'), el('p', { class: 'small' }, p.error)),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))

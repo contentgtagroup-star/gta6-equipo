@@ -4,6 +4,7 @@ import handler from '../api/publicacion.js'
 import { idFuente } from '../lib/publicacion.js'
 import { obtenerMetricas } from '../lib/metricas_redes.js'
 import { procesarPublicaciones } from '../lib/publicacion_worker.js'
+import { encolarPub, mantenerAgendaCola } from '../lib/publicacion_store.js'
 import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
 
 Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: '{"Eze":"clave-de-prueba-suficientemente-larga"}', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 2).toString('base64'), BUFFER_API_KEY: 'buffer-privado', BUFFER_CHANNEL_ID: 'canal-x' })
@@ -58,6 +59,94 @@ async function llamada(body, method = 'POST', clave = true) {
 function reset() { tablas.docs.length = 0; tablas.publicacion_docs.length = 0; remotas.length = 0; estadoGraph = 'processing'; publishReel = false; delete process.env.PUBLICACION_ACTIVA }
 const sugerencia = () => ({ coleccion: 'sugerencias', id: 's1', version: 1, datos: { titulo: 'Una caja en GTA 6', descripcion: '¿Qué tiene adentro?', plataformas: ['instagram', 'youtube'], hashtags: ['#GTA6'], media: 'reusar', video_path: 'Eze/clip.mp4', imagenes: [], estado: 'pendiente', media_lista: true } })
 const conexionMeta = () => ({ coleccion: 'conexiones', id: 'meta', version: 1, datos: { sobre: cifrarConexion('meta', { access_token: 'fixture', page_id: 'pagina', expira_el: Date.now() + 9999999 }) } })
+
+test('dos aprobaciones simultáneas toman franjas distintas y el cupo diario se respeta', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 2, horarios: ['18:00', '19:00'] } } } })
+  await Promise.all(['a', 'b', 'c'].map(id => encolarPub(id, { plataformas: ['x'], titulo: id, descripcion: 'Prueba' }, 'Eze')))
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos)
+  assert.equal(cola.length, 3)
+  assert.equal(new Set(cola.map(x => x.programado_el)).size, 3)
+  const dia = ms => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
+  assert.equal(cola.filter(x => dia(x.programado_el) === dia(cola[0].programado_el)).length, 2)
+})
+
+test('shorts simultáneos comparten horario entre redes y seis turnos para el equipo', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 20, horarios: [] }, youtube: { por_dia: 20, horarios: [] } } } })
+  await Promise.all(Array.from({ length: 7 }, (_, i) => encolarPub('short-' + i, { plataformas: ['x', 'youtube'], video_path: 'Eze/clip.mp4', titulo: 'Short ' + i, descripcion: 'Prueba' }, 'Eze')))
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos)
+  assert.equal(cola.length, 14)
+  for (let i = 0; i < 7; i++) {
+    const grupo = cola.filter(x => x.origen_id === 'short-' + i)
+    assert.equal(grupo.length, 2)
+    assert.equal(grupo[0].programado_el, grupo[1].programado_el)
+  }
+  const dia = ms => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
+  assert.ok(new Set(cola.map(x => x.origen_id).filter(id => dia(cola.find(x => x.origen_id === id).programado_el) === dia(Date.now()))).size <= 6)
+})
+
+test('un short vencido se reprograma junto en todas sus redes antes de enviarse', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] }, youtube: { por_dia: 6, horarios: [] } } } })
+  await encolarPub('viejo', { plataformas: ['x', 'youtube'], video_path: 'Eze/clip.mp4', titulo: 'Short', descripcion: 'Prueba' }, 'Eze')
+  const vencido = Date.now() - 20 * 60000
+  for (const fila of tablas.publicacion_docs.filter(x => x.coleccion === 'cola')) { fila.datos.programado_el = vencido; fila.datos.proximo_el = vencido }
+  const agenda = tablas.publicacion_docs.find(x => x.coleccion === 'programacion')
+  for (const reserva of Object.values(agenda.datos.reservas)) reserva.fecha = vencido
+  await mantenerAgendaCola()
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos)
+  assert.equal(cola[0].programado_el, cola[1].programado_el)
+  assert.ok(cola[0].programado_el >= Date.now() + 14 * 60000)
+})
+
+test('la cola anterior sin horario recibe un turno al activar la agenda', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] }, youtube: { por_dia: 6, horarios: [] } } } })
+  for (const red of ['x', 'youtube']) tablas.publicacion_docs.push({ coleccion: 'cola', id: 'legado-' + red, version: 1, datos: { origen_id: 'legado', plataforma: red, estado: 'pendiente', video_path: 'Eze/clip.mp4', aprobado_por: 'Eze', titulo: 'Legado' } })
+  await mantenerAgendaCola()
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos)
+  assert.equal(cola[0].programado_el, cola[1].programado_el)
+  assert.ok(cola[0].programado_el >= Date.now() + 14 * 60000)
+})
+
+test('un short aprobado con la agenda apagada se programa al activarla', async () => {
+  reset()
+  await encolarPub('apagado', { plataformas: ['x', 'youtube'], video_path: 'Eze/clip.mp4', titulo: 'Short', descripcion: 'Prueba' }, 'Eze')
+  assert.ok(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').every(x => !x.datos.programado_el))
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] }, youtube: { por_dia: 6, horarios: [] } } } })
+  await mantenerAgendaCola()
+  const horarios = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos.programado_el)
+  assert.equal(horarios[0], horarios[1])
+  assert.ok(horarios[0] >= Date.now() + 14 * 60000)
+})
+
+test('reintentar un short explícitamente no se sobrescribe con su reserva anterior', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] } } } })
+  await encolarPub('retry', { plataformas: ['x'], video_path: 'Eze/clip.mp4', titulo: 'Short', descripcion: 'Prueba' }, 'Eze')
+  const fila = tablas.publicacion_docs.find(x => x.coleccion === 'cola')
+  fila.datos.estado = 'error'
+  const agenda = tablas.publicacion_docs.find(x => x.coleccion === 'programacion')
+  agenda.datos.reservas[fila.id].fecha = Date.now() - 3600000
+  assert.equal((await llamada({ op: 'cola_reintentar', id: fila.id, version: 1 })).codigo, 200)
+  const fechaReintento = fila.datos.programado_el
+  await mantenerAgendaCola()
+  assert.equal(fila.datos.programado_el, fechaReintento)
+  assert.ok(fila.datos.reintento_el)
+})
+
+test('descartar un destino conserva el turno del short hasta descartar el último', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] }, youtube: { por_dia: 6, horarios: [] } } } })
+  await encolarPub('descartar', { plataformas: ['x', 'youtube'], video_path: 'Eze/clip.mp4', titulo: 'Short', descripcion: 'Prueba' }, 'Eze')
+  const reservas = () => Object.values(tablas.publicacion_docs.find(x => x.coleccion === 'programacion').datos.reservas)
+  assert.equal(reservas().length, 2)
+  assert.equal((await llamada({ op: 'cola_desestimar', id: 'descartar-x', version: 1 })).codigo, 200)
+  assert.equal(reservas().length, 1)
+  assert.equal((await llamada({ op: 'cola_desestimar', id: 'descartar-youtube', version: 1 })).codigo, 200)
+  assert.equal(reservas().length, 0)
+})
 
 test('publicaciones exige la clave del equipo antes de leer o escribir', async () => {
   reset(); assert.equal((await llamada({ op: 'importar_fuentes' }, 'POST', false)).codigo, 401)

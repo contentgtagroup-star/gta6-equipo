@@ -1,7 +1,7 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 import { exigir, responder } from '../../lib/comun.js'
 import { leerPub, guardarPub, eventoPub } from '../../lib/publicacion_store.js'
-import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH, usarYoutubeTokens, verificarYoutubeTokens } from '../../lib/conexiones.js'
+import { configOAuth, jsonRemoto, guardarConexion, tokenConexion, origenApp, GRAPH, youtubeRenovable, verificarYoutubeTokens } from '../../lib/conexiones.js'
 import { errorPublicacion } from '../../lib/publicacion.js'
 import { usarMetaSistema, verificarMetaSistema } from '../../lib/meta_sistema.js'
 
@@ -13,7 +13,10 @@ export default async function handler (req, res) {
     if (!['meta', 'google', 'tiktok', 'buffer'].includes(p)) throw errorPublicacion('Conexión desconocida.')
     if (req.method === 'POST') {
       const yo = exigir(req, res); if (!yo) return
-      if (p === 'meta' && usarMetaSistema()) {
+      const modoMeta = String(process.env.META_AUTH_MODE || '').trim().toLowerCase()
+      const metaSistema = p === 'meta' && usarMetaSistema()
+      const metaActual = p === 'meta' && !metaSistema && !modoMeta ? await leerPub('conexiones', p) : null
+      if (p === 'meta' && (metaSistema || !modoMeta && metaActual?.datos.origen === 'system_user')) {
         const datos = await verificarMetaSistema(yo)
         const actual = await leerPub('conexiones', p)
         await guardarConexion(p, datos, actual)
@@ -21,7 +24,8 @@ export default async function handler (req, res) {
         return responder(res, 200, { ok: true, metodo: 'system_user', faltan_permisos: datos.faltan_permisos || [] })
       }
       if (req.body?.op === 'renovar' && p !== 'meta') { await tokenConexion(p); return responder(res, 200, { ok: true }) }
-      if (p === 'google' && usarYoutubeTokens()) {
+      const googleActual = p === 'google' ? await leerPub('conexiones', p) : null
+      if (p === 'google' && youtubeRenovable(googleActual?.datos)) {
         const datos = await verificarYoutubeTokens(yo)
         const actual = await leerPub('conexiones', p)
         await guardarConexion(p, datos, actual)
@@ -30,6 +34,7 @@ export default async function handler (req, res) {
       }
       if (p === 'buffer') {
         const t = await tokenConexion(p)
+        if (!t.organization_id) throw errorPublicacion('Falta configurar BUFFER_ORGANIZATION_ID en Vercel para verificar la cuenta de X.', 424)
         let datos
         try {
           // Misma consulta que usa gta-publicador: los campos isDisconnected/isLocked no existen en Buffer.
@@ -41,8 +46,34 @@ export default async function handler (req, res) {
         const canal = (datos.data?.channels || []).find(x => String(x.id) === String(t.channel_id))
         if (!canal || String(canal.service).toLowerCase() !== 'twitter') throw errorPublicacion('El canal configurado en Buffer no es una cuenta de X conectada.', 424)
         const actual = await leerPub('conexiones', p)
-        await guardarPub('conexiones', p, { estado: 'conectada', sincronizada_el: Date.now(), cuenta: canal.name }, actual?.version || 0)
+        await guardarPub('conexiones', p, { estado: canal.isQueuePaused ? 'pausada' : 'conectada', sincronizada_el: Date.now(), cuenta: canal.name }, actual?.version || 0)
         return responder(res, 200, { ok: true })
+      }
+      if (req.body?.op === 'verificar') {
+        const t = await tokenConexion(p)
+        let cuenta = t.cuenta || ''
+        let actualizado = t
+        if (p === 'meta') {
+          const pagina = await jsonRemoto(GRAPH + '/' + encodeURIComponent(t.page_id) + '?fields=id,name,instagram_business_account', { headers: { Authorization: 'Bearer ' + t.access_token } })
+          if (String(pagina.id) !== String(process.env.META_PAGE_ID)) throw errorPublicacion('La conexión de Meta no corresponde a la página configurada.', 424)
+          cuenta = pagina.name || cuenta
+          actualizado = { ...t, cuenta, ig_id: pagina.instagram_business_account?.id || undefined }
+        } else if (p === 'google') {
+          const canales = await jsonRemoto('https://www.googleapis.com/youtube/v3/channels?part=id,snippet&mine=true', { headers: { Authorization: 'Bearer ' + t.access_token } })
+          const canal = canales.items?.find(x => String(x.id) === String(process.env.YOUTUBE_CHANNEL_ID || t.channel_id))
+          if (!canal) throw errorPublicacion('El token no da acceso al canal de YouTube configurado.', 424)
+          cuenta = canal.snippet?.title || cuenta
+          actualizado = { ...t, cuenta, channel_id: canal.id }
+        } else if (p === 'tiktok') {
+          const user = await jsonRemoto('https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name', { headers: { Authorization: 'Bearer ' + t.access_token } })
+          if (!user.data?.user?.open_id || t.open_id && user.data.user.open_id !== t.open_id) throw errorPublicacion('TikTok devolvió otra cuenta. Reconectá la cuenta correcta.', 424)
+          cuenta = user.data.user.display_name || cuenta
+          actualizado = { ...t, cuenta, open_id: user.data.user.open_id }
+        }
+        const actual = await leerPub('conexiones', p)
+        await guardarConexion(p, actualizado, actual)
+        await eventoPub('conexion_verificada', yo, { proveedor: p })
+        return responder(res, 200, { ok: true, cuenta })
       }
       const c = configOAuth(p), state = randomBytes(32).toString('hex')
       await guardarPub('oauth', createHash('sha256').update(state).digest('hex'), { proveedor: p, por: yo, vence: Date.now() + 600000, usado: false })
@@ -84,10 +115,12 @@ export default async function handler (req, res) {
       const user = await jsonRemoto('https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name', { headers: { Authorization: 'Bearer ' + t.access_token } })
       if (user.error?.code && user.error.code !== 'ok') throw errorPublicacion('TikTok no confirmó la cuenta.', 424)
       t.cuenta = user.data?.user?.display_name || 'TikTok'
+      t.open_id = user.data?.user?.open_id
     }
     etapa = 'guardar_conexion'
     const actual = await leerPub('conexiones', p)
-    await guardarConexion(p, { ...t, refresh_token: t.refresh_token || undefined, expira_el: t.expires_in ? Date.now() + Number(t.expires_in) * 1000 : null }, actual)
+    await guardarConexion(p, { ...t, refresh_token: t.refresh_token || undefined, expira_el: t.expires_in ? Date.now() + Number(t.expires_in) * 1000 : null,
+      refresh_expira_el: t.refresh_expires_in ? Date.now() + Number(t.refresh_expires_in) * 1000 : null }, actual)
     await eventoPub('conexion', intento.datos.por, { proveedor: p })
     res.setHeader('Set-Cookie', 'gta6_oauth_' + p + '=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/api/conexion')
     res.writeHead(303, { Location: origenApp() + '/#publicaciones' }); res.end()

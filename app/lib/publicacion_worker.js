@@ -78,7 +78,7 @@ export async function procesarPublicaciones (yo) {
         await checkpoint({ estado: 'procesando', proximo_el: Date.now() + 30000 })
         return { ok: true, item_id: d.id }
       }
-      if (e.remoto === 401 || e.remoto === 403) {
+      if (e.remoto === 401 || ['invalid_grant', 'invalid_token', 'access_token_invalid'].includes(e.codigoRemoto)) {
         try { await marcarConexionVencida(REDES[d.datos.plataforma].proveedor) } catch {}
       }
       // Una respuesta perdida puede haber publicado: nunca se reintenta a ciegas.

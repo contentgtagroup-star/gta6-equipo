@@ -105,6 +105,16 @@ test('la respuesta exitosa de TikTok con error.code=ok se acepta y los errores n
   } finally { globalThis.fetch = original }
 })
 
+test('Meta distingue token inválido de permiso denegado', async () => {
+  const original = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: { code: 190, message: 'token-no-mostrar' } }), { status: 400 })
+    await assert.rejects(jsonRemoto('https://graph.facebook.com/v27.0/me'), e => e.codigoRemoto === 'invalid_token' && !e.message.includes('no-mostrar'))
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: { code: 200, message: 'permiso-no-mostrar' } }), { status: 403 })
+    await assert.rejects(jsonRemoto('https://graph.facebook.com/v27.0/me'), e => e.remoto === 403 && !e.codigoRemoto && !e.message.includes('no-mostrar'))
+  } finally { globalThis.fetch = original }
+})
+
 test('los errores OAuth y de perfil de TikTok se explican sin mostrar descripciones privadas', async () => {
   const original = globalThis.fetch
   try {

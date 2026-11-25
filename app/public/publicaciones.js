@@ -2,6 +2,14 @@
 (() => {
   const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '', etag: '' }
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
+  // Color de marca por red (legible en el panel oscuro), para reconocerlas a la vista.
+  const redColor = { instagram: '#E1306C', facebook: '#4599FF', x: '#E7E9EA', youtube: '#FF4E45', tiktok: '#25F4EE' }
+  function redChip (id, texto) {
+    const c = redColor[id] || 'var(--fg)'
+    return el('span', { style: 'display:inline-flex;align-items:center;gap:6px;font-weight:700;color:' + c },
+      el('span', { 'aria-hidden': 'true', style: 'width:9px;height:9px;border-radius:50%;background:' + c + ';display:inline-block;flex:none' }),
+      el('span', {}, texto || redes[id] || id))
+  }
   const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', config_incompleta: 'Configuración incompleta', conectada: 'Conectada', pausada: 'Cola pausada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', manual: 'Para subir a mano a X', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
   const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
   const num = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'
@@ -107,7 +115,7 @@
         const d = await api('/api/trazabilidad?' + q)
         if (actual !== pedido || !box.isConnected) return
         for (const e of d.eventos || []) cuerpo.append(el('tr', {},
-          el('td', {}, fecha(e.el)), el('td', {}, redes[e.plataforma] || '—'),
+          el('td', {}, fecha(e.el)), el('td', {}, e.plataforma && redes[e.plataforma] ? redChip(e.plataforma) : '—'),
           el('td', {}, e.accion || '—'), el('td', {}, e.por || '—'),
           el('td', {}, e.titulo || e.item_id || e.fuente_id || e.trabajo_id || '—')))
         cursor = d.siguiente
@@ -532,7 +540,7 @@
       }), boton('Ya lo publiqué', confirmar))
       if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', confirmar))
       const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
-      box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
+      box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' }, redChip(p.plataforma), el('span', {}, '· ' + p.titulo)),
         el('p', {}, (youtubeFotos ? 'Pendiente manual' : tiktokFotos ? 'En bandeja de TikTok' : etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
         p.programado_el && el('p', { class: 'small muted' }, 'Programado: ' + new Intl.DateTimeFormat('es-AR', { timeZone: p.zona_horaria || 'America/Argentina/Cordoba', dateStyle: 'short', timeStyle: 'short' }).format(new Date(p.programado_el)) + ' · ' + (p.zona_horaria || 'Argentina')),
         p.estado === 'manual' && el('p', { class: 'small muted' }, youtubeFotos ? 'Bajá las placas en orden, copiá el texto y subilo desde + → Publicación en YouTube. Después pegá el enlace.' : 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),

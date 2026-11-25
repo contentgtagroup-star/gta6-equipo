@@ -449,7 +449,8 @@
         boton('Priorizar', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'ya' }); toast('Movido al frente'); await cargar(true) }),
         boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
       if (p.estado === 'error') acciones.append(boton('Reintentar', async () => { await post({ op: 'cola_reintentar', id: p.id, version: p._version }); await cargar(true) }, 'tiny primary'))
-      if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)), boton('Cancelar', async () => { await post({ op: 'cola_cancelar', id: p.id, version: p._version }); await cargar(true) }))
+      if (['pendiente', 'error', 'manual'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)))
+      if (!['publicado', 'borrador', 'cancelado'].includes(p.estado) && !(['enviando', 'procesando'].includes(p.estado) && p.remoto_id)) acciones.append(boton('Detener subida', async () => { await post({ op: 'cola_desestimar', id: p.id, version: p._version }); toast('Subida detenida'); await cargar(true) }, 'tiny ghost danger'))
       if (p.remoto_id && ['procesando', 'enviando'].includes(p.estado)) acciones.append(boton('Detener reintentos', async () => { await post({ op: 'cola_detener', id: p.id, version: p._version }); await cargar(true) }))
       if (youtubeFotos) {
         acciones.append(boton('Ya lo publiqué', confirmar))

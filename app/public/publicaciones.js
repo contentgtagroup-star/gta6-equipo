@@ -338,13 +338,21 @@
   }
   function sugerencias(box) {
     box.append(boton('Traer clips aprobados', async () => { const d = await post({ op: 'sugerir_clips' }); toast(d.agregadas + ' sugerencias nuevas'); await cargar(true) }))
+    // Generaciones en curso: la sugerencia todavía no existe, pero mostramos que está en proceso.
+    for (const t of P.datos.trabajos.filter(t => t.fuente_id && t.tipo !== 'media' && trabajoActivo(t) && !P.datos.sugerencias.some(s => s.estado === 'pendiente' && s.fuente_id === t.fuente_id))) {
+      const fuente = P.datos.fuentes.find(f => f.id === t.fuente_id)
+      box.append(el('article', { class: 'pub-suggestion' }, el('div', { class: 'pub-suggestion-content' }, el('div', { class: 'pub-suggestion-copy' },
+        el('h3', {}, '⏳ Generando sugerencia…'),
+        el('p', { class: 'small muted' }, 'En proceso en la compu de ' + (t.pedido_por || 'el equipo') + (fuente ? ' · ' + fuente.url.replace('https://', '') : '')),
+        progresoTrabajo(t, 'Generación')))))
+    }
     for (const s of P.datos.sugerencias.filter(s => s.estado === 'pendiente')) {
       const listo = Boolean(s.video_path || s.imagenes?.length)
       const trabajo = P.datos.trabajos.find(t => t.sugerencia_id === s.id && t.tipo === 'media')
       const ocupado = trabajo && trabajoActivo(trabajo)
       const material = el('section', { class: 'pub-suggestion-material', 'aria-label': 'Material generado' }, el('h4', {}, 'Material generado'),
         el('p', { class: 'small muted' }, listo ? (s.video_path ? '1 video' : s.imagenes.length === 1 ? '1 imagen' : s.imagenes.length + ' imágenes') + ' · vista privada'
-          : ocupado ? 'En preparación' : 'Todavía no hay material preparado.'))
+          : ocupado ? 'En preparación…' : 'Todavía no hay material. Tocá "Preparar material con IA" para que baje/recorte el video (o modele las imágenes); recién ahí vas a poder elegir redes y publicar.'))
       if (trabajo && trabajo.estado !== 'cancelado') material.append(progresoTrabajo(trabajo, 'Preparación de material'))
       if (trabajo?.estado === 'error' && trabajo.error) material.append(el('details', {}, el('summary', {}, 'Ver detalle'), el('p', { class: 'small' }, trabajo.error)))
       if (listo) {
@@ -373,7 +381,7 @@
             notas.map(nota => el('p', { class: 'small' }, nota)))), material),
         el('div', { class: 'row pub-suggestion-actions' },
           el('div', { class: 'row' }, boton('Editar y preparar', () => editarContenido(s)),
-          !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }),
+          !ocupado && boton(trabajo?.estado === 'error' ? 'Reintentar preparación' : 'Preparar material con IA', async () => { await post({ op: 'preparar_media', id: s.id, version: s._version }); toast('Preparación en cola'); await cargar(true) }, listo ? 'tiny' : 'tiny primary'),
           boton('Descartar sugerencia', () => dialogo('Descartar sugerencia', el('p', {}, s.fuente_id
             ? 'Se quita de Sugerencias y podés volver a generar desde el mismo enlace.'
             : 'Se quita de Sugerencias.'), async () => {

@@ -6,6 +6,21 @@ const fecha = ms => new Date(ms).toISOString().slice(0, 10)
 function params (base, datos) { const u = new URL(base); for (const [k, v] of Object.entries(datos)) u.searchParams.set(k, v); return u }
 const mapaYT = { views: 'vistas', likes: 'likes', comments: 'comentarios', shares: 'compartidos', subscribersGained: 'follows', averageViewDuration: 'tiempo_medio', averageViewPercentage: 'retencion' }
 export function filaYouTube (d, fila) { return Object.fromEntries(d.columnHeaders.map((c, i) => [mapaYT[c.name] || c.name, fila[i]])) }
+async function videosRecientesYouTube (t, canal, desde, hasta) {
+  const lista = canal.contentDetails?.relatedPlaylists?.uploads
+  if (!lista) return []
+  const items = await jsonRemoto(params('https://www.googleapis.com/youtube/v3/playlistItems', { part: 'contentDetails', playlistId: lista, maxResults: 50 }), auth(t))
+  const ids = (items.items || []).map(x => x.contentDetails?.videoId).filter(Boolean)
+  if (!ids.length) return []
+  const videos = await jsonRemoto(params('https://www.googleapis.com/youtube/v3/videos', { part: 'snippet,statistics', id: ids.join(',') }), auth(t))
+  return (videos.items || []).filter(x => {
+    const creado = Date.parse(x.snippet?.publishedAt || '')
+    return creado >= desde && creado <= hasta
+  }).map(x => ({ id: x.id, titulo: x.snippet?.title, enlace: 'https://www.youtube.com/watch?v=' + x.id,
+    creado: Date.parse(x.snippet.publishedAt), vistas: Number(x.statistics?.viewCount ?? 0),
+    likes: x.statistics?.likeCount == null ? null : Number(x.statistics.likeCount),
+    comentarios: x.statistics?.commentCount == null ? null : Number(x.statistics.commentCount) }))
+}
 export async function obtenerMetricas (red, ventana, publicaciones = []) {
   const t = await tokenConexion(REDES[red].proveedor), v = ventanaMetricas(ventana)
   const hasta = Date.now(), desde = ventana === 'historico' ? Date.UTC(2020, 0, 1) : v.desde
@@ -28,14 +43,19 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
       const d = await jsonRemoto(params('https://youtubeanalytics.googleapis.com/v2/reports', q), auth(t)).catch(errorAcceso)
       return (d.rows || []).map(f => filaYouTube(d, f))
     }
-    const [cuenta, posts, anterior, canal] = await Promise.all([
-      reporte(rango.desde, rango.hasta), reporte(rango.desde, rango.hasta, true),
+    const [cuenta, anterior, canal] = await Promise.all([
+      reporte(rango.desde, rango.hasta),
       ventana === 'historico' ? null : reporte(rango.desde - dur, rango.desde - 1),
-      jsonRemoto('https://www.googleapis.com/youtube/v3/channels?part=statistics&mine=true', auth(t))
+      jsonRemoto('https://www.googleapis.com/youtube/v3/channels?part=statistics,contentDetails&mine=true', auth(t))
     ])
     const actual = cuenta[0] || {}
     actual.seguidores = canal.items?.[0]?.statistics?.hiddenSubscriberCount ? null : Number(canal.items?.[0]?.statistics?.subscriberCount ?? NaN)
-    return { actual, anterior: anterior?.[0] || null, posts, rango, nota: 'YouTube Analytics informa por día cerrado. Los videos muestran las 25 publicaciones con más vistas en esa ventana.' }
+    if (process.env.YOUTUBE_CHANNEL_ID && canal.items?.[0]?.id !== process.env.YOUTUBE_CHANNEL_ID) throw errorPublicacion('El token de YouTube apunta a otro canal. Revisá YOUTUBE_CHANNEL_ID y reconectá.', 424)
+    let recientes = [], detalleRecienteNoDisponible = false
+    try { recientes = await videosRecientesYouTube(t, canal.items?.[0] || {}, desde, hasta) } catch { detalleRecienteNoDisponible = true }
+    return { actual, anterior: anterior?.[0] || null, posts: recientes, rango,
+      recientes: detalleRecienteNoDisponible ? null : { videos: recientes.length, vistas: recientes.reduce((s, p) => s + p.vistas, 0) },
+      nota: 'YouTube Analytics tarda normalmente 48 a 72 horas en procesar datos. El período de arriba usa Analytics; la tabla muestra contadores actuales acumulados de videos publicados en la ventana (hasta 50 recientes).' + (detalleRecienteNoDisponible ? ' YouTube no devolvió el detalle reciente en esta sincronización.' : '') }
   }
   if (red === 'x') {
     if (!t.organization_id) throw errorPublicacion('Configurá la organización de Buffer para leer sus métricas.', 424)
@@ -60,18 +80,22 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
         detalleParcial = true
       }
     }
-    return { actual: await agregado(inicio, hasta), anterior: ventana === 'historico' ? null : await agregado(v.anterior_desde, v.anterior_hasta), posts, rango: { desde: inicio, hasta }, nota: 'Buffer sincroniza aproximadamente una vez por día. El detalle incluye hasta 10 publicaciones registradas por esta app; sus contadores son acumulados.' + (detalleParcial ? ' Buffer no devolvió el detalle por publicación en esta sincronización.' : '') }
+    return { actual: await agregado(inicio, hasta), anterior: ventana === 'historico' ? null : await agregado(v.anterior_desde, v.anterior_hasta), posts, rango: { desde: inicio, hasta }, nota: 'Las impresiones son el total de los posts del canal incluidos por Buffer en esta ventana; no corresponden a un solo post. Buffer sincroniza aproximadamente una vez por día. El detalle incluye hasta 10 publicaciones registradas por esta app; sus contadores son acumulados.' + (detalleParcial ? ' Buffer no devolvió el detalle por publicación en esta sincronización.' : '') }
   }
   if (red === 'tiktok') {
     const permisos = String(t.scope || '').split(/[\s,]+/)
     const faltan = ['user.info.stats', 'video.list'].filter(p => !permisos.includes(p))
-    if (faltan.length) throw errorPublicacion('TikTok no autorizó las métricas de esta cuenta. Faltan permisos: ' + faltan.join(', ') + '. El sandbox actual solo permite publicar al Inbox.', 424)
+    if (faltan.length) throw errorPublicacion('TikTok todavía no autorizó estas métricas. Faltan permisos: ' + faltan.join(', ') + '. Aplicá los cambios del sandbox y reconectá la cuenta.', 424)
     const [u, videos] = await Promise.all([
       jsonRemoto('https://open.tiktokapis.com/v2/user/info/?fields=follower_count,likes_count,video_count', auth(t)),
       jsonRemoto('https://open.tiktokapis.com/v2/video/list/?fields=id,title,create_time,share_url,view_count,like_count,comment_count,share_count', { method: 'POST', headers: { ...auth(t).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ max_count: 20 }) })
     ])
     const posts = (videos.data?.videos || []).map(p => ({ id: p.id, titulo: p.title, enlace: p.share_url, creado: p.create_time * 1000, vistas: p.view_count, likes: p.like_count, comentarios: p.comment_count, compartidos: p.share_count }))
-    return { actual: { seguidores: u.data?.user?.follower_count ?? null }, anterior: null, posts: posts.filter(p => p.creado >= desde), rango: { desde, hasta }, nota: 'TikTok devuelve contadores acumulados de hasta 20 videos recientes. No equivalen a interacciones ganadas en la ventana. Retención, guardados y follows por post no están disponibles con esta integración.' }
+    const enVentana = posts.filter(p => p.creado >= desde && p.creado <= hasta)
+    const sumar = k => enVentana.reduce((s, p) => s + (Number(p[k]) || 0), 0)
+    return { actual: { seguidores: u.data?.user?.follower_count ?? null }, anterior: null, posts: enVentana, rango: { desde, hasta },
+      recientes: { videos: enVentana.length, vistas: sumar('vistas'), interacciones: sumar('likes') + sumar('comentarios') + sumar('compartidos') },
+      nota: 'El resumen de videos suma contadores acumulados de hasta 20 publicaciones recientes creadas en la ventana. No representa vistas o interacciones ganadas durante esos días. Retención, guardados y follows por post no están disponibles con esta integración.' }
   }
   const id = red === 'instagram' ? t.ig_id : t.page_id
   if (!id) throw errorPublicacion('Conectá la cuenta de Meta correspondiente.', 424)

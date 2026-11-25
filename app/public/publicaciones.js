@@ -635,13 +635,19 @@
         if (datos.no_disponibles?.length) resultado.append(el('p', { class: 'small muted' },
           'Datos no disponibles: ' + datos.no_disponibles.map(k => nombres[k] || k).join(', ')))
         const indicadores = el('div', { class: 'pub-metric-cards' })
-        for (const [clave, nombre] of (cuenta === 'x' ? [['impresiones', 'Impresiones'], ['reacciones', 'Reacciones'], ['publicaciones_buffer', 'Posts medidos'], ['alcance', 'Alcance']] : [['vistas', 'Vistas'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores']])) {
-          const valor = datos.actual?.[clave]
+        const tarjetas = cuenta === 'x' ? [['impresiones', 'Impresiones · Buffer'], ['reacciones', 'Reacciones · Buffer'], ['publicaciones_buffer', 'Posts medidos'], ['alcance', 'Alcance']]
+          : cuenta === 'tiktok' ? [['vistas', 'Vistas acumuladas · videos recientes', 'recientes'], ['interacciones', 'Interacciones acumuladas · videos recientes', 'recientes'], ['videos', 'Videos recientes', 'recientes'], ['seguidores', 'Seguidores actuales']]
+            : [['vistas', 'Vistas · Analytics'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores actuales']]
+        for (const [clave, nombre, fuente] of tarjetas) {
+          const valor = fuente === 'recientes' ? datos.recientes?.[clave] : datos.actual?.[clave]
           indicadores.append(el('article', { class: 'pub-metric-card' }, el('span', { class: 'small muted' }, nombre), el('strong', {}, num(valor))))
         }
         resultado.prepend(indicadores)
+        if (cuenta === 'youtube' && datos.recientes) resultado.insertBefore(el('p', { class: 'small muted' },
+          'Videos publicados en la ventana: ' + datos.recientes.videos + ' · Vistas actuales acumuladas: ' + num(datos.recientes.vistas) + '. Estos contadores son más recientes que Analytics y no miden las vistas ganadas en la ventana.'), indicadores.nextSibling)
         const posts = datos.posts || []
-        const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
+        const finContenido = cuenta === 'youtube' ? Date.now() : datos.rango.hasta
+        const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= finContenido)
         const vinculados = new Set()
         const filas = registros.map(p => {
           const m = posts.find(x => x.id && ([p.publicacion_remota, p.remoto_id].some(id => id && String(x.id) === String(id)) || x.enlace && x.enlace === p.enlace))

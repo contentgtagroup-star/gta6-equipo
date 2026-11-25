@@ -119,7 +119,7 @@ export async function pasoPublicacion (item, checkpoint) {
     const assets = item.video_path ? `assets: [{video: {url: ${JSON.stringify(await video(item))}}}]` : item.imagenes?.length ? 'assets: [' + (await imagenes(item)).map(u => '{image: {url: ' + JSON.stringify(u) + '}}').join(',') + ']' : ''
     await checkpoint({ etapa: 'publicando' })
     const d = await buffer(`mutation { createPost(input: {channelId: ${JSON.stringify(t.channel_id)}, text: ${JSON.stringify(texto)}, schedulingType: automatic, mode: shareNow, ${assets}}) { ... on PostActionSuccess { post { id sentAt externalLink } } ... on MutationError { message } } }`, t)
-    if (!d.createPost?.post?.id) throw errorPublicacion('Buffer rechazó el contenido o la cuenta de X.', 422)
+    if (!d.createPost?.post?.id) throw errorPublicacion('Buffer rechazó X' + (d.createPost?.message ? ': ' + d.createPost.message : ' (contenido o cuenta).'), 422)
     return { remoto_id: d.createPost.post.id, enlace: d.createPost.post.externalLink || '', estado: d.createPost.post.sentAt ? 'publicado' : 'procesando', etapa: 'confirmando' }
   }
   if (item.plataforma === 'youtube') {

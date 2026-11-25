@@ -437,6 +437,15 @@ test('Buffer usa post(input) para el detalle y conserva las métricas agregadas'
   }
 })
 
+test('TikTok sandbox informa los permisos de métricas faltantes sin consultar endpoints no autorizados', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'conexiones', id: 'tiktok', version: 1, datos: {
+    estado: 'conectada', sobre: cifrarConexion('tiktok', { access_token: 'sandbox', scope: 'user.info.basic,video.upload', expira_el: Date.now() + 3600000 })
+  } })
+  await assert.rejects(obtenerMetricas('tiktok', '7d'), e => e.status === 424 && /user.info.stats, video.list/.test(e.message))
+  assert.equal(remotas.length, 0)
+})
+
 test('descartar oculta la propuesta, bloquea su aprobación y habilita otra desde el mismo enlace', async () => {
   reset()
   const url = 'https://x.com/cuenta/status/123'

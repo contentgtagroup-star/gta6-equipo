@@ -251,15 +251,22 @@ test('confirmar_manual publica X con un link de x.com y rechaza otros hosts', as
 })
 const enCola = (id, datos) => ({ coleccion: 'cola', id, version: 1, datos: { plataforma: 'instagram', titulo: 'Envío ' + id, aprobado_por: 'Eze', creado: 1, proximo_el: 1, ...datos } })
 
-test('administración de cola: reintentar un fallado lo reencola y nunca toca un «revisar»', async () => {
+test('administración de cola: reintentar reencola fallados y trabados sin id remoto, y bloquea un «revisar» con id remoto', async () => {
   reset()
-  tablas.publicacion_docs.push(enCola('c-err', { estado: 'error', error: 'falló la red' }), enCola('c-rev', { estado: 'revisar', error: 'se interrumpió' }))
+  tablas.publicacion_docs.push(
+    enCola('c-err', { estado: 'error', error: 'falló la red' }),
+    enCola('c-trab', { estado: 'revisar', error: 'se interrumpió' }),
+    enCola('c-rev', { estado: 'revisar', error: 'se interrumpió', remoto_id: 'r9' }))
   const ok = await llamada({ op: 'cola_reintentar', id: 'c-err', version: 1 })
   assert.equal(ok.codigo, 200)
   const reencolado = tablas.publicacion_docs.find(d => d.id === 'c-err')
   assert.equal(reencolado.datos.estado, 'pendiente')
   assert.equal(reencolado.datos.error, '')
   assert.ok(reencolado.datos.proximo_el > 1)
+  // Un trabado SIN id remoto sí se puede reintentar.
+  assert.equal((await llamada({ op: 'cola_reintentar', id: 'c-trab', version: 1 })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'c-trab').datos.estado, 'pendiente')
+  // Un «revisar» CON id remoto (pudo publicarse) sigue bloqueado.
   assert.equal((await llamada({ op: 'cola_reintentar', id: 'c-rev', version: 1 })).codigo, 409)
   assert.equal(tablas.publicacion_docs.find(d => d.id === 'c-rev').datos.estado, 'revisar')
 })

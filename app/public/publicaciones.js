@@ -69,16 +69,55 @@
     finally { P.cargando = false }
   }
   function render() {
-    const tabs = { conexiones: 'Conexiones', fuentes: 'Cuentas a rastrear', sugerencias: 'Sugerencias', cola: 'Cola', actividad: 'Actividad', metricas: 'Métricas' }
+    const enResultados = window.estoyEn?.('resultados')
+    const enTrazabilidad = window.estoyEn?.('trazabilidad')
+    const tabs = { conexiones: 'Conexiones', fuentes: 'Cuentas a rastrear', sugerencias: 'Sugerencias', cola: 'Cola', actividad: 'Actividad' }
     $('pubTabs').replaceChildren(...Object.entries(tabs).map(([id, texto]) => boton(texto, () => { P.tab = id; render() }, 'tiny' + (P.tab === id ? ' primary' : ''))))
     for (const b of $('pubTabs').children) b.setAttribute('aria-pressed', b.textContent === tabs[P.tab] ? 'true' : 'false')
-    const box = $('pubContenido'); box.replaceChildren()
+    const box = $(enResultados ? 'pubResultadosContenido' : enTrazabilidad ? 'pubTrazabilidadContenido' : 'pubContenido'); box.replaceChildren()
     if (!S.clave) { box.append(el('p', { class: 'small muted' }, 'Entrá al panel para ver las publicaciones.')); return }
     if (!P.datos) {
       box.append(el('p', { class: 'small muted' }, P.error ? 'Ya estás dentro del panel. No necesitás volver a ingresar tu clave. La biblioteca y el motor de clips siguen disponibles.' : 'Cargando publicaciones…'))
       return
     }
-    ;({ conexiones, fuentes, sugerencias, cola, actividad, metricas })[P.tab](box)
+    if (enResultados) metricas(box)
+    else if (enTrazabilidad) trazabilidad(box)
+    else ({ conexiones, fuentes, sugerencias, cola, actividad })[P.tab](box)
+  }
+  function trazabilidad (box) {
+    const red = selector([['', 'Todas las redes'], ...Object.entries(redes)], '')
+    const accion = entrada('', { placeholder: 'Acción exacta, por ejemplo encolado' })
+    const desde = entrada('', { type: 'date' }), hasta = entrada('', { type: 'date' })
+    const estado = el('p', { class: 'small muted', role: 'status' })
+    const cuerpo = el('tbody')
+    const tabla = el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, ['Fecha', 'Red', 'Acción', 'Integrante', 'Contenido'].map(t => el('th', {}, t)))), cuerpo))
+    const mas = boton('Ver más', () => cargarPagina(true))
+    let cursor = null, pedido = 0
+    async function cargarPagina (agregar = false) {
+      const actual = ++pedido
+      if (!agregar) { cursor = null; cuerpo.replaceChildren() }
+      estado.textContent = 'Cargando historial…'
+      const q = new URLSearchParams()
+      if (red.value) q.set('plataforma', red.value)
+      if (accion.value.trim()) q.set('accion', accion.value.trim())
+      if (desde.value) q.set('desde', String(new Date(desde.value + 'T00:00:00-03:00').getTime()))
+      if (hasta.value) q.set('hasta', String(new Date(hasta.value + 'T23:59:59-03:00').getTime()))
+      if (cursor) { q.set('cursor_el', cursor.el); q.set('cursor_id', cursor.id) }
+      try {
+        const d = await api('/api/trazabilidad?' + q)
+        if (actual !== pedido || !box.isConnected) return
+        for (const e of d.eventos || []) cuerpo.append(el('tr', {},
+          el('td', {}, fecha(e.el)), el('td', {}, redes[e.plataforma] || '—'),
+          el('td', {}, e.accion || '—'), el('td', {}, e.por || '—'),
+          el('td', {}, e.titulo || e.item_id || e.fuente_id || e.trabajo_id || '—')))
+        cursor = d.siguiente
+        mas.hidden = !cursor
+        estado.textContent = cuerpo.children.length + ' acciones visibles' + (cursor ? ' · hay más' : '')
+      } catch (e) { estado.textContent = e.message || 'No se pudo leer el historial.' }
+    }
+    const aplicar = boton('Filtrar', () => cargarPagina())
+    box.append(el('div', { class: 'row' }, campo('Red', red), campo('Acción', accion), campo('Desde', desde), campo('Hasta', hasta), aplicar), estado, tabla, mas)
+    cargarPagina()
   }
   function conexiones(box) {
     const grid = el('div', { class: 'people', style: 'grid-template-columns:repeat(auto-fit,minmax(190px,1fr))' })
@@ -591,16 +630,45 @@
         else resultado.append(el('p', { class: 'small muted' }, 'La plataforma no devolvió totales para esta ventana.'))
         if (datos.no_disponibles?.length) resultado.append(el('p', { class: 'small muted' },
           'Datos no disponibles: ' + datos.no_disponibles.map(k => nombres[k] || k).join(', ')))
-        const registradas = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
-        resultado.append(el('p', { class: 'small' }, registradas.length + ' publicaciones registradas en esta app durante el período.'))
-        const posts = [...(datos.posts || [])].sort((a, b) => (b.vistas || 0) - (a.vistas || 0))
-        if (posts.length) resultado.append(el('h3', {}, 'Publicaciones · primero la de más vistas'))
-        for (const p of posts) {
-          const enlace = p.enlace || (p.video ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(p.video) : null)
-          resultado.append(el('details', {}, el('summary', {}, (p.titulo || p.video || p.id) + ' · ' + num(p.vistas) + ' vistas'),
-            enlace && el('a', { href: enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver publicación'),
-            ...Object.entries(nombres).filter(([k]) => k !== 'seguidores' && hay(p[k])).map(([k, n]) => el('p', { class: 'small' }, n + ': ' + num(p[k])))))
+        const indicadores = el('div', { class: 'pub-metric-cards' })
+        for (const [clave, nombre] of [['vistas', 'Vistas'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores']]) {
+          const valor = datos.actual?.[clave]
+          indicadores.append(el('article', { class: 'pub-metric-card' }, el('span', { class: 'small muted' }, nombre), el('strong', {}, num(valor))))
         }
+        resultado.prepend(indicadores)
+        const posts = datos.posts || []
+        const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
+        const vinculados = new Set()
+        const filas = registros.map(p => {
+          const m = posts.find(x => x.id && (String(x.id) === String(p.remoto_id) || x.enlace && x.enlace === p.enlace))
+          if (m) vinculados.add(m)
+          return { ...p, metrica: m, titulo: p.titulo, fecha: p.publicado_el, enlace: p.enlace || m?.enlace, estado: 'Publicado' }
+        })
+        for (const m of posts.filter(x => !vinculados.has(x))) filas.push({ titulo: m.titulo || m.id || 'Publicación externa', fecha: m.creado || 0, enlace: m.enlace, estado: 'En la red', metrica: m })
+        const tituloTabla = el('h3', {}, 'Contenido publicado')
+        const buscar = entrada('', { type: 'search', placeholder: 'Buscar título o identificador', 'aria-label': 'Buscar contenido' })
+        const desde = entrada('', { type: 'date', 'aria-label': 'Desde' })
+        const hasta = entrada('', { type: 'date', 'aria-label': 'Hasta' })
+        const filtro = selector([['', 'Todos los registros'], ['Publicado', 'Publicado desde el panel'], ['En la red', 'Encontrado en la red']], '')
+        const aviso = el('p', { class: 'small muted' })
+        const cuerpoPosts = el('tbody')
+        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {}, ['Contenido', 'Fecha', 'Estado', 'Vistas', 'Me gusta', 'Comentarios', 'Compartidos', 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
+        const dia = t => new Date(t).toISOString().slice(0, 10)
+        function dibujarFilas () {
+          const texto = buscar.value.toLocaleLowerCase('es'), elegidas = filas.filter(p =>
+            (!texto || (p.titulo + ' ' + (p.metrica?.id || '')).toLocaleLowerCase('es').includes(texto)) &&
+            (!filtro.value || p.estado === filtro.value) &&
+            (!desde.value || p.fecha && dia(p.fecha) >= desde.value) && (!hasta.value || p.fecha && dia(p.fecha) <= hasta.value))
+            .sort((a, b) => b.fecha - a.fecha)
+          aviso.textContent = elegidas.length + ' registros · “—” indica dato no disponible en la conexión.'
+          cuerpoPosts.replaceChildren(...elegidas.map(p => el('tr', {},
+            el('td', {}, p.titulo), el('td', {}, p.fecha ? fecha(p.fecha) : '—'), el('td', {}, p.estado),
+            ...['vistas', 'likes', 'comentarios', 'compartidos'].map(k => el('td', { class: 'n' }, num(p.metrica?.[k]))),
+            el('td', {}, p.enlace ? el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver') : '—'))))
+        }
+        for (const control of [buscar, desde, hasta, filtro]) control.addEventListener('input', dibujarFilas)
+        resultado.append(tituloTabla, el('div', { class: 'row' }, buscar, campo('Desde', desde), campo('Hasta', hasta), filtro), aviso, el('div', { class: 'tbl' }, tablaPosts))
+        dibujarFilas()
       } catch (e) {
         if (actual === pedido && resultado.isConnected) resultado.replaceChildren(el('p', { class: 'small', role: 'alert' }, e.message),
           el('p', { class: 'small muted' }, ayudaAcceso[cuenta]))
@@ -619,8 +687,8 @@
   }
   $('pubActualizar').addEventListener('click', () => cargar(true))
   // Publicaciones se consulta solo cuando el panel abre esa sección: crear clips no debe esperar a la base.
-  const enSeccion = () => !window.estoyEn || window.estoyEn('publicaciones')
-  window.publicacionesAlEntrar = () => cargar()
+  const enSeccion = () => !window.estoyEn || window.estoyEn('publicaciones') || window.estoyEn('resultados') || window.estoyEn('trazabilidad')
+  window.publicacionesAlEntrar = () => { render(); cargar() }
   render(); if (enSeccion()) cargar()
   setInterval(() => {
     if (document.hidden || !enSeccion()) return

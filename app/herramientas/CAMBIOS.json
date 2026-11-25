@@ -1,6 +1,7 @@
 {
- "version": 78,
+ "version": 79,
  "cambios": [
+  {"v": 79, "fecha": "2026-11-25", "texto": "Resultados distingue los totales tardíos de YouTube Analytics de los contadores actuales de sus videos, suma los videos recientes de TikTok sin presentar sus valores acumulados como ganancias del período y aclara que las impresiones de X abarcan todos los posts incluidos por Buffer.", "manual": "Sincronizá YouTube, TikTok y X en Resultados para renovar los informes."},
   {"v": 78, "fecha": "2026-11-25", "texto": "TikTok en sandbox solicita también los permisos de estadísticas de la cuenta y lista de videos para mostrar sus métricas en Resultados.", "manual": "En el sandbox de TikTok agregá user.info.stats y video.list; aplicá los cambios y reconectá la cuenta desde el panel para autorizarlos."},
   {"v": 77, "fecha": "2026-11-25", "texto": "Resultados muestra en X las impresiones, reacciones y posts medidos por Buffer. Vincula los insights de Instagram con la publicación original y muestra su fecha. YouTube Analytics distingue API deshabilitada de permisos faltantes cuando la red lo informa. TikTok indica los permisos concretos que faltan para leer métricas en sandbox.", "manual": null},
   {"v": 76, "fecha": "2026-11-25", "texto": "Conexiones permite verificar Meta, YouTube, X y TikTok desde el panel sin publicar contenido. Muestra configuración incompleta y cola pausada de Buffer; YouTube y TikTok renuevan el acceso sin marcarlo vencido antes de tiempo. Cuando el token renovable realmente caduca, indica que hay que reconectar. Los errores de permisos no invalidan automáticamente la conexión.", "manual": null},

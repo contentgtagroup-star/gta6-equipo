@@ -409,4 +409,14 @@ test('generar_subido rechaza un video_path inválido', async () => {
   assert.equal((await llamada({ op: 'generar_subido', video_path: 'http://malo/x' })).codigo, 400)
 })
 
+test('cadencia_guardar persiste la config y el GET la devuelve limpia', async () => {
+  reset()
+  const r = await llamada({ op: 'cadencia_guardar', datos: { por_red: { youtube: { por_dia: 6, horarios: ['09:00', '18:00'] } }, activo: true } })
+  assert.equal(r.codigo, 200)
+  const out = (await llamada(undefined, 'GET')).datos
+  assert.equal(out.cadencia.por_red.youtube.por_dia, 6)
+  assert.deepEqual(out.cadencia.por_red.youtube.horarios, ['09:00', '18:00'])
+  assert.equal(out.cadencia.activo, true)
+})
+
 test.after(() => { globalThis.fetch = original })

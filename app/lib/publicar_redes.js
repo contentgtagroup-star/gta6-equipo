@@ -52,6 +52,20 @@ async function imagenes (item) {
 }
 
 // Un paso por llamada. Los identificadores remotos se guardan antes de continuar.
+// X/Twitter no admite más de 280 caracteres. Recorta por punto de código (sin romper emojis) dejando lugar para el …
+export function recortar280 (texto) {
+  if (texto.length <= 280) return texto
+  let out = ''
+  for (const ch of texto) { if ((out + ch).length > 277) break; out += ch }
+  return out.trimEnd() + '…'
+}
+// Texto para X: prioriza título + descripción + hashtags; si no entra en 280, saca los hashtags y recorta.
+export function textoX (item) {
+  const tags = (item.hashtags || []).join(' ')
+  const full = [item.titulo, item.descripcion, tags].filter(Boolean).join('\n\n')
+  if (full.length <= 280) return full
+  return recortar280([item.titulo, item.descripcion].filter(Boolean).join('\n\n'))
+}
 export async function pasoPublicacion (item, checkpoint) {
   const t = await tokenConexion(REDES[item.plataforma].proveedor)
   const texto = [item.titulo, item.descripcion, (item.hashtags || []).join(' ')].filter(Boolean).join('\n\n')
@@ -118,7 +132,7 @@ export async function pasoPublicacion (item, checkpoint) {
     if (!canal || String(canal.service).toLowerCase() !== 'twitter' || canal.isQueuePaused) throw errorPublicacion('Revisá que el canal de Buffer sea la cuenta de X conectada y con la cola activa.', 424)
     const assets = item.video_path ? `assets: [{video: {url: ${JSON.stringify(await video(item))}}}]` : item.imagenes?.length ? 'assets: [' + (await imagenes(item)).map(u => '{image: {url: ' + JSON.stringify(u) + '}}').join(',') + ']' : ''
     await checkpoint({ etapa: 'publicando' })
-    const d = await buffer(`mutation { createPost(input: {channelId: ${JSON.stringify(t.channel_id)}, text: ${JSON.stringify(texto)}, schedulingType: automatic, mode: shareNow, ${assets}}) { ... on PostActionSuccess { post { id sentAt externalLink } } ... on MutationError { message } } }`, t)
+    const d = await buffer(`mutation { createPost(input: {channelId: ${JSON.stringify(t.channel_id)}, text: ${JSON.stringify(textoX(item))}, schedulingType: automatic, mode: shareNow, ${assets}}) { ... on PostActionSuccess { post { id sentAt externalLink } } ... on MutationError { message } } }`, t)
     if (!d.createPost?.post?.id) throw errorPublicacion('Buffer rechazó X' + (d.createPost?.message ? ': ' + d.createPost.message : ' (contenido o cuenta).'), 422)
     return { remoto_id: d.createPost.post.id, enlace: d.createPost.post.externalLink || '', estado: d.createPost.post.sentAt ? 'publicado' : 'procesando', etapa: 'confirmando' }
   }

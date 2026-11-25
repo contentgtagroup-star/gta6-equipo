@@ -1,6 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { pasoPublicacion } from '../lib/publicar_redes.js'
+import { pasoPublicacion, textoX, recortar280 } from '../lib/publicar_redes.js'
+
+test('textoX nunca supera 280 caracteres y conserva el título', () => {
+  const corto = textoX({ titulo: 'Choque épico', descripcion: 'Mirá esto', hashtags: ['GTA6', 'clip'] })
+  assert.ok(corto.length <= 280)
+  assert.match(corto, /Choque épico/)
+  const largo = textoX({ titulo: 'Título', descripcion: 'x'.repeat(400), hashtags: ['GTA6'] })
+  assert.ok(largo.length <= 280, 'recorta a 280: ' + largo.length)
+  assert.match(largo, /^Título/)
+  assert.equal(recortar280('a'.repeat(100)).length, 100)
+  assert.ok(recortar280('a'.repeat(500)).length <= 280)
+})
 import { cifrarConexion } from '../lib/conexiones.js'
 
 Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 3).toString('base64'), BUFFER_API_KEY: 'fixture', BUFFER_CHANNEL_ID: 'canal-x' })

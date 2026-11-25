@@ -687,6 +687,20 @@
         for (const control of [buscar, desde, hasta, filtro]) control.addEventListener('input', dibujarFilas)
         resultado.append(tituloTabla, el('div', { class: 'row' }, buscar, campo('Desde', desde), campo('Hasta', hasta), filtro), aviso, el('div', { class: 'tbl' }, tablaPosts))
         dibujarFilas()
+        // Histórico por día: un snapshot por día guardado en cada sincronización (evolución de seguidores, vistas, etc.).
+        try {
+          const { serie } = await api('/api/metricas?serie=1&red=' + cuenta)
+          if (actual === pedido && resultado.isConnected && serie?.length) {
+            const campos = ['seguidores', 'vistas', 'likes', 'comentarios', 'compartidos', 'alcance', 'engagement'].filter(k => serie.some(s => typeof s[k] === 'number'))
+            if (campos.length) {
+              const cuerpoSerie = el('tbody', {}, ...serie.slice(-30).reverse().map(s => el('tr', {}, el('td', {}, s.dia),
+                ...campos.map(k => el('td', { class: 'n' }, k === 'engagement' && typeof s[k] === 'number' ? num(s[k] * 100) + '%' : num(s[k]))))))
+              resultado.append(el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, '· Histórico por día')),
+                el('p', { class: 'small muted' }, 'Un registro por día, guardado en cada sincronización (últimos 30). Sincronizá seguido para ir armando la serie.'),
+                el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, 'Día'), ...campos.map(k => el('th', {}, nombres[k] || k)))), cuerpoSerie)))
+            }
+          }
+        } catch {}
       } catch (e) {
         if (actual === pedido && resultado.isConnected) resultado.replaceChildren(el('p', { class: 'small', role: 'alert' }, e.message),
           el('p', { class: 'small muted' }, ayudaAcceso[cuenta]))

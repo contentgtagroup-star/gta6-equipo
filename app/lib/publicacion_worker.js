@@ -1,4 +1,4 @@
-import { listarPub, guardarPub, eventoPub, encolarPub } from './publicacion_store.js'
+import { leerPub, listarPub, guardarPub, eventoPub, encolarPub, mantenerAgendaCola } from './publicacion_store.js'
 import { db } from './comun.js'
 import { pasoPublicacion } from './publicar_redes.js'
 import { marcarConexionVencida } from './conexiones.js'
@@ -35,9 +35,15 @@ export async function procesarPublicaciones (yo) {
     await db().from('docs').update({ datos: { ...c.datos, publicacion_encolada: true }, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version)
   }
   if (process.env.PUBLICACION_ACTIVA !== '1') return { ok: true, activo: false }
+  const agendaActiva = await mantenerAgendaCola()
   const cola = (await listarPub('cola')).filter(d => ['pendiente', 'procesando', 'enviando'].includes(d.datos.estado) && (d.datos.proximo_el || 0) <= Date.now()).sort((a, b) => (b.datos.prioridad || 0) - (a.datos.prioridad || 0) || (a.datos.proximo_el || 0) - (b.datos.proximo_el || 0))
   for (let d of cola) {
     if (d.datos.aprobado_por !== yo) continue
+    if (agendaActiva && d.datos.estado === 'pendiente' && !d.datos.programado_el) continue
+    if (d.datos.estado === 'pendiente' && d.datos.video_path && d.datos.programado_el) {
+      const reserva = (await leerPub('programacion', 'global'))?.datos?.reservas?.[d.id]
+      if (reserva && (reserva.fecha !== d.datos.programado_el || reserva.fecha > Date.now())) continue
+    }
     if (d.datos.estado === 'enviando') {
       if (d.datos.vence > Date.now()) continue
       await guardarPub('cola', d.id, { ...d.datos, estado: 'revisar', error: 'Se interrumpió un envío. Revisá la red antes de volver a enviar para evitar duplicados.' }, d.version)

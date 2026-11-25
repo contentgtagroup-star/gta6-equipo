@@ -39,3 +39,22 @@ export function proximaFranja (config, red, ocupados = [], desde = Date.now()) {
   }
   throw new Error('No hay un horario libre en la cadencia configurada.')
 }
+
+// Un short ocupa una de seis franjas compartidas por todo el equipo.
+// Todos sus destinos reciben el mismo instante y cada red conserva su tope diario.
+export function proximaFranjaShort (config, reservas, redes, desde = Date.now(), minuto = 0) {
+  const zona = config.zona_horaria
+  const inicial = diaLocal(desde, zona)
+  for (let n = 0; n < 366; n++) {
+    const dia = new Date(Date.parse(inicial + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10)
+    const delDia = Object.values(reservas).filter(r => diaLocal(r.fecha, zona) === dia)
+    const grupos = new Set(delDia.filter(r => r.short).map(r => r.origen))
+    if (grupos.size >= 6 || redes.some(red => delDia.filter(r => r.red === red).length >= config.por_red[red].por_dia)) continue
+    for (let franja = 0; franja < 6; franja++) {
+      if (delDia.some(r => r.short && r.franja === franja)) continue
+      const hora = `${String(9 + 2 * franja).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`
+      for (const fecha of instantes(dia, hora, zona)) if (fecha >= desde + 15 * 60000 && !delDia.some(r => redes.includes(r.red) && r.fecha === fecha)) return { fecha, franja }
+    }
+  }
+  throw new Error('No hay una franja libre para el short en el próximo año.')
+}

@@ -68,6 +68,8 @@ export default async function handler (req, res) {
         const tope = c.horarios.length ? Math.min(c.por_dia, c.horarios.length) : c.por_dia
         return [red, { usados, libres: Math.max(0, tope - usados), tope }]
       }))
+      const shortsHoy = new Set(Object.values(agenda?.datos?.reservas || {}).filter(r => r.short && new Intl.DateTimeFormat('en-CA', { timeZone: out.cadencia.zona_horaria, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(r.fecha)) === hoy).map(r => r.origen))
+      out.cupos_short = { usados: shortsHoy.size, libres: Math.max(0, 6 - shortsHoy.size), tope: 6 }
       out.tiktok_fotos_configurado = !!prefijoFotosTikTok()
       out.automatico_activo = process.env.PUBLICACION_ACTIVA === '1'
       // Respuesta condicional para ahorrar egress en el poll de 30 s.
@@ -319,7 +321,9 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
     } else if (b.op === 'cola_reintentar') {
       const d = await exigirItem('cola', b.id, b.version)
       if (!['error', 'revisar'].includes(d.datos.estado) || d.datos.remoto_id) throw errorPublicacion('Solo se reintenta un envío con error o trabado sin id remoto. Si tiene id remoto puede haberse publicado: revisá la red antes de reintentar.', 409)
-      const { fecha, zona } = await posponerHorario(d, Date.now())
+      const { fecha, zona } = d.datos.video_path
+        ? { fecha: Math.max(Date.now(), d.datos.programado_el || 0), zona: d.datos.zona_horaria }
+        : await posponerHorario(d, Date.now())
       await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version)
       await eventoPub('cola_reintentar', yo, { item_id: d.id })
     } else if (b.op === 'cola_reintentar_masa') {
@@ -327,7 +331,9 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       let n = 0
       for (const d of fallados) {
         try {
-          const { fecha, zona } = await posponerHorario(d, Date.now())
+          const { fecha, zona } = d.datos.video_path
+            ? { fecha: Math.max(Date.now(), d.datos.programado_el || 0), zona: d.datos.zona_horaria }
+            : await posponerHorario(d, Date.now())
           await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version); n++
         } catch (e) { if (e.status !== 409) throw e }
       }

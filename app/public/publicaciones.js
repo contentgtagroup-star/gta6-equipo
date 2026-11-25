@@ -430,7 +430,7 @@
       filasCadencia[red] = { tope, horarios }
       controles.append(el('div', { class: 'row' }, campo(nombre + ' por día', tope), campo('Horarios (opcionales)', horarios)))
     }
-    controles.append(el('p', { class: 'small muted' }, 'Si definís horarios, cada uno admite un envío diario. Si los dejás vacíos, el cupo se reparte entre las 9 y las 21 h de Argentina.'))
+    controles.append(el('p', { class: 'small muted' }, 'Si definís horarios, cada uno admite un envío diario. Sin horarios, el cupo se reparte entre las 9 y las 21 h. Los shorts comparten seis franjas globales de 9 a 21 h y usan la misma hora en todas sus redes.'))
     controles.append(boton('Guardar cadencia', async () => {
       const por_red = Object.fromEntries(Object.entries(filasCadencia).map(([red, f]) => [red, {
         por_dia: Number(f.tope.value), horarios: f.horarios.value.split(',').map(x => x.trim()).filter(Boolean)
@@ -444,7 +444,7 @@
         const cupo = P.datos.cupos?.[red] || { libres: 0, tope: 0 }
         return nombre + ': ' + cupo.libres + '/' + cupo.tope + ' libres hoy'
       })
-      box.append(el('p', { class: 'small muted' }, resumen.join(' · ')))
+      box.append(el('p', { class: 'small muted' }, 'Shorts del equipo: ' + (P.datos.cupos_short?.libres ?? 6) + '/6 libres hoy · ' + resumen.join(' · ')))
     }
     const cuenta = items.reduce((a, p) => { a[p.estado] = (a[p.estado] || 0) + 1; return a }, {})
     const trabado = p => ['error', 'revisar'].includes(p.estado) || (p.estado === 'enviando' && (p.vence || 0) < Date.now())
@@ -475,7 +475,7 @@
       if (!p.video_path && p.imagenes?.length) acciones.append(botonDescargarImagenes(p))
       if (['pendiente', 'procesando'].includes(p.estado) && !p.remoto_id) acciones.append(
         boton('Priorizar', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'ya' }); toast('Movido al frente'); await cargar(true) }),
-        boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
+        !p.video_path && boton('Posponer', async () => { await post({ op: 'cola_prioridad', id: p.id, version: p._version, cuando: 'posponer' }); toast('Pospuesto'); await cargar(true) }))
       if (['error', 'revisar'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Reintentar subida', async () => { await post({ op: 'cola_reintentar', id: p.id, version: p._version }); toast('Reencolado'); await cargar(true) }, 'tiny primary'))
       if (['pendiente', 'error', 'manual', 'revisar'].includes(p.estado) && !p.remoto_id) acciones.append(boton('Editar antes de salir', () => editarContenido(p, true)))
       if (!['publicado', 'borrador', 'cancelado'].includes(p.estado) && !(['enviando', 'procesando'].includes(p.estado) && p.remoto_id)) acciones.append(boton('Detener subida', async () => { await post({ op: 'cola_desestimar', id: p.id, version: p._version }); toast('Subida detenida'); await cargar(true) }, 'tiny ghost danger'))

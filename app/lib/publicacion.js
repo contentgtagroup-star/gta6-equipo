@@ -69,7 +69,9 @@ export function cadenciaValida (d = {}) {
     const horarios = [...new Set((Array.isArray(c.horarios) ? c.horarios : []).map(h => String(h)).filter(h => /^([01]\d|2[0-3]):[0-5]\d$/.test(h)))].sort().slice(0, 12)
     por_red[red] = { por_dia, horarios }
   }
-  const zona_horaria = /^[A-Za-z][A-Za-z_]+\/[A-Za-z_]+(\/[A-Za-z_]+)?$/.test(String(d.zona_horaria || '')) ? d.zona_horaria : 'America/Argentina/Cordoba'
+  let zona_horaria = String(d.zona_horaria || 'America/Argentina/Cordoba')
+  try { new Intl.DateTimeFormat('en-US', { timeZone: zona_horaria }) }
+  catch { zona_horaria = 'America/Argentina/Cordoba' }
   return { por_red, zona_horaria, activo: d.activo === true }
 }
 export function promptSugerencia (fuente, clips) {

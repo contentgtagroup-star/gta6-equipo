@@ -1,6 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { fuenteValida, contenidoValido, ventanaMetricas, REDES } from '../lib/publicacion.js'
+import { fuenteValida, contenidoValido, ventanaMetricas, REDES, cadenciaValida } from '../lib/publicacion.js'
+
+test('cadenciaValida limpia por_dia, horarios y zona horaria', () => {
+  const c = cadenciaValida({ por_red: { instagram: { por_dia: 999, horarios: ['10:00', '25:99', '14:30', '10:00'] }, x: { por_dia: -3 } }, zona_horaria: 'rm -rf', activo: true })
+  assert.equal(c.por_red.instagram.por_dia, 50)
+  assert.deepEqual(c.por_red.instagram.horarios, ['10:00', '14:30'])
+  assert.equal(c.por_red.x.por_dia, 0)
+  assert.equal(c.zona_horaria, 'America/Argentina/Cordoba')
+  assert.equal(c.activo, true)
+  for (const red of Object.keys(REDES)) assert.ok(c.por_red[red], 'cada red presente: ' + red)
+})
 import { cifrarConexion, descifrarConexion, jsonRemoto, configOAuth } from '../lib/conexiones.js'
 import { leerPub, listarPub } from '../lib/publicacion_store.js'
 

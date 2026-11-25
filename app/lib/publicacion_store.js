@@ -39,6 +39,23 @@ export async function listarActividad ({ ancla, historial = false, cursor } = {}
   return { filas, siguiente }
 }
 
+// Trazabilidad con filtros, para su sección propia: por plataforma, acción y rango de fechas (ms), paginada por cursor.
+export async function listarTrazabilidad ({ plataforma, accion, desde, hasta, cursor } = {}) {
+  const fecha = 'datos->>el'
+  let consulta = db().from(TABLA).select('id,datos,version').eq('coleccion', 'eventos')
+  if (plataforma) consulta = consulta.eq('datos->>plataforma', plataforma)
+  if (accion) consulta = consulta.eq('datos->>accion', accion)
+  if (desde != null) consulta = consulta.gte(fecha, String(desde))
+  if (hasta != null) consulta = consulta.lte(fecha, String(hasta))
+  if (cursor) consulta = consulta.or(fecha + '.lt.' + cursor.el + ',and(' + fecha + '.eq.' + cursor.el + ',id.lt.' + cursor.id + ')')
+  const { data, error } = await consulta.order(fecha, { ascending: false }).order('id', { ascending: false }).limit(ACTIVIDAD_PAGINA + 1)
+  if (error) throw falloLectura(error)
+  const filas = (data || []).slice(0, ACTIVIDAD_PAGINA)
+  const ultimo = filas.at(-1)
+  const siguiente = data?.length > ACTIVIDAD_PAGINA ? { el: ultimo.datos.el, id: ultimo.id } : null
+  return { filas, siguiente }
+}
+
 export async function guardarPub (col, id, datos, version = 0, sb = db()) {
   const { data, error } = version
     ? await sb.from(TABLA).update({ datos, version: version + 1, actualizado: new Date().toISOString() }).eq('coleccion', col).eq('id', id).eq('version', version).select('version')

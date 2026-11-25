@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { db, exigir, responder, BUCKET } from '../lib/comun.js'
-import { REDES, TERMINALES, esPublicacionFotos, estadoInicialEnvio, prefijoFotosTikTok, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, errorPublicacion } from '../lib/publicacion.js'
+import { REDES, TERMINALES, esPublicacionFotos, estadoInicialEnvio, prefijoFotosTikTok, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, promptSugerenciaSubido, errorPublicacion } from '../lib/publicacion.js'
 import { leerPub, listarPub, listarActividad, guardarPub, eventoPub, encolarPub as encolar } from '../lib/publicacion_store.js'
 import { estadosConexiones } from '../lib/conexiones.js'
 import { procesarPublicaciones, actualizarClipPublicado } from '../lib/publicacion_worker.js'
@@ -136,6 +136,18 @@ export default async function handler (req, res) {
       f = await leerPub('fuentes', id)
       salida = await crearTrabajo(f, yo, await clipsDisponibles(), String(b.enfoque || '').trim().slice(0, 400))
       await eventoPub('trabajo_creado', yo, { trabajo_id: salida.id, fuente_id: id, desde_link: true })
+    } else if (b.op === 'generar_subido') {
+      const video_path = String(b.video_path || '')
+      if (!/^[A-Za-z0-9_-]{1,40}\/[A-Za-z0-9_.-]{1,120}\.mp4$/.test(video_path)) throw errorPublicacion('Subí primero el video.', 400)
+      const nota = String(b.nota || '').trim().slice(0, 400)
+      const fid = idFuente(video_path)
+      await guardarPub('fuentes', fid, { url: '', plataforma: 'Subido', tipo: 'subido', idioma: '?', video_subido: video_path, nota, activa: true, un_link: true, creado_por: yo, creado: Date.now() })
+      const tid = 'fuente-' + fid, actual = await leerPub('trabajos', tid)
+      if (actual && ['pendiente', 'ejecutando'].includes(actual.datos.estado)) throw errorPublicacion('Ese video ya tiene un pedido en curso.', 409)
+      const f = await leerPub('fuentes', fid), clips = await clipsDisponibles()
+      salida = await guardarPub('trabajos', tid, { estado: 'pendiente', fuente_id: fid, fuente: f.datos, pedido_por: yo, creado: Date.now(),
+        prompt: promptSugerenciaSubido(video_path, nota, clips.map(c => ({ id: c.id, titulo: c.datos.titulo, video_path: c.datos.video_path, descripcion: c.datos.descripcion }))) }, actual?.version || 0)
+      await eventoPub('trabajo_creado', yo, { trabajo_id: salida.id, fuente_id: fid, subido: true })
     } else if (b.op === 'sugerencia_descartar') {
       const d = await exigirItem('sugerencias', b.id, b.version)
       if (b.version !== d.version || d.datos.estado !== 'pendiente') throw errorPublicacion('Actualizá y elegí una sugerencia pendiente.', 409)
@@ -208,7 +220,8 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         if (!contenido.video_path && !contenido.imagenes.length) throw errorPublicacion('La IA no devolvió archivos preparados.', 422)
         await guardarPub('sugerencias', s.id, { ...s.datos, ...contenido, media_lista: false, preparado_el: Date.now(), preparado_por: yo }, s.version)
       } else if (!b.error) {
-        const contenido = contenidoValido(b.resultado || {}), fuente_url = fuenteValida({ url: b.resultado.fuente_url || d.datos.fuente.url, tipo: 'publicacion' }).url
+        const subido = d.datos.fuente?.tipo === 'subido'
+        const contenido = contenidoValido(b.resultado || {}), fuente_url = subido ? '' : fuenteValida({ url: b.resultado.fuente_url || d.datos.fuente.url, tipo: 'publicacion' }).url
         const base = idFuente(d.datos.fuente_id + fuente_url)
         const anterior = await leerPub('sugerencias', base)
         const id = anterior?.datos.estado === 'descartada' ? idFuente(base + d.datos.run_id) : base

@@ -1,6 +1,7 @@
 {
- "version": 80,
+ "version": 81,
  "cambios": [
+  {"v": 81, "fecha": "2026-11-25", "texto": "Resultados suma un «Histórico por día» por red: una tabla con la evolución diaria (seguidores, vistas, likes, alcance, etc.) armada con los snapshots que se guardan en cada sincronización. Muestra los últimos 30 días; sincronizá seguido para ir completando la serie.", "manual": null},
   {"v": 80, "fecha": "2026-11-25", "texto": "Cada red se reconoce a la vista por su color de marca: en la Cola y en la Trazabilidad el nombre de la plataforma (Instagram, Facebook, X, YouTube, TikTok) aparece con su color y un punto, para ubicarlas de un vistazo sin leer.", "manual": null},
   {"v": 79, "fecha": "2026-11-25", "texto": "Resultados distingue los totales tardíos de YouTube Analytics de los contadores actuales de sus videos, suma los videos recientes de TikTok sin presentar sus valores acumulados como ganancias del período y aclara que las impresiones de X abarcan todos los posts incluidos por Buffer.", "manual": "Sincronizá YouTube, TikTok y X en Resultados para renovar los informes."},
   {"v": 78, "fecha": "2026-11-25", "texto": "TikTok en sandbox solicita también los permisos de estadísticas de la cuenta y lista de videos para mostrar sus métricas en Resultados.", "manual": "En el sandbox de TikTok agregá user.info.stats y video.list; aplicá los cambios y reconectá la cuenta desde el panel para autorizarlos."},

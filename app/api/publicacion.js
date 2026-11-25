@@ -313,6 +313,12 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       }
       await eventoPub('cola_reintentar_masa', yo, { resultado: n + ' reencolados' })
       salida = { ok: true, reintentados: n }
+    } else if (b.op === 'cola_desestimar') {
+      const d = await exigirItem('cola', b.id, b.version)
+      if (['enviando', 'procesando'].includes(d.datos.estado) && d.datos.remoto_id) throw errorPublicacion('Ese envío está en curso en la red. Usá "Detener reintentos" para frenarlo sin duplicar.', 409)
+      await guardarPub('cola', d.id, { ...d.datos, estado: 'cancelado', error: '', proximo_el: 0, desestimado_por: yo, desestimado_el: Date.now() }, d.version)
+      await eventoPub('cola_desestimada', yo, { item_id: d.id, plataforma: d.datos.plataforma })
+      salida = { ok: true }
     } else if (b.op === 'confirmar_manual') {
       const d = await exigirItem('cola', b.id, b.version)
       const esBorrador = d.datos.estado === 'borrador' && ['youtube', 'tiktok'].includes(d.datos.plataforma)

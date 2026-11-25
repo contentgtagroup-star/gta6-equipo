@@ -419,4 +419,14 @@ test('cadencia_guardar persiste la config y el GET la devuelve limpia', async ()
   assert.equal(out.cadencia.activo, true)
 })
 
+test('cola_desestimar frena un envío (lo cancela) y bloquea uno en curso en la red', async () => {
+  reset()
+  tablas.publicacion_docs.push(enCola('d1', { estado: 'error' }), enCola('d2', { estado: 'revisar' }), enCola('d3', { estado: 'enviando', remoto_id: 'r1' }))
+  assert.equal((await llamada({ op: 'cola_desestimar', id: 'd1', version: 1 })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'd1').datos.estado, 'cancelado')
+  assert.equal((await llamada({ op: 'cola_desestimar', id: 'd2', version: 1 })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'd2').datos.estado, 'cancelado')
+  assert.equal((await llamada({ op: 'cola_desestimar', id: 'd3', version: 1 })).codigo, 409)
+})
+
 test.after(() => { globalThis.fetch = original })

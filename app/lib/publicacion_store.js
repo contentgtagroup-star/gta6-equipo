@@ -71,7 +71,7 @@ export async function eventoPub (accion, por, detalle = {}) {
 async function reservarHorario (id, red, desde) {
   for (let intento = 0; intento < 12; intento++) {
     const config = (await leerPub('cadencia', 'global'))?.datos
-    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba' }
+    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba', programado: false }
     if (!config.por_red?.[red]?.por_dia) throw errorPublicacion('La cadencia de esta red está en 0 publicaciones por día.', 422)
     const actual = await leerPub('programacion', 'global')
     const reservas = Object.fromEntries(Object.entries(actual?.datos?.reservas || {}).filter(([, r]) => r.fecha >= Date.now() - 2 * 86400000))
@@ -80,7 +80,7 @@ async function reservarHorario (id, red, desde) {
     const fecha = proximaFranja(config, red, ocupados, desde)
     try {
       await guardarPub('programacion', 'global', { reservas: { ...reservas, [id]: { red, fecha, zona: config.zona_horaria } } }, actual?.version || 0)
-      return { fecha, zona: config.zona_horaria }
+      return { fecha, zona: config.zona_horaria, programado: true }
     } catch (e) { if (e.status !== 409) throw e }
   }
   throw errorPublicacion('La agenda está ocupada. Volvé a intentar.', 409)
@@ -89,7 +89,7 @@ async function reservarShort (origen, redes, desde) {
   const minuto = createHash('sha256').update(origen).digest()[0] % 60
   for (let intento = 0; intento < 20; intento++) {
     const config = (await leerPub('cadencia', 'global'))?.datos
-    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba' }
+    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba', programado: false }
     if (redes.some(red => !config.por_red?.[red]?.por_dia)) throw errorPublicacion('Una red del short tiene cadencia de 0 publicaciones por día.', 422)
     const actual = await leerPub('programacion', 'global')
     const reservas = Object.fromEntries(Object.entries(actual?.datos?.reservas || {}).filter(([, r]) => r.fecha >= Date.now() - 2 * 86400000))
@@ -97,10 +97,10 @@ async function reservarShort (origen, redes, desde) {
     const { fecha, franja } = previa || proximaFranjaShort(config, reservas, redes, desde, minuto)
     const nuevas = { ...reservas }
     for (const red of redes) nuevas[origen + '-' + red] = { red, fecha, zona: config.zona_horaria, origen, short: true, franja }
-    if (redes.every(red => reservas[origen + '-' + red]?.fecha === fecha)) return { fecha, zona: config.zona_horaria }
+    if (redes.every(red => reservas[origen + '-' + red]?.fecha === fecha)) return { fecha, zona: config.zona_horaria, programado: true }
     try {
       await guardarPub('programacion', 'global', { reservas: nuevas }, actual?.version || 0)
-      return { fecha, zona: config.zona_horaria }
+      return { fecha, zona: config.zona_horaria, programado: true }
     } catch (e) { if (e.status !== 409) throw e }
   }
   throw errorPublicacion('La agenda compartida cambió. Volvé a intentar.', 409)
@@ -147,7 +147,7 @@ export async function mantenerAgendaCola () {
       await reservarShort(origen, pendientes.map(f => f.datos.plataforma), Date.now())
       continue
     }
-    if (!grupo.every(f => f.datos.estado === 'pendiente')) continue
+    if (!grupo.every(f => f.datos.estado === 'pendiente') || grupo.some(f => f.datos.reintento_el)) continue
     const fechaVieja = grupo[0].datos.programado_el
     if (!fechaVieja || fechaVieja >= Date.now() - 15 * 60000) continue
     const redes = grupo.map(f => f.datos.plataforma)
@@ -166,7 +166,7 @@ export async function mantenerAgendaCola () {
     }
   }
   const agenda = (await leerPub('programacion', 'global'))?.datos?.reservas || {}
-  for (const fila of filas.filter(f => f.datos.estado === 'pendiente' && f.datos.video_path)) {
+  for (const fila of filas.filter(f => f.datos.estado === 'pendiente' && f.datos.video_path && !f.datos.reintento_el)) {
     const reserva = agenda[fila.id]
     if (reserva && fila.datos.programado_el !== reserva.fecha) {
       try { await guardarPub('cola', fila.id, { ...fila.datos, programado_el: reserva.fecha, proximo_el: reserva.fecha, zona_horaria: reserva.zona }, fila.version) }
@@ -187,8 +187,8 @@ export async function encolarPub (origen, d, por) {
   for (const plataforma of plataformas) {
     const id = origen + '-' + plataforma
     if (!await leerPub('cola', id)) {
-      const { fecha, zona } = turnoShort || await reservarHorario(id, plataforma, creado)
-      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, programado_el: fecha, zona_horaria: zona, proximo_el: fecha }) }
+      const { fecha, zona, programado } = turnoShort || await reservarHorario(id, plataforma, creado)
+      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, programado_el: programado === false ? 0 : fecha, zona_horaria: zona, proximo_el: fecha }) }
       catch (e) { if (e.status !== 409) throw e }
     }
     try { await guardarPub('eventos', 'encolado-' + id, { accion: 'encolado', por, el: creado, item_id: id, plataforma, fuente_url: d.fuente_url || '', aprobado_por: por }) }

@@ -324,7 +324,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       const { fecha, zona } = d.datos.video_path
         ? { fecha: Math.max(Date.now(), d.datos.programado_el || 0), zona: d.datos.zona_horaria }
         : await posponerHorario(d, Date.now())
-      await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version)
+      await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha, reintento_el: d.datos.video_path ? Date.now() : 0 }, d.version)
       await eventoPub('cola_reintentar', yo, { item_id: d.id })
     } else if (b.op === 'cola_reintentar_masa') {
       const fallados = (await listarPub('cola')).filter(d => d.datos.estado === 'error' && !d.datos.remoto_id)
@@ -334,7 +334,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
           const { fecha, zona } = d.datos.video_path
             ? { fecha: Math.max(Date.now(), d.datos.programado_el || 0), zona: d.datos.zona_horaria }
             : await posponerHorario(d, Date.now())
-          await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version); n++
+          await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha, reintento_el: d.datos.video_path ? Date.now() : 0 }, d.version); n++
         } catch (e) { if (e.status !== 409) throw e }
       }
       await eventoPub('cola_reintentar_masa', yo, { resultado: n + ' reencolados' })

@@ -110,6 +110,32 @@ test('la cola anterior sin horario recibe un turno al activar la agenda', async 
   assert.ok(cola[0].programado_el >= Date.now() + 14 * 60000)
 })
 
+test('un short aprobado con la agenda apagada se programa al activarla', async () => {
+  reset()
+  await encolarPub('apagado', { plataformas: ['x', 'youtube'], video_path: 'Eze/clip.mp4', titulo: 'Short', descripcion: 'Prueba' }, 'Eze')
+  assert.ok(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').every(x => !x.datos.programado_el))
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] }, youtube: { por_dia: 6, horarios: [] } } } })
+  await mantenerAgendaCola()
+  const horarios = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos.programado_el)
+  assert.equal(horarios[0], horarios[1])
+  assert.ok(horarios[0] >= Date.now() + 14 * 60000)
+})
+
+test('reintentar un short explícitamente no se sobrescribe con su reserva anterior', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] } } } })
+  await encolarPub('retry', { plataformas: ['x'], video_path: 'Eze/clip.mp4', titulo: 'Short', descripcion: 'Prueba' }, 'Eze')
+  const fila = tablas.publicacion_docs.find(x => x.coleccion === 'cola')
+  fila.datos.estado = 'error'
+  const agenda = tablas.publicacion_docs.find(x => x.coleccion === 'programacion')
+  agenda.datos.reservas[fila.id].fecha = Date.now() - 3600000
+  assert.equal((await llamada({ op: 'cola_reintentar', id: fila.id, version: 1 })).codigo, 200)
+  const fechaReintento = fila.datos.programado_el
+  await mantenerAgendaCola()
+  assert.equal(fila.datos.programado_el, fechaReintento)
+  assert.ok(fila.datos.reintento_el)
+})
+
 test('descartar un destino conserva el turno del short hasta descartar el último', async () => {
   reset()
   tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 6, horarios: [] }, youtube: { por_dia: 6, horarios: [] } } } })

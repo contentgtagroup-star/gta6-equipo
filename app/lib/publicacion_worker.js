@@ -34,13 +34,13 @@ export async function procesarPublicaciones (yo) {
     await encolarPub('clip-' + c.id, c.datos.publicacion_snapshot, c.datos.aprobado_por)
     await db().from('docs').update({ datos: { ...c.datos, publicacion_encolada: true }, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version)
   }
-  if (process.env.PUBLICACION_ACTIVA !== '1') return { ok: true, activo: false }
   const agendaActiva = await mantenerAgendaCola()
+  if (process.env.PUBLICACION_ACTIVA !== '1') return { ok: true, activo: false }
   const cola = (await listarPub('cola')).filter(d => ['pendiente', 'procesando', 'enviando'].includes(d.datos.estado) && (d.datos.proximo_el || 0) <= Date.now()).sort((a, b) => (b.datos.prioridad || 0) - (a.datos.prioridad || 0) || (a.datos.proximo_el || 0) - (b.datos.proximo_el || 0))
   for (let d of cola) {
     if (d.datos.aprobado_por !== yo) continue
     if (agendaActiva && d.datos.estado === 'pendiente' && !d.datos.programado_el) continue
-    if (d.datos.estado === 'pendiente' && d.datos.video_path && d.datos.programado_el) {
+    if (d.datos.estado === 'pendiente' && d.datos.video_path && d.datos.programado_el && !d.datos.reintento_el) {
       const reserva = (await leerPub('programacion', 'global'))?.datos?.reservas?.[d.id]
       if (reserva && (reserva.fecha !== d.datos.programado_el || reserva.fecha > Date.now())) continue
     }
@@ -50,7 +50,7 @@ export async function procesarPublicaciones (yo) {
       await eventoPub('envio_interrumpido', yo, { item_id: d.id }); continue
     }
     const estadoInicial = d.datos.estado
-    try { d = await guardarPub('cola', d.id, { ...d.datos, estado: 'enviando', vence: Date.now() + 180000, procesado_por: yo }, d.version) } catch (e) { if (e.status === 409) continue; throw e }
+    try { d = await guardarPub('cola', d.id, { ...d.datos, estado: 'enviando', vence: Date.now() + 180000, procesado_por: yo, reintento_el: 0 }, d.version) } catch (e) { if (e.status === 409) continue; throw e }
     const checkpoint = async cambios => { d = await guardarPub('cola', d.id, { ...d.datos, ...cambios }, d.version) }
     try {
       if (d.datos.clip_id) {

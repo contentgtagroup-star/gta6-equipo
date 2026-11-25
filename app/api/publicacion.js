@@ -276,7 +276,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       await db().from('docs').update({ datos: { ...aprobacion, publicacion_encolada: true }, version: c.version + 2 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version + 1)
     } else if (b.op === 'cola_editar' || b.op === 'cola_cancelar' || b.op === 'cola_preparar') {
       const d = await exigirItem('cola', b.id, b.version)
-      if (TERMINALES.has(d.datos.estado) || d.datos.remoto_id || d.datos.estado === 'enviando' || d.datos.estado === 'revisar') throw errorPublicacion('Ese envío ya empezó. Revisá su estado antes de cambiarlo.', 409)
+      if (TERMINALES.has(d.datos.estado) || d.datos.remoto_id || d.datos.estado === 'enviando') throw errorPublicacion('Ese envío ya empezó en la red. Revisá su estado antes de cambiarlo.', 409)
       if (b.op === 'cola_cancelar') await guardarPub('cola', d.id, { ...d.datos, estado: 'cancelado' }, d.version)
       else if (b.op === 'cola_preparar') {
         const contenido = contenidoValido({ ...d.datos, ...b.datos, plataformas: [d.datos.plataforma] })
@@ -302,7 +302,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       await eventoPub('cola_prioridad', yo, { item_id: d.id, resultado: b.cuando === 'posponer' ? 'pospuesto' : 'priorizado' })
     } else if (b.op === 'cola_reintentar') {
       const d = await exigirItem('cola', b.id, b.version)
-      if (d.datos.estado !== 'error') throw errorPublicacion('Solo se reintenta un envío con error. Los que quedaron en «revisar» pueden haberse publicado: revisá la red antes de reintentar.', 409)
+      if (!['error', 'revisar'].includes(d.datos.estado) || d.datos.remoto_id) throw errorPublicacion('Solo se reintenta un envío con error o trabado sin id remoto. Si tiene id remoto puede haberse publicado: revisá la red antes de reintentar.', 409)
       await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', proximo_el: Date.now() }, d.version)
       await eventoPub('cola_reintentar', yo, { item_id: d.id })
     } else if (b.op === 'cola_reintentar_masa') {

@@ -125,8 +125,32 @@
       el('div', { class: 'row', style: 'flex-wrap:wrap' }, link, enfoque, generar),
       el('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Capta el texto y las imágenes del post, lo adapta al español y deja la publicación en Sugerencias para revisar y aprobar.')))
   }
+  function subirVideo(box) {
+    const archivo = entrada('', { type: 'file', accept: 'video/mp4', style: 'flex:1;min-width:220px' })
+    const nota = entrada('', { placeholder: 'Orientación: hacia dónde llevarlo (opcional)', maxlength: 400 })
+    const subir = boton('Subir video', async () => {
+      const f = archivo.files?.[0]
+      if (!f) return toast('Elegí un archivo de video.')
+      if (f.type !== 'video/mp4') return toast('Tiene que ser un MP4.')
+      if (f.size > 14 * 1024 * 1024) return toast('El video no puede superar los 14 MB. Recortalo antes de subirlo.')
+      subir.disabled = true
+      try {
+        const d = await post({ op: 'subir_media', tipo: f.type, peso: f.size })
+        const r = await fetch(d.url, { method: 'PUT', headers: { 'Content-Type': f.type, 'x-upsert': 'false', 'Cache-Control': 'max-age=3600' }, body: f })
+        if (!r.ok) throw new Error('No se pudo subir el video a la biblioteca.')
+        await post({ op: 'generar_subido', video_path: d.path, nota: nota.value })
+        archivo.value = ''; nota.value = ''
+        toast('Video subido. Generando la publicación; la vas a ver en Sugerencias.'); P.tab = 'sugerencias'; await cargar(true)
+      } catch (e) { toast(e.message || 'No se pudo subir el video.') } finally { subir.disabled = false }
+    }, 'tiny primary')
+    box.append(el('article', { class: 'bloque', style: 'padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:10px' },
+      el('h3', { class: 'small', style: 'margin:0 0 8px' }, 'Subir un video del equipo'),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' }, archivo, nota, subir),
+      el('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Subí un MP4 propio (hasta 14 MB) con una nota de orientación: la IA le escribe el copy tuitero y lo deja en Sugerencias para revisar y aprobar.')))
+  }
   function fuentes(box) {
     generarDesdeLink(box)
+    subirVideo(box)
     box.append(el('div', { class: 'row' }, boton('Agregar fuente', () => editarFuente(), 'tiny primary'), boton('Importar fuentes del equipo', async () => { const d = await post({ op: 'importar_fuentes' }); toast(d.agregadas + ' fuentes nuevas'); await cargar(true) })))
     box.append(el('p', { class: 'small muted' }, 'Un perfil se revisa periódicamente si activás el rastreo. Un enlace puntual admite una sugerencia activa a la vez. Los enlaces pendientes de verificar se importan pausados.'))
     for (const f of P.datos.fuentes) {

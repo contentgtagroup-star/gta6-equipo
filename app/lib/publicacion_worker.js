@@ -35,7 +35,7 @@ export async function procesarPublicaciones (yo) {
     await db().from('docs').update({ datos: { ...c.datos, publicacion_encolada: true }, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version)
   }
   if (process.env.PUBLICACION_ACTIVA !== '1') return { ok: true, activo: false }
-  const cola = (await listarPub('cola')).filter(d => ['pendiente', 'procesando', 'enviando'].includes(d.datos.estado) && (d.datos.proximo_el || 0) <= Date.now()).sort((a, b) => (a.datos.proximo_el || 0) - (b.datos.proximo_el || 0))
+  const cola = (await listarPub('cola')).filter(d => ['pendiente', 'procesando', 'enviando'].includes(d.datos.estado) && (d.datos.proximo_el || 0) <= Date.now()).sort((a, b) => (b.datos.prioridad || 0) - (a.datos.prioridad || 0) || (a.datos.proximo_el || 0) - (b.datos.proximo_el || 0))
   for (let d of cola) {
     if (d.datos.aprobado_por !== yo) continue
     if (d.datos.estado === 'enviando') {

@@ -4,6 +4,7 @@ import handler from '../api/publicacion.js'
 import { idFuente } from '../lib/publicacion.js'
 import { obtenerMetricas } from '../lib/metricas_redes.js'
 import { procesarPublicaciones } from '../lib/publicacion_worker.js'
+import { encolarPub } from '../lib/publicacion_store.js'
 import { cifrarConexion, tokenConexion } from '../lib/conexiones.js'
 
 Object.assign(process.env, { SUPABASE_URL: 'https://unit.supabase.co', SUPABASE_SERVICE_KEY: 'fixture', TEAM_KEYS: '{"Eze":"clave-de-prueba-suficientemente-larga"}', PUBLICACION_CIPHER_KEY: Buffer.alloc(32, 2).toString('base64'), BUFFER_API_KEY: 'buffer-privado', BUFFER_CHANNEL_ID: 'canal-x' })
@@ -58,6 +59,17 @@ async function llamada(body, method = 'POST', clave = true) {
 function reset() { tablas.docs.length = 0; tablas.publicacion_docs.length = 0; remotas.length = 0; estadoGraph = 'processing'; publishReel = false; delete process.env.PUBLICACION_ACTIVA }
 const sugerencia = () => ({ coleccion: 'sugerencias', id: 's1', version: 1, datos: { titulo: 'Una caja en GTA 6', descripcion: '¿Qué tiene adentro?', plataformas: ['instagram', 'youtube'], hashtags: ['#GTA6'], media: 'reusar', video_path: 'Eze/clip.mp4', imagenes: [], estado: 'pendiente', media_lista: true } })
 const conexionMeta = () => ({ coleccion: 'conexiones', id: 'meta', version: 1, datos: { sobre: cifrarConexion('meta', { access_token: 'fixture', page_id: 'pagina', expira_el: Date.now() + 9999999 }) } })
+
+test('dos aprobaciones simultáneas toman franjas distintas y el cupo diario se respeta', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 2, horarios: ['18:00', '19:00'] } } } })
+  await Promise.all(['a', 'b', 'c'].map(id => encolarPub(id, { plataformas: ['x'], titulo: id, descripcion: 'Prueba' }, 'Eze')))
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos)
+  assert.equal(cola.length, 3)
+  assert.equal(new Set(cola.map(x => x.programado_el)).size, 3)
+  const dia = ms => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
+  assert.equal(cola.filter(x => dia(x.programado_el) === dia(cola[0].programado_el)).length, 2)
+})
 
 test('publicaciones exige la clave del equipo antes de leer o escribir', async () => {
   reset(); assert.equal((await llamada({ op: 'importar_fuentes' }, 'POST', false)).codigo, 401)

@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { db, exigir, responder, BUCKET } from '../lib/comun.js'
 import { REDES, TERMINALES, esPublicacionFotos, estadoInicialEnvio, prefijoFotosTikTok, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, promptSugerenciaSubido, cadenciaValida, errorPublicacion } from '../lib/publicacion.js'
-import { leerPub, listarPub, listarActividad, guardarPub, eventoPub, encolarPub as encolar } from '../lib/publicacion_store.js'
+import { leerPub, listarPub, listarActividad, guardarPub, eventoPub, posponerHorario, liberarHorario, encolarPub as encolar } from '../lib/publicacion_store.js'
 import { estadosConexiones } from '../lib/conexiones.js'
 import { procesarPublicaciones, actualizarClipPublicado } from '../lib/publicacion_worker.js'
 
@@ -61,6 +61,13 @@ export default async function handler (req, res) {
       out.fuentes = out.fuentes.filter(f => !f.eliminada)
       out.conexiones = await estadosConexiones()
       out.cadencia = cadenciaValida((await leerPub('cadencia', 'global'))?.datos || {})
+      const agenda = await leerPub('programacion', 'global')
+      const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: out.cadencia.zona_horaria, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+      out.cupos = Object.fromEntries(Object.entries(out.cadencia.por_red).map(([red, c]) => {
+        const usados = Object.values(agenda?.datos?.reservas || {}).filter(r => r.red === red && new Intl.DateTimeFormat('en-CA', { timeZone: out.cadencia.zona_horaria, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(r.fecha)) === hoy).length
+        const tope = c.horarios.length ? Math.min(c.por_dia, c.horarios.length) : c.por_dia
+        return [red, { usados, libres: Math.max(0, tope - usados), tope }]
+      }))
       out.tiktok_fotos_configurado = !!prefijoFotosTikTok()
       out.automatico_activo = process.env.PUBLICACION_ACTIVA === '1'
       // Respuesta condicional para ahorrar egress en el poll de 30 s.
@@ -73,7 +80,10 @@ export default async function handler (req, res) {
         siguienteEvento: actividad.siguiente,
         conexiones: out.conexiones,
         tiktokFotos: out.tiktok_fotos_configurado,
-        automatico: out.automatico_activo
+        automatico: out.automatico_activo,
+        cadencia: out.cadencia,
+        agenda: agenda?.version || 0,
+        diaAgenda: hoy
       })
       const etag = 'W/"' + createHash('sha1').update(firmaEstable).digest('base64url').slice(0, 27) + '"'
       res.setHeader('ETag', etag)
@@ -286,7 +296,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       } else {
         const contenido = contenidoValido({ ...d.datos, ...b.datos, plataformas: [d.datos.plataforma] })
         if (['video_path', 'imagenes', 'recorte', 'instrucciones_media', 'media'].some(k => JSON.stringify(contenido[k] || '') !== JSON.stringify(d.datos[k] || ''))) throw errorPublicacion('El cambio de material necesita preparación y una nueva revisión.', 422)
-        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: estadoInicialEnvio(d.datos.plataforma, contenido), error: '', proximo_el: Date.now() }, d.version)
+        await guardarPub('cola', d.id, { ...d.datos, ...contenido, aprobado_por: yo, aprobado_el: Date.now(), estado: estadoInicialEnvio(d.datos.plataforma, contenido), error: '', proximo_el: Math.max(Date.now(), d.datos.programado_el || 0) }, d.version)
       }
       await eventoPub(b.op, yo, { item_id: d.id, aprobado_por: yo })
     } else if (b.op === 'cola_detener') {
@@ -297,19 +307,29 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
     } else if (b.op === 'cola_prioridad') {
       const d = await exigirItem('cola', b.id, b.version)
       if (TERMINALES.has(d.datos.estado) || d.datos.remoto_id || ['enviando', 'revisar'].includes(d.datos.estado)) throw errorPublicacion('Ese envío ya empezó. No se puede reordenar.', 409)
-      const proximo_el = b.cuando === 'posponer' ? Date.now() + 3600000 : Date.now() - 1
-      await guardarPub('cola', d.id, { ...d.datos, proximo_el }, d.version)
+      if (!['posponer', 'ya'].includes(b.cuando)) throw errorPublicacion('Elegí priorizar o posponer.', 422)
+      if (d.datos.estado !== 'pendiente') throw errorPublicacion('Solo se reordena un envío pendiente.', 409)
+      if (b.cuando === 'posponer') {
+        const { fecha, zona } = await posponerHorario(d, Math.max(Date.now() + 3600000, d.datos.programado_el || 0))
+        await guardarPub('cola', d.id, { ...d.datos, programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version)
+      } else {
+        await guardarPub('cola', d.id, { ...d.datos, prioridad: (d.datos.prioridad || 0) + 1, proximo_el: Math.max(Date.now(), d.datos.programado_el || 0) }, d.version)
+      }
       await eventoPub('cola_prioridad', yo, { item_id: d.id, resultado: b.cuando === 'posponer' ? 'pospuesto' : 'priorizado' })
     } else if (b.op === 'cola_reintentar') {
       const d = await exigirItem('cola', b.id, b.version)
       if (!['error', 'revisar'].includes(d.datos.estado) || d.datos.remoto_id) throw errorPublicacion('Solo se reintenta un envío con error o trabado sin id remoto. Si tiene id remoto puede haberse publicado: revisá la red antes de reintentar.', 409)
-      await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', proximo_el: Date.now() }, d.version)
+      const { fecha, zona } = await posponerHorario(d, Date.now())
+      await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version)
       await eventoPub('cola_reintentar', yo, { item_id: d.id })
     } else if (b.op === 'cola_reintentar_masa') {
       const fallados = (await listarPub('cola')).filter(d => d.datos.estado === 'error' && !d.datos.remoto_id)
       let n = 0
       for (const d of fallados) {
-        try { await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', proximo_el: Date.now() + n * 1000 }, d.version); n++ } catch (e) { if (e.status !== 409) throw e }
+        try {
+          const { fecha, zona } = await posponerHorario(d, Date.now())
+          await guardarPub('cola', d.id, { ...d.datos, estado: 'pendiente', error: '', programado_el: fecha, zona_horaria: zona, proximo_el: fecha }, d.version); n++
+        } catch (e) { if (e.status !== 409) throw e }
       }
       await eventoPub('cola_reintentar_masa', yo, { resultado: n + ' reencolados' })
       salida = { ok: true, reintentados: n }
@@ -317,6 +337,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       const d = await exigirItem('cola', b.id, b.version)
       if (['enviando', 'procesando'].includes(d.datos.estado) && d.datos.remoto_id) throw errorPublicacion('Ese envío está en curso en la red. Usá "Detener reintentos" para frenarlo sin duplicar.', 409)
       await guardarPub('cola', d.id, { ...d.datos, estado: 'cancelado', error: '', proximo_el: 0, desestimado_por: yo, desestimado_el: Date.now() }, d.version)
+      await liberarHorario(d.id)
       await eventoPub('cola_desestimada', yo, { item_id: d.id, plataforma: d.datos.plataforma })
       salida = { ok: true }
     } else if (b.op === 'confirmar_manual') {

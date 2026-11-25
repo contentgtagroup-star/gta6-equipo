@@ -1,6 +1,7 @@
 {
- "version": 73,
+ "version": 74,
  "cambios": [
+  {"v": 74, "fecha": "2026-11-25", "texto": "La cola programa cada destino según su cupo diario y horarios en la zona argentina, reserva franjas sin duplicarlas entre aprobaciones simultáneas, muestra cupos libres y permite configurar la cadencia desde el panel. Priorizar ordena los envíos listos; posponer y reintentar buscan una nueva franja. Descartar libera el cupo.", "manual": null},
   {"v": 73, "fecha": "2026-11-24", "texto": "El generador desde link entiende mejor cada plataforma: capturar.py detecta el \"tipo\" del post (imágenes, video o texto) y ahora también lee Facebook, además de X, YouTube, TikTok e Instagram. Si el post es un video (X incluido), con --video baja el video (fuente.mp4) para usarlo como material/clip, no solo las imágenes. Instagram y Facebook avisan claro cuando el post necesita ser público. Facebook ya se acepta como fuente. Al pegar un link, el panel reconoce YouTube, Twitch, Kick, X, Instagram, Facebook y TikTok: CREAR CLIP es para los videos de YouTube/Twitch/Kick, y si pegás un post de X/IG/FB/TikTok te manda a Publicaciones → Generar desde link en vez de fallar sin avisar.", "manual": "Actualizá las herramientas: python3 equipo.py herramientas (trae el capturar.py nuevo)."},
   {"v": 72, "fecha": "2026-11-24", "texto": "Navegación con iconos propios y sugerencias que priorizan la vista del material generado y agrupan las notas de producción. Las publicaciones con imágenes permiten descargar un ZIP ordenado y copiar el texto.", "manual": null},
   {"v": 71, "fecha": "2026-11-24", "texto": "Los carruseles tienen un destino manual para YouTube y un envío a bandeja para TikTok cuando está configurado el prefijo de fotos.", "manual": null},

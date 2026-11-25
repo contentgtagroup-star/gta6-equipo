@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { db } from './comun.js'
 import { errorPublicacion, redesValidas, estadoInicialEnvio } from './publicacion.js'
+import { proximaFranja } from './agenda_cola.js'
 
 const TABLA = 'publicacion_docs'
 function falloLectura (error) {
@@ -66,12 +67,57 @@ export async function guardarPub (col, id, datos, version = 0, sb = db()) {
 export async function eventoPub (accion, por, detalle = {}) {
   return guardarPub('eventos', Date.now() + '-' + randomUUID(), { accion, por, el: Date.now(), ...detalle })
 }
+// Un único documento CAS serializa las reservas entre computadoras del equipo.
+async function reservarHorario (id, red, desde) {
+  for (let intento = 0; intento < 12; intento++) {
+    const config = (await leerPub('cadencia', 'global'))?.datos
+    if (!config?.activo) return { fecha: desde, zona: config?.zona_horaria || 'America/Argentina/Cordoba' }
+    if (!config.por_red?.[red]?.por_dia) throw errorPublicacion('La cadencia de esta red está en 0 publicaciones por día.', 422)
+    const actual = await leerPub('programacion', 'global')
+    const reservas = Object.fromEntries(Object.entries(actual?.datos?.reservas || {}).filter(([, r]) => r.fecha >= Date.now() - 2 * 86400000))
+    if (reservas[id]) return { fecha: reservas[id].fecha, zona: reservas[id].zona }
+    const ocupados = Object.values(reservas).filter(r => r.red === red).map(r => r.fecha)
+    const fecha = proximaFranja(config, red, ocupados, desde)
+    try {
+      await guardarPub('programacion', 'global', { reservas: { ...reservas, [id]: { red, fecha, zona: config.zona_horaria } } }, actual?.version || 0)
+      return { fecha, zona: config.zona_horaria }
+    } catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda está ocupada. Volvé a intentar.', 409)
+}
+export async function posponerHorario (item, desde) {
+  const config = (await leerPub('cadencia', 'global'))?.datos
+  if (!config?.activo) return { fecha: desde, zona: item.datos.zona_horaria }
+  for (let intento = 0; intento < 12; intento++) {
+    const actual = await leerPub('programacion', 'global')
+    const reservas = actual?.datos?.reservas || {}
+    const ocupados = Object.entries(reservas).filter(([id, r]) => id !== item.id && r.red === item.datos.plataforma).map(([, r]) => r.fecha)
+    const fecha = proximaFranja(config, item.datos.plataforma, ocupados, desde)
+    try {
+      await guardarPub('programacion', 'global', { reservas: { ...reservas, [item.id]: { red: item.datos.plataforma, fecha, zona: config.zona_horaria } } }, actual?.version || 0)
+      return { fecha, zona: config.zona_horaria }
+    } catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda cambió. Volvé a intentar.', 409)
+}
+export async function liberarHorario (id) {
+  for (let intento = 0; intento < 12; intento++) {
+    const actual = await leerPub('programacion', 'global')
+    if (!actual?.datos?.reservas?.[id]) return
+    const reservas = { ...actual.datos.reservas }
+    delete reservas[id]
+    try { await guardarPub('programacion', 'global', { reservas }, actual.version); return }
+    catch (e) { if (e.status !== 409) throw e }
+  }
+  throw errorPublicacion('La agenda cambió. Volvé a intentar.', 409)
+}
 export async function encolarPub (origen, d, por) {
   const creado = Date.now(), ids = []
   for (const plataforma of redesValidas(d.plataformas)) {
     const id = origen + '-' + plataforma
     if (!await leerPub('cola', id)) {
-      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, proximo_el: creado }) }
+      const { fecha, zona } = await reservarHorario(id, plataforma, creado)
+      try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, programado_el: fecha, zona_horaria: zona, proximo_el: fecha }) }
       catch (e) { if (e.status !== 409) throw e }
     }
     try { await guardarPub('eventos', 'encolado-' + id, { accion: 'encolado', por, el: creado, item_id: id, plataforma, fuente_url: d.fuente_url || '', aprobado_por: por }) }

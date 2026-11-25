@@ -94,7 +94,7 @@
   }
   function trazabilidad (box) {
     const red = selector([['', 'Todas las redes'], ...Object.entries(redes)], '')
-    const accion = entrada('', { placeholder: 'Acción exacta, por ejemplo encolado' })
+    const accion = selector([['', 'Todas las acciones'], ['publicado', 'Publicado'], ['borrador', 'Borrador'], ['revisar', 'A revisar'], ['error', 'Error'], ['encolado', 'Encolado'], ['trabajo_creado', 'Trabajo creado'], ['sugerencia_generada', 'Sugerencia generada'], ['sugerencia_error', 'Sugerencia con error'], ['preparacion_media', 'Preparación de material'], ['cola_desestimada', 'Subida detenida'], ['cola_reintentar', 'Reintento'], ['cola_prioridad', 'Prioridad cambiada'], ['metricas_sincronizadas', 'Métricas sincronizadas'], ['cadencia_guardada', 'Cadencia guardada']], '')
     const desde = entrada('', { type: 'date' }), hasta = entrada('', { type: 'date' })
     const estado = el('p', { class: 'small muted', role: 'status' })
     const cuerpo = el('tbody')

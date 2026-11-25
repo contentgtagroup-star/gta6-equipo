@@ -337,6 +337,14 @@ test('confirmar_manual publica X con un link de x.com y rechaza otros hosts', as
   const item = tablas.publicacion_docs.find(d => d.id === 'cx')
   assert.equal(item.datos.estado, 'publicado')
   assert.equal(item.datos.enlace, 'https://x.com/Gta6univers0/status/123')
+  assert.ok(tablas.publicacion_docs.some(e => e.coleccion === 'eventos' && e.datos.accion === 'publicado' && e.datos.plataforma === 'x' && e.datos.manual), 'confirmar emite evento publicado')
+})
+test('confirmar_manual de un borrador de YouTube lo deja publicado y lo cuenta', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cola', id: 'cy', version: 1, datos: { estado: 'borrador', plataforma: 'youtube', aprobado_por: 'Eze', titulo: 't', descripcion: 'd' } })
+  assert.equal((await llamada({ op: 'confirmar_manual', id: 'cy', version: 1, url: 'https://youtube.com/watch?v=abc' })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'cy').datos.estado, 'publicado')
+  assert.ok(tablas.publicacion_docs.some(e => e.coleccion === 'eventos' && e.datos.accion === 'publicado' && e.datos.plataforma === 'youtube'))
 })
 const enCola = (id, datos) => ({ coleccion: 'cola', id, version: 1, datos: { plataforma: 'instagram', titulo: 'Envío ' + id, aprobado_por: 'Eze', creado: 1, proximo_el: 1, ...datos } })
 

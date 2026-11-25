@@ -1,59 +1,330 @@
 {
- "version": 82,
+ "version": 83,
  "cambios": [
-  {"v": 82, "fecha": "2026-11-25", "texto": "Nueva sección Monetización arriba de Resultados: muestra, por red, el avance (%) hacia los requisitos de cada programa (YouTube Partner, TikTok Creator Rewards, Instagram, Facebook, X), con cuánto tenemos y cuánto falta de seguidores, vistas o impresiones. Se calcula con el último informe sincronizado de cada red.", "manual": null},
-  {"v": 81, "fecha": "2026-11-25", "texto": "Resultados suma un «Histórico por día» por red: una tabla con la evolución diaria (seguidores, vistas, likes, alcance, etc.) armada con los snapshots que se guardan en cada sincronización. Muestra los últimos 30 días; sincronizá seguido para ir completando la serie.", "manual": null},
-  {"v": 80, "fecha": "2026-11-25", "texto": "Cada red se reconoce a la vista por su color de marca: en la Cola y en la Trazabilidad el nombre de la plataforma (Instagram, Facebook, X, YouTube, TikTok) aparece con su color y un punto, para ubicarlas de un vistazo sin leer.", "manual": null},
-  {"v": 79, "fecha": "2026-11-25", "texto": "Resultados distingue los totales tardíos de YouTube Analytics de los contadores actuales de sus videos, suma los videos recientes de TikTok sin presentar sus valores acumulados como ganancias del período y aclara que las impresiones de X abarcan todos los posts incluidos por Buffer.", "manual": "Sincronizá YouTube, TikTok y X en Resultados para renovar los informes."},
-  {"v": 78, "fecha": "2026-11-25", "texto": "TikTok en sandbox solicita también los permisos de estadísticas de la cuenta y lista de videos para mostrar sus métricas en Resultados.", "manual": "En el sandbox de TikTok agregá user.info.stats y video.list; aplicá los cambios y reconectá la cuenta desde el panel para autorizarlos."},
-  {"v": 77, "fecha": "2026-11-25", "texto": "Resultados muestra en X las impresiones, reacciones y posts medidos por Buffer. Vincula los insights de Instagram con la publicación original y muestra su fecha. YouTube Analytics distingue API deshabilitada de permisos faltantes cuando la red lo informa. TikTok indica los permisos concretos que faltan para leer métricas en sandbox.", "manual": null},
-  {"v": 76, "fecha": "2026-11-25", "texto": "Conexiones permite verificar Meta, YouTube, X y TikTok desde el panel sin publicar contenido. Muestra configuración incompleta y cola pausada de Buffer; YouTube y TikTok renuevan el acceso sin marcarlo vencido antes de tiempo. Cuando el token renovable realmente caduca, indica que hay que reconectar. Los errores de permisos no invalidan automáticamente la conexión.", "manual": null},
-  {"v": 75, "fecha": "2026-11-25", "texto": "Resultados tiene sección propia en la barra lateral: indicadores de la red elegida, comparación de métricas y tabla de publicaciones con búsqueda, fecha y origen. Trazabilidad también tiene sección propia y filtros por red, acción y fechas con paginación. Los valores que la red no entrega aparecen como no disponibles, sin inventar ceros.", "manual": null},
-  {"v": 74, "fecha": "2026-11-25", "texto": "La cola permite configurar cupo y horarios por red. Los shorts usan una agenda compartida de seis franjas diarias entre 9 y 21 h de Argentina, con al menos 15 minutos de anticipación y una misma hora para todos sus destinos; los vencidos se reprograman juntos. Las reservas concurrentes evitan duplicados. El panel muestra cupos globales y por red. Priorizar ordena los envíos listos y descartar libera la reserva.", "manual": null},
-  {"v": 73, "fecha": "2026-11-24", "texto": "El generador desde link entiende mejor cada plataforma: capturar.py detecta el \"tipo\" del post (imágenes, video o texto) y ahora también lee Facebook, además de X, YouTube, TikTok e Instagram. Si el post es un video (X incluido), con --video baja el video (fuente.mp4) para usarlo como material/clip, no solo las imágenes. Instagram y Facebook avisan claro cuando el post necesita ser público. Facebook ya se acepta como fuente. Al pegar un link, el panel reconoce YouTube, Twitch, Kick, X, Instagram, Facebook y TikTok: CREAR CLIP es para los videos de YouTube/Twitch/Kick, y si pegás un post de X/IG/FB/TikTok te manda a Publicaciones → Generar desde link en vez de fallar sin avisar.", "manual": "Actualizá las herramientas: python3 equipo.py herramientas (trae el capturar.py nuevo)."},
-  {"v": 72, "fecha": "2026-11-24", "texto": "Navegación con iconos propios y sugerencias que priorizan la vista del material generado y agrupan las notas de producción. Las publicaciones con imágenes permiten descargar un ZIP ordenado y copiar el texto.", "manual": null},
-  {"v": 71, "fecha": "2026-11-24", "texto": "Los carruseles tienen un destino manual para YouTube y un envío a bandeja para TikTok cuando está configurado el prefijo de fotos.", "manual": null},
-  {"v": 70, "fecha": "2026-11-24", "texto": "Las piezas editoriales nuevas usan la paleta y la tipografía del panel con un sello GTA6 Universo para las imágenes modeladas o regeneradas.", "manual": null},
-  {"v": 69, "fecha": "2026-11-24", "texto": "Clips, correcciones y preparación editorial aplican un piso de video de 720p. Para bajar el peso, se recortan primero los tramos secundarios y se conserva el máster.", "manual": null},
-  {"v": 68, "fecha": "2026-11-24", "texto": "Actividad y Sugerencias muestran el porcentaje de generación y preparación según las etapas que completó el motor, incluida la subida privada de cada imagen.", "manual": null},
-  {"v": 67, "fecha": "2026-11-24", "texto": "En la revisión final, cada destino tiene su propia casilla alineada y el lápiz permite editar título, descripción y hashtags. Las recopilaciones nuevas usan un gancho propio y la descripción pública omite el bloque heredado de enlaces a originales. Podés descartar sugerencias y volver a generar desde el mismo enlace con otro enfoque.", "manual": null},
-  {"v": 66, "fecha": "2026-11-24", "texto": "Actividad abre con 48 horas y permite pedir páginas anteriores. Métricas distingue conexión, permisos y datos disponibles. Links del equipo permite filtrar y muestra los clips vinculados. Sugerencias tiene un bloque de Material generado con vista previa a demanda.", "manual": null},
-  {"v": 65, "fecha": "2026-11-24", "texto": "Publicar abre la vista previa y pide elegir las cuentas y confirmar la revisión antes de encolar. El motor prepara todas las imágenes antes de subirlas y muestra el código de rechazo si falla Storage.", "manual": "Actualizá las herramientas del motor."},
-  {"v": 64, "fecha": "2026-11-24", "texto": "El panel tiene una barra lateral con secciones: Crear clips, Biblioteca, Publicaciones, Links del equipo y Ayuda y compu. La biblioteca y Publicaciones no se abren ni descargan videos ni datos hasta que las elegís, así la pantalla de crear queda limpia y no compite por red. La sección elegida se recuerda y también se puede abrir por link (#biblioteca, #publicaciones). En la sidebar se ve cuántos clips hay para revisar sin entrar a la biblioteca.", "manual": null},
-  {"v": 63, "fecha": "2026-11-24", "texto": "Generador de publicaciones desde un link (no solo clips): pegás el link de un post (X y otros) y la IA capta el texto, lo adapta al español, baja las imágenes y arma la publicación para la cola. Material nuevo: capturar.py lee el post (texto completo incluso en posts largos, con los links expandidos, + imágenes y cuántas) y imagenes.py las lleva a 4:5 y les pone el sello del equipo (SELLO.png) cuando se modela o regenera; si se reusa tal cual, va sin sello. Arriba de Cuentas a rastrear hay un campo «Generar desde link» para hacerlo en un paso. La Cola ahora se administra: filtrás por estado y por red, ves cuántos hay y cuáles están trabados, priorizás o posponés un envío y reintentás los fallados (uno o todos de una). Los que quedaron en «revisar» no se reintentan solos para no duplicar. El panel pesa menos: no vuelve a bajar todo si nada cambió (ETag/304) y los videos de revisión sólo se descargan al darles play.", "manual": "Actualizá las herramientas: python3 equipo.py herramientas (baja capturar.py, imagenes.py y SELLO.png)."},
-  {"v": 62, "fecha": "2026-11-24", "texto": "Los reels de Facebook se cierran con la forma real del estado de Graph (processing_phase.status = complete, publish_status = published y wrapper video_status). Si un envío sigue procesando más de 30 minutos, pasa a «Revisar en la red» en vez de reconsultar sin parar, y el panel permite detener reintentos de un envío con remoto_id sin borrar su identificador.", "manual": "Si hay un reel viejo trabado, actualizá el panel: el worker lo cierra si ya se publicó o lo pasa a revisión. Verificá en Facebook antes de reenviar."},
-  {"v": 61, "fecha": "2026-11-23", "texto": "La limpieza de espacio la ejecuta solo el dueño de datos y almacenamiento. Si falla el borrado o el registro, el clip vuelve a su estado anterior o se reintenta con la versión actual, para no dejar archivos borrados sin metadata.", "manual": "Ninguna: es una operación administrativa."},
-  {"v": 60, "fecha": "2026-11-23", "texto": "La limpieza de espacio puede detectar clips que llevan al menos 14 días sin aprobar ni usar y descartarlos por lotes. Conserva stock, recopilaciones, material compartido y cualquier archivo que todavía figure en Publicaciones; antes de borrar vuelve a comprobar que el clip no haya cambiado y deja la metadata del descarte registrada.", "manual": "La limpieza es administrativa y requiere confirmación explícita; primero se consulta la simulación."},
-  {"v": 59, "fecha": "2026-11-23", "texto": "Los fallos de la base de Publicaciones quedan registrados en el servidor para diagnosticarlos sin exponer el error interno en el panel.", "manual": "Ninguna: es solo diagnóstico interno."},
-  {"v": 58, "fecha": "2026-11-23", "texto": "X vuelve a publicarse automáticamente con Buffer. El posteo usaba consultas viejas de GraphQL (post(id:) y channel(id:) con campos que ya no existen), por eso fallaba aunque la conexión estuviera bien. Ahora usa post(input: { id }) y channel(input: { id }) con isQueuePaused, y muestra el motivo cuando Buffer rechaza una consulta. Sigue sin hacer falta la API directa de X ni créditos.", "manual": "Aprobá un clip con X marcado: debe pasar a Publicado con el link del posteo."},
-  {"v": 57, "fecha": "2026-11-23", "texto": "X pasa a modo manual: al aprobar, el envío de X queda en la Cola como «Para subir a mano» y no intenta publicarse solo (mientras se resuelve Buffer). Desde la Cola copiás el título y la descripción, bajás el video y lo subís a mano en X; después tocás «Ya lo publiqué» y pegás el link para dejarlo registrado. Instagram y Facebook siguen automáticos; YouTube y TikTok, en borrador.", "manual": "En la Cola, en cada envío de X: Copiar título y descripción, Bajar video, subirlo en X, y Ya lo publiqué con el link del posteo."},
-  {"v": 56, "fecha": "2026-11-23", "texto": "Conectar X usa la misma consulta de canales que el publicador, que sí funciona con Buffer. La consulta anterior pedía campos que Buffer no tiene y por eso fallaba. Si Buffer devuelve un error, el panel muestra el motivo sin exponer la clave.", "manual": "Recargá el panel y tocá Conectar en la tarjeta de X."},
-  {"v": 55, "fecha": "2026-11-23", "texto": "Herramienta local para generar YT_REFRESH_TOKEN y mandarlo directo a Vercel como secreto, sin mostrarlo ni pasarlo por el chat. Abre el navegador, comprueba el canal y dispara el deploy desde GitHub.", "manual": "Corré python3 app/herramientas/youtube_token_vercel.py ruta/client_secret_XXXX.json con vercel y gh logueados; después tocá Conectar en YouTube."},
-  {"v": 54, "fecha": "2026-11-23", "texto": "YouTube se conecta con el token renovable que ya tenía el equipo (YT_CLIENT_ID, YT_CLIENT_SECRET y YT_REFRESH_TOKEN) sin crear una app OAuth nueva; comprueba el canal y renueva el acceso solo. X y YouTube dicen en el panel qué variable falta en Vercel cuando la conexión no está lista.", "manual": "Cargá BUFFER_API_KEY, YT_CLIENT_ID, YT_CLIENT_SECRET y YT_REFRESH_TOKEN como secretos de Vercel y tocá Conectar en X y YouTube."},
-  {"v": 53, "fecha": "2026-11-23", "texto": "El modo System User de Meta se activa aunque no esté configurada la variable META_AUTH_MODE: alcanza con que exista el token en Vercel. Así Conectar no vuelve al OAuth viejo que rechazaba la página.", "manual": null},
-  {"v": 52, "fecha": "2026-11-23", "texto": "Meta puede conectarse con el token del usuario del sistema cargado en Vercel, sin pasar por OAuth ni por el chat. Conectar comprueba la app, la vigencia, la página y el Instagram sin publicar nada, guarda el acceso cifrado y el panel indica el método y los permisos de métricas que faltan.", "manual": "Generá el token en Configuración del negocio → Usuarios del sistema con los permisos documentados, guardalo como META_SYSTEM_USER_TOKEN y tocá Reconectar."},
-  {"v": 51, "fecha": "2026-11-23", "texto": "La conexión de TikTok informa el motivo de rechazo (credenciales, código vencido, callback o permisos) y registra la etapa sin exponer accesos. El intercambio y la renovación de acceso envían explícitamente el formato requerido por TikTok.", "manual": null},
-  {"v": 50, "fecha": "2026-11-23", "texto": "TikTok permite reutilizar la app sandbox que ya tenía GTA. Usa sus claves separadas y los permisos de prueba existentes; Conexiones indica cuándo se está trabajando en sandbox.", "manual": "Agregar el callback del panel en Login Kit de la app sandbox y autorizar desde Conectar."},
-  {"v": 49, "fecha": "2026-11-23", "texto": "Publicaciones usa la misma sesión del panel y ya no vuelve a pedir la clave cuando falla la configuración. Distingue una base pendiente de habilitar de un problema de conexión y permite volver a cargar después de resolverlo.", "manual": null},
-  {"v": 48, "fecha": "2026-11-23", "texto": "Un solo espacio arriba para pegar material: ALIMENTAR guarda el link como referencia para la IA y CREAR CLIP pide un short con ese enlace específico en tu compu. Las referencias quedan guardadas sin mostrar una lista debajo del formulario.", "manual": null},
-  {"v": 47, "fecha": "2026-11-23", "texto": "Cada pedido se procesa en la compu de quien lo solicita: clips, correcciones, sugerencias y preparación de material. Si esa compu está apagada u ocupada, espera allí. El rastreo automático queda ligado a quien lo configuró y los envíos aprobados los avanza su propia compu.", "manual": null},
-  {"v": 46, "fecha": "2026-11-23", "texto": "Crear un clip desde un link quedó cerrado: hay un solo formulario, la nota viaja con el pedido y el motor usa exactamente ese enlace, también al esperar en cola, pausar, reanudar o reintentar. Si el link ya se usó, lo está trabajando otro pedido o no es apto, el panel lo dice claro y no toma otro video. El radar y «Solo a la cola» siguen funcionando igual. Cada pedido queda atado a la compu que lo pidió, aunque venza la reserva o esa compu esté apagada.", "manual": null},
-  {"v": 45, "fecha": "2026-11-22", "texto": "Espacio en el panel para crear un clip directo desde cualquier link de YouTube o Twitch (video, directo o clip). El enlace entra con máxima prioridad para la compu asignada y genera un pedido para procesar ese clip puntual.", "manual": null},
-  {"v": 44, "fecha": "2026-11-22", "texto": "Publicaciones reúne conexiones, cuentas a rastrear, sugerencias, preparación de material con IA, cola por red, actividad y métricas oficiales. La importación conserva las notas de las 44 fuentes del equipo y pausa las que necesitan verificación. Los envíos necesitan aprobación; YouTube y TikTok quedan en borrador. Un cambio de material vuelve a revisión. El rastreo automático se activa por fuente.", "manual": "Hay que preparar la base y las conexiones antes de habilitar los envíos. Actualizá el motor para que tome trabajos editoriales."},
-  {"v": 43, "fecha": "2026-11-22", "texto": "Whisper se prepara antes de pedir clips, en un entorno propio con Python compatible. En Mac: Actualizar mi sistema y procesar.py preparar-whisper (instalá Python 3.12 si lo pide). Los turnos ya no instalan paquetes. Se pueden liberar reservas propias tras un intento fallido, y los prompts refuerzan la promesa del primer segundo y el cierre del clip.", "manual": "Actualizá el sistema y corré python3 procesar.py preparar-whisper antes de pedir clips de Twitch o Kick."},
-  {"v": 42, "fecha": "2026-11-22", "texto": "Arriba de todo del panel está «Referencias para la IA»: pegás links de contenido que funciona (YouTube, Twitch, Kick o posts de X) con una nota opcional, y en cada pedido la IA los mira para aprender qué momentos, temas y ganchos son los mejores. Si tildás «Usarlo también para hacer clips», además entra en la cola. Los pedidos de Twitch ya arrancan aunque YouTube tenga bloqueada la conexión, y la tarjeta del pedido muestra si es de YouTube o de Twitch.", "manual": null},
-  {"v": 41, "fecha": "2026-11-22", "texto": "Clips más rápidos con el mismo video: el análisis de cada video (audio, picos y transcripción) se guarda 24 h, así el segundo clip o un pedido que se reanuda no vuelve a bajar el audio entero. Cada compu anota cuánto tarda cada paso: python3 equipo.py tiempos lo muestra. El campo para pegar links ahora está arriba de todo en el panel.", "manual": null},
-  {"v": 40, "fecha": "2026-11-22", "texto": "En Links del equipo también se pueden pegar posts de X (misterios, easter eggs, momentos virales). Los toma el próximo pedido, sea de YouTube o de Twitch: si el post tiene video lo usa para un clip, y si no, usa el texto como pista de qué buscar.", "manual": null},
-  {"v": 39, "fecha": "2026-11-22", "texto": "Al tocar CREAR CLIPS ahora elegís dónde buscar: BUSCAR POR YOUTUBE o BUSCAR POR TWITCH. Twitch trae los clips y VODs más vistos de GTA VI del día con la API oficial, y también toma los links de Twitch o Kick pegados a mano. Cada pedido usa solo links de la plataforma elegida.", "manual": null},
-  {"v": 38, "fecha": "2026-11-22", "texto": "En Links del equipo hay un campo nuevo para pegar a mano un link de YouTube, Twitch o Kick (VOD o clip) y elegir para quién es. Los links agregados a mano van primeros: el próximo turno los toma antes que los del radar.", "manual": null},
-  {"v": 37, "fecha": "2026-11-22", "texto": "El motor ya acepta links de Twitch y Kick (VODs y clips). Como no tienen subtítulos, el tramo se transcribe con Whisper: se instala solo la primera vez que hace falta (tarda unos minutos y baja el modelo de voz una sola vez). Un error de Twitch o Kick ya no pone en pausa el motor como si YouTube hubiera bloqueado. Para buscar momentos en un stream largo se transcriben solo los 20 minutos con más ruido (picos de volumen) en vez de las horas enteras, y un clip corto de Twitch o Kick se usa entero sin buscar momentos.", "manual": null},
-  {"v": 36, "fecha": "2026-11-21", "texto": "Clips más rápidos: el render tarda unas 4 veces menos (el fondo se calcula a menor resolución, se trabaja a 30 cuadros desde el principio y los filtros usan todos los núcleos) y la descarga de cada tramo unas 2,5 veces menos. El resultado se ve igual.", "manual": null},
-  {"v": 35, "fecha": "2026-11-21", "texto": "Menos bloqueos de YouTube: el radar consulta solo los 25 videos más vistos en vez de todos. Si YouTube igual frena la conexión, el pedido queda en pausa y se reanuda solo unos 45 minutos después, sin repetir clips. Recomendado: instalar el generador de PO Token (está en Actualizar / Preparar mi compu). Además, Reanudar también funciona mientras un pedido se está pausando y cada pedido muestra cuánto tardó cada etapa.", "manual": "Opcional pero recomendado: pegá el prompt de Actualizar en tu asistente para instalar el generador de PO Token."},
-  {"v": 34, "fecha": "2026-11-21", "texto": "Solo se pueden crear clips con las herramientas en la última versión: si tu compu está desactualizada, el panel lo avisa y bloquea CREAR CLIPS hasta que se actualice (con el motor prendido se actualiza solo en unos minutos). Al actualizar se borran solos los restos de versiones anteriores y las carpetas de trabajo viejas para liberar espacio.", "manual": null},
-  {"v": 33, "fecha": "2026-11-21", "texto": "Los clips y correcciones se crean siempre con Claude Sonnet 5.5. Si ese modelo no está disponible en la PC o se terminan los créditos, el mismo pedido sigue con Codex.", "manual": null},
-  {"v": 32, "fecha": "2026-11-21", "texto": "Más seguridad en los turnos: Claude solo puede usar las herramientas del clipper (python, ffmpeg, yt-dlp y archivos), sin acceso libre a la terminal ni a internet. Al cortar o borrar un turno se cierran también los ffmpeg y yt-dlp que quedaban colgados. El panel se refresca cada 8 s solo con pedidos en curso.", "manual": null},
-  {"v": 31, "fecha": "2026-11-21", "texto": "Los pedidos de CREAR CLIPS tienen un tachito para borrarlos de la lista (en cola, pausados, terminados o con error). Cancelar ahora borra el pedido directamente. Un pedido que se está ejecutando primero hay que pausarlo.", "manual": null},
-  {"v": 30, "fecha": "2026-11-21", "texto": "Categorías especializadas para pedidos nuevos: reglas por etapa, evidencia y estructura al guardar, categoría en biblioteca y recetas. General conserva el flujo habitual. Actualizá las herramientas antes de crear pedidos categorizados.", "manual": null},
+  {
+   "v": 83,
+   "fecha": "2026-11-25",
+   "texto": "Cuando confirmás a mano un video de YouTube o TikTok (que salían como borrador), queda registrado como «publicado» igual que los automáticos: cuenta en Resultados y aparece como publicado en la Trazabilidad, con el color de la red. Además, el filtro «Acción» de la Trazabilidad es un desplegable con las acciones disponibles, así se ve qué opciones hay.",
+   "manual": null
+  },
+  {
+   "v": 82,
+   "fecha": "2026-11-25",
+   "texto": "Nueva sección Monetización arriba de Resultados: muestra, por red, el avance (%) hacia los requisitos de cada programa (YouTube Partner, TikTok Creator Rewards, Instagram, Facebook, X), con cuánto tenemos y cuánto falta de seguidores, vistas o impresiones. Se calcula con el último informe sincronizado de cada red.",
+   "manual": null
+  },
+  {
+   "v": 81,
+   "fecha": "2026-11-25",
+   "texto": "Resultados suma un «Histórico por día» por red: una tabla con la evolución diaria (seguidores, vistas, likes, alcance, etc.) armada con los snapshots que se guardan en cada sincronización. Muestra los últimos 30 días; sincronizá seguido para ir completando la serie.",
+   "manual": null
+  },
+  {
+   "v": 80,
+   "fecha": "2026-11-25",
+   "texto": "Cada red se reconoce a la vista por su color de marca: en la Cola y en la Trazabilidad el nombre de la plataforma (Instagram, Facebook, X, YouTube, TikTok) aparece con su color y un punto, para ubicarlas de un vistazo sin leer.",
+   "manual": null
+  },
+  {
+   "v": 79,
+   "fecha": "2026-11-25",
+   "texto": "Resultados distingue los totales tardíos de YouTube Analytics de los contadores actuales de sus videos, suma los videos recientes de TikTok sin presentar sus valores acumulados como ganancias del período y aclara que las impresiones de X abarcan todos los posts incluidos por Buffer.",
+   "manual": "Sincronizá YouTube, TikTok y X en Resultados para renovar los informes."
+  },
+  {
+   "v": 78,
+   "fecha": "2026-11-25",
+   "texto": "TikTok en sandbox solicita también los permisos de estadísticas de la cuenta y lista de videos para mostrar sus métricas en Resultados.",
+   "manual": "En el sandbox de TikTok agregá user.info.stats y video.list; aplicá los cambios y reconectá la cuenta desde el panel para autorizarlos."
+  },
+  {
+   "v": 77,
+   "fecha": "2026-11-25",
+   "texto": "Resultados muestra en X las impresiones, reacciones y posts medidos por Buffer. Vincula los insights de Instagram con la publicación original y muestra su fecha. YouTube Analytics distingue API deshabilitada de permisos faltantes cuando la red lo informa. TikTok indica los permisos concretos que faltan para leer métricas en sandbox.",
+   "manual": null
+  },
+  {
+   "v": 76,
+   "fecha": "2026-11-25",
+   "texto": "Conexiones permite verificar Meta, YouTube, X y TikTok desde el panel sin publicar contenido. Muestra configuración incompleta y cola pausada de Buffer; YouTube y TikTok renuevan el acceso sin marcarlo vencido antes de tiempo. Cuando el token renovable realmente caduca, indica que hay que reconectar. Los errores de permisos no invalidan automáticamente la conexión.",
+   "manual": null
+  },
+  {
+   "v": 75,
+   "fecha": "2026-11-25",
+   "texto": "Resultados tiene sección propia en la barra lateral: indicadores de la red elegida, comparación de métricas y tabla de publicaciones con búsqueda, fecha y origen. Trazabilidad también tiene sección propia y filtros por red, acción y fechas con paginación. Los valores que la red no entrega aparecen como no disponibles, sin inventar ceros.",
+   "manual": null
+  },
+  {
+   "v": 74,
+   "fecha": "2026-11-25",
+   "texto": "La cola permite configurar cupo y horarios por red. Los shorts usan una agenda compartida de seis franjas diarias entre 9 y 21 h de Argentina, con al menos 15 minutos de anticipación y una misma hora para todos sus destinos; los vencidos se reprograman juntos. Las reservas concurrentes evitan duplicados. El panel muestra cupos globales y por red. Priorizar ordena los envíos listos y descartar libera la reserva.",
+   "manual": null
+  },
+  {
+   "v": 73,
+   "fecha": "2026-11-24",
+   "texto": "El generador desde link entiende mejor cada plataforma: capturar.py detecta el \"tipo\" del post (imágenes, video o texto) y ahora también lee Facebook, además de X, YouTube, TikTok e Instagram. Si el post es un video (X incluido), con --video baja el video (fuente.mp4) para usarlo como material/clip, no solo las imágenes. Instagram y Facebook avisan claro cuando el post necesita ser público. Facebook ya se acepta como fuente. Al pegar un link, el panel reconoce YouTube, Twitch, Kick, X, Instagram, Facebook y TikTok: CREAR CLIP es para los videos de YouTube/Twitch/Kick, y si pegás un post de X/IG/FB/TikTok te manda a Publicaciones → Generar desde link en vez de fallar sin avisar.",
+   "manual": "Actualizá las herramientas: python3 equipo.py herramientas (trae el capturar.py nuevo)."
+  },
+  {
+   "v": 72,
+   "fecha": "2026-11-24",
+   "texto": "Navegación con iconos propios y sugerencias que priorizan la vista del material generado y agrupan las notas de producción. Las publicaciones con imágenes permiten descargar un ZIP ordenado y copiar el texto.",
+   "manual": null
+  },
+  {
+   "v": 71,
+   "fecha": "2026-11-24",
+   "texto": "Los carruseles tienen un destino manual para YouTube y un envío a bandeja para TikTok cuando está configurado el prefijo de fotos.",
+   "manual": null
+  },
+  {
+   "v": 70,
+   "fecha": "2026-11-24",
+   "texto": "Las piezas editoriales nuevas usan la paleta y la tipografía del panel con un sello GTA6 Universo para las imágenes modeladas o regeneradas.",
+   "manual": null
+  },
+  {
+   "v": 69,
+   "fecha": "2026-11-24",
+   "texto": "Clips, correcciones y preparación editorial aplican un piso de video de 720p. Para bajar el peso, se recortan primero los tramos secundarios y se conserva el máster.",
+   "manual": null
+  },
+  {
+   "v": 68,
+   "fecha": "2026-11-24",
+   "texto": "Actividad y Sugerencias muestran el porcentaje de generación y preparación según las etapas que completó el motor, incluida la subida privada de cada imagen.",
+   "manual": null
+  },
+  {
+   "v": 67,
+   "fecha": "2026-11-24",
+   "texto": "En la revisión final, cada destino tiene su propia casilla alineada y el lápiz permite editar título, descripción y hashtags. Las recopilaciones nuevas usan un gancho propio y la descripción pública omite el bloque heredado de enlaces a originales. Podés descartar sugerencias y volver a generar desde el mismo enlace con otro enfoque.",
+   "manual": null
+  },
+  {
+   "v": 66,
+   "fecha": "2026-11-24",
+   "texto": "Actividad abre con 48 horas y permite pedir páginas anteriores. Métricas distingue conexión, permisos y datos disponibles. Links del equipo permite filtrar y muestra los clips vinculados. Sugerencias tiene un bloque de Material generado con vista previa a demanda.",
+   "manual": null
+  },
+  {
+   "v": 65,
+   "fecha": "2026-11-24",
+   "texto": "Publicar abre la vista previa y pide elegir las cuentas y confirmar la revisión antes de encolar. El motor prepara todas las imágenes antes de subirlas y muestra el código de rechazo si falla Storage.",
+   "manual": "Actualizá las herramientas del motor."
+  },
+  {
+   "v": 64,
+   "fecha": "2026-11-24",
+   "texto": "El panel tiene una barra lateral con secciones: Crear clips, Biblioteca, Publicaciones, Links del equipo y Ayuda y compu. La biblioteca y Publicaciones no se abren ni descargan videos ni datos hasta que las elegís, así la pantalla de crear queda limpia y no compite por red. La sección elegida se recuerda y también se puede abrir por link (#biblioteca, #publicaciones). En la sidebar se ve cuántos clips hay para revisar sin entrar a la biblioteca.",
+   "manual": null
+  },
+  {
+   "v": 63,
+   "fecha": "2026-11-24",
+   "texto": "Generador de publicaciones desde un link (no solo clips): pegás el link de un post (X y otros) y la IA capta el texto, lo adapta al español, baja las imágenes y arma la publicación para la cola. Material nuevo: capturar.py lee el post (texto completo incluso en posts largos, con los links expandidos, + imágenes y cuántas) y imagenes.py las lleva a 4:5 y les pone el sello del equipo (SELLO.png) cuando se modela o regenera; si se reusa tal cual, va sin sello. Arriba de Cuentas a rastrear hay un campo «Generar desde link» para hacerlo en un paso. La Cola ahora se administra: filtrás por estado y por red, ves cuántos hay y cuáles están trabados, priorizás o posponés un envío y reintentás los fallados (uno o todos de una). Los que quedaron en «revisar» no se reintentan solos para no duplicar. El panel pesa menos: no vuelve a bajar todo si nada cambió (ETag/304) y los videos de revisión sólo se descargan al darles play.",
+   "manual": "Actualizá las herramientas: python3 equipo.py herramientas (baja capturar.py, imagenes.py y SELLO.png)."
+  },
+  {
+   "v": 62,
+   "fecha": "2026-11-24",
+   "texto": "Los reels de Facebook se cierran con la forma real del estado de Graph (processing_phase.status = complete, publish_status = published y wrapper video_status). Si un envío sigue procesando más de 30 minutos, pasa a «Revisar en la red» en vez de reconsultar sin parar, y el panel permite detener reintentos de un envío con remoto_id sin borrar su identificador.",
+   "manual": "Si hay un reel viejo trabado, actualizá el panel: el worker lo cierra si ya se publicó o lo pasa a revisión. Verificá en Facebook antes de reenviar."
+  },
+  {
+   "v": 61,
+   "fecha": "2026-11-23",
+   "texto": "La limpieza de espacio la ejecuta solo el dueño de datos y almacenamiento. Si falla el borrado o el registro, el clip vuelve a su estado anterior o se reintenta con la versión actual, para no dejar archivos borrados sin metadata.",
+   "manual": "Ninguna: es una operación administrativa."
+  },
+  {
+   "v": 60,
+   "fecha": "2026-11-23",
+   "texto": "La limpieza de espacio puede detectar clips que llevan al menos 14 días sin aprobar ni usar y descartarlos por lotes. Conserva stock, recopilaciones, material compartido y cualquier archivo que todavía figure en Publicaciones; antes de borrar vuelve a comprobar que el clip no haya cambiado y deja la metadata del descarte registrada.",
+   "manual": "La limpieza es administrativa y requiere confirmación explícita; primero se consulta la simulación."
+  },
+  {
+   "v": 59,
+   "fecha": "2026-11-23",
+   "texto": "Los fallos de la base de Publicaciones quedan registrados en el servidor para diagnosticarlos sin exponer el error interno en el panel.",
+   "manual": "Ninguna: es solo diagnóstico interno."
+  },
+  {
+   "v": 58,
+   "fecha": "2026-11-23",
+   "texto": "X vuelve a publicarse automáticamente con Buffer. El posteo usaba consultas viejas de GraphQL (post(id:) y channel(id:) con campos que ya no existen), por eso fallaba aunque la conexión estuviera bien. Ahora usa post(input: { id }) y channel(input: { id }) con isQueuePaused, y muestra el motivo cuando Buffer rechaza una consulta. Sigue sin hacer falta la API directa de X ni créditos.",
+   "manual": "Aprobá un clip con X marcado: debe pasar a Publicado con el link del posteo."
+  },
+  {
+   "v": 57,
+   "fecha": "2026-11-23",
+   "texto": "X pasa a modo manual: al aprobar, el envío de X queda en la Cola como «Para subir a mano» y no intenta publicarse solo (mientras se resuelve Buffer). Desde la Cola copiás el título y la descripción, bajás el video y lo subís a mano en X; después tocás «Ya lo publiqué» y pegás el link para dejarlo registrado. Instagram y Facebook siguen automáticos; YouTube y TikTok, en borrador.",
+   "manual": "En la Cola, en cada envío de X: Copiar título y descripción, Bajar video, subirlo en X, y Ya lo publiqué con el link del posteo."
+  },
+  {
+   "v": 56,
+   "fecha": "2026-11-23",
+   "texto": "Conectar X usa la misma consulta de canales que el publicador, que sí funciona con Buffer. La consulta anterior pedía campos que Buffer no tiene y por eso fallaba. Si Buffer devuelve un error, el panel muestra el motivo sin exponer la clave.",
+   "manual": "Recargá el panel y tocá Conectar en la tarjeta de X."
+  },
+  {
+   "v": 55,
+   "fecha": "2026-11-23",
+   "texto": "Herramienta local para generar YT_REFRESH_TOKEN y mandarlo directo a Vercel como secreto, sin mostrarlo ni pasarlo por el chat. Abre el navegador, comprueba el canal y dispara el deploy desde GitHub.",
+   "manual": "Corré python3 app/herramientas/youtube_token_vercel.py ruta/client_secret_XXXX.json con vercel y gh logueados; después tocá Conectar en YouTube."
+  },
+  {
+   "v": 54,
+   "fecha": "2026-11-23",
+   "texto": "YouTube se conecta con el token renovable que ya tenía el equipo (YT_CLIENT_ID, YT_CLIENT_SECRET y YT_REFRESH_TOKEN) sin crear una app OAuth nueva; comprueba el canal y renueva el acceso solo. X y YouTube dicen en el panel qué variable falta en Vercel cuando la conexión no está lista.",
+   "manual": "Cargá BUFFER_API_KEY, YT_CLIENT_ID, YT_CLIENT_SECRET y YT_REFRESH_TOKEN como secretos de Vercel y tocá Conectar en X y YouTube."
+  },
+  {
+   "v": 53,
+   "fecha": "2026-11-23",
+   "texto": "El modo System User de Meta se activa aunque no esté configurada la variable META_AUTH_MODE: alcanza con que exista el token en Vercel. Así Conectar no vuelve al OAuth viejo que rechazaba la página.",
+   "manual": null
+  },
+  {
+   "v": 52,
+   "fecha": "2026-11-23",
+   "texto": "Meta puede conectarse con el token del usuario del sistema cargado en Vercel, sin pasar por OAuth ni por el chat. Conectar comprueba la app, la vigencia, la página y el Instagram sin publicar nada, guarda el acceso cifrado y el panel indica el método y los permisos de métricas que faltan.",
+   "manual": "Generá el token en Configuración del negocio → Usuarios del sistema con los permisos documentados, guardalo como META_SYSTEM_USER_TOKEN y tocá Reconectar."
+  },
+  {
+   "v": 51,
+   "fecha": "2026-11-23",
+   "texto": "La conexión de TikTok informa el motivo de rechazo (credenciales, código vencido, callback o permisos) y registra la etapa sin exponer accesos. El intercambio y la renovación de acceso envían explícitamente el formato requerido por TikTok.",
+   "manual": null
+  },
+  {
+   "v": 50,
+   "fecha": "2026-11-23",
+   "texto": "TikTok permite reutilizar la app sandbox que ya tenía GTA. Usa sus claves separadas y los permisos de prueba existentes; Conexiones indica cuándo se está trabajando en sandbox.",
+   "manual": "Agregar el callback del panel en Login Kit de la app sandbox y autorizar desde Conectar."
+  },
+  {
+   "v": 49,
+   "fecha": "2026-11-23",
+   "texto": "Publicaciones usa la misma sesión del panel y ya no vuelve a pedir la clave cuando falla la configuración. Distingue una base pendiente de habilitar de un problema de conexión y permite volver a cargar después de resolverlo.",
+   "manual": null
+  },
+  {
+   "v": 48,
+   "fecha": "2026-11-23",
+   "texto": "Un solo espacio arriba para pegar material: ALIMENTAR guarda el link como referencia para la IA y CREAR CLIP pide un short con ese enlace específico en tu compu. Las referencias quedan guardadas sin mostrar una lista debajo del formulario.",
+   "manual": null
+  },
+  {
+   "v": 47,
+   "fecha": "2026-11-23",
+   "texto": "Cada pedido se procesa en la compu de quien lo solicita: clips, correcciones, sugerencias y preparación de material. Si esa compu está apagada u ocupada, espera allí. El rastreo automático queda ligado a quien lo configuró y los envíos aprobados los avanza su propia compu.",
+   "manual": null
+  },
+  {
+   "v": 46,
+   "fecha": "2026-11-23",
+   "texto": "Crear un clip desde un link quedó cerrado: hay un solo formulario, la nota viaja con el pedido y el motor usa exactamente ese enlace, también al esperar en cola, pausar, reanudar o reintentar. Si el link ya se usó, lo está trabajando otro pedido o no es apto, el panel lo dice claro y no toma otro video. El radar y «Solo a la cola» siguen funcionando igual. Cada pedido queda atado a la compu que lo pidió, aunque venza la reserva o esa compu esté apagada.",
+   "manual": null
+  },
+  {
+   "v": 45,
+   "fecha": "2026-11-22",
+   "texto": "Espacio en el panel para crear un clip directo desde cualquier link de YouTube o Twitch (video, directo o clip). El enlace entra con máxima prioridad para la compu asignada y genera un pedido para procesar ese clip puntual.",
+   "manual": null
+  },
+  {
+   "v": 44,
+   "fecha": "2026-11-22",
+   "texto": "Publicaciones reúne conexiones, cuentas a rastrear, sugerencias, preparación de material con IA, cola por red, actividad y métricas oficiales. La importación conserva las notas de las 44 fuentes del equipo y pausa las que necesitan verificación. Los envíos necesitan aprobación; YouTube y TikTok quedan en borrador. Un cambio de material vuelve a revisión. El rastreo automático se activa por fuente.",
+   "manual": "Hay que preparar la base y las conexiones antes de habilitar los envíos. Actualizá el motor para que tome trabajos editoriales."
+  },
+  {
+   "v": 43,
+   "fecha": "2026-11-22",
+   "texto": "Whisper se prepara antes de pedir clips, en un entorno propio con Python compatible. En Mac: Actualizar mi sistema y procesar.py preparar-whisper (instalá Python 3.12 si lo pide). Los turnos ya no instalan paquetes. Se pueden liberar reservas propias tras un intento fallido, y los prompts refuerzan la promesa del primer segundo y el cierre del clip.",
+   "manual": "Actualizá el sistema y corré python3 procesar.py preparar-whisper antes de pedir clips de Twitch o Kick."
+  },
+  {
+   "v": 42,
+   "fecha": "2026-11-22",
+   "texto": "Arriba de todo del panel está «Referencias para la IA»: pegás links de contenido que funciona (YouTube, Twitch, Kick o posts de X) con una nota opcional, y en cada pedido la IA los mira para aprender qué momentos, temas y ganchos son los mejores. Si tildás «Usarlo también para hacer clips», además entra en la cola. Los pedidos de Twitch ya arrancan aunque YouTube tenga bloqueada la conexión, y la tarjeta del pedido muestra si es de YouTube o de Twitch.",
+   "manual": null
+  },
+  {
+   "v": 41,
+   "fecha": "2026-11-22",
+   "texto": "Clips más rápidos con el mismo video: el análisis de cada video (audio, picos y transcripción) se guarda 24 h, así el segundo clip o un pedido que se reanuda no vuelve a bajar el audio entero. Cada compu anota cuánto tarda cada paso: python3 equipo.py tiempos lo muestra. El campo para pegar links ahora está arriba de todo en el panel.",
+   "manual": null
+  },
+  {
+   "v": 40,
+   "fecha": "2026-11-22",
+   "texto": "En Links del equipo también se pueden pegar posts de X (misterios, easter eggs, momentos virales). Los toma el próximo pedido, sea de YouTube o de Twitch: si el post tiene video lo usa para un clip, y si no, usa el texto como pista de qué buscar.",
+   "manual": null
+  },
+  {
+   "v": 39,
+   "fecha": "2026-11-22",
+   "texto": "Al tocar CREAR CLIPS ahora elegís dónde buscar: BUSCAR POR YOUTUBE o BUSCAR POR TWITCH. Twitch trae los clips y VODs más vistos de GTA VI del día con la API oficial, y también toma los links de Twitch o Kick pegados a mano. Cada pedido usa solo links de la plataforma elegida.",
+   "manual": null
+  },
+  {
+   "v": 38,
+   "fecha": "2026-11-22",
+   "texto": "En Links del equipo hay un campo nuevo para pegar a mano un link de YouTube, Twitch o Kick (VOD o clip) y elegir para quién es. Los links agregados a mano van primeros: el próximo turno los toma antes que los del radar.",
+   "manual": null
+  },
+  {
+   "v": 37,
+   "fecha": "2026-11-22",
+   "texto": "El motor ya acepta links de Twitch y Kick (VODs y clips). Como no tienen subtítulos, el tramo se transcribe con Whisper: se instala solo la primera vez que hace falta (tarda unos minutos y baja el modelo de voz una sola vez). Un error de Twitch o Kick ya no pone en pausa el motor como si YouTube hubiera bloqueado. Para buscar momentos en un stream largo se transcriben solo los 20 minutos con más ruido (picos de volumen) en vez de las horas enteras, y un clip corto de Twitch o Kick se usa entero sin buscar momentos.",
+   "manual": null
+  },
+  {
+   "v": 36,
+   "fecha": "2026-11-21",
+   "texto": "Clips más rápidos: el render tarda unas 4 veces menos (el fondo se calcula a menor resolución, se trabaja a 30 cuadros desde el principio y los filtros usan todos los núcleos) y la descarga de cada tramo unas 2,5 veces menos. El resultado se ve igual.",
+   "manual": null
+  },
+  {
+   "v": 35,
+   "fecha": "2026-11-21",
+   "texto": "Menos bloqueos de YouTube: el radar consulta solo los 25 videos más vistos en vez de todos. Si YouTube igual frena la conexión, el pedido queda en pausa y se reanuda solo unos 45 minutos después, sin repetir clips. Recomendado: instalar el generador de PO Token (está en Actualizar / Preparar mi compu). Además, Reanudar también funciona mientras un pedido se está pausando y cada pedido muestra cuánto tardó cada etapa.",
+   "manual": "Opcional pero recomendado: pegá el prompt de Actualizar en tu asistente para instalar el generador de PO Token."
+  },
+  {
+   "v": 34,
+   "fecha": "2026-11-21",
+   "texto": "Solo se pueden crear clips con las herramientas en la última versión: si tu compu está desactualizada, el panel lo avisa y bloquea CREAR CLIPS hasta que se actualice (con el motor prendido se actualiza solo en unos minutos). Al actualizar se borran solos los restos de versiones anteriores y las carpetas de trabajo viejas para liberar espacio.",
+   "manual": null
+  },
+  {
+   "v": 33,
+   "fecha": "2026-11-21",
+   "texto": "Los clips y correcciones se crean siempre con Claude Sonnet 5.5. Si ese modelo no está disponible en la PC o se terminan los créditos, el mismo pedido sigue con Codex.",
+   "manual": null
+  },
+  {
+   "v": 32,
+   "fecha": "2026-11-21",
+   "texto": "Más seguridad en los turnos: Claude solo puede usar las herramientas del clipper (python, ffmpeg, yt-dlp y archivos), sin acceso libre a la terminal ni a internet. Al cortar o borrar un turno se cierran también los ffmpeg y yt-dlp que quedaban colgados. El panel se refresca cada 8 s solo con pedidos en curso.",
+   "manual": null
+  },
+  {
+   "v": 31,
+   "fecha": "2026-11-21",
+   "texto": "Los pedidos de CREAR CLIPS tienen un tachito para borrarlos de la lista (en cola, pausados, terminados o con error). Cancelar ahora borra el pedido directamente. Un pedido que se está ejecutando primero hay que pausarlo.",
+   "manual": null
+  },
+  {
+   "v": 30,
+   "fecha": "2026-11-21",
+   "texto": "Categorías especializadas para pedidos nuevos: reglas por etapa, evidencia y estructura al guardar, categoría en biblioteca y recetas. General conserva el flujo habitual. Actualizá las herramientas antes de crear pedidos categorizados.",
+   "manual": null
+  },
   {
    "v": 29,
    "fecha": "2026-11-20",

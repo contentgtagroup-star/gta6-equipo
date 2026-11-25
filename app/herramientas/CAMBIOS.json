@@ -1,6 +1,7 @@
 {
- "version": 79,
+ "version": 80,
  "cambios": [
+  {"v": 80, "fecha": "2026-11-25", "texto": "Cada red se reconoce a la vista por su color de marca: en la Cola y en la Trazabilidad el nombre de la plataforma (Instagram, Facebook, X, YouTube, TikTok) aparece con su color y un punto, para ubicarlas de un vistazo sin leer.", "manual": null},
   {"v": 79, "fecha": "2026-11-25", "texto": "Resultados distingue los totales tardíos de YouTube Analytics de los contadores actuales de sus videos, suma los videos recientes de TikTok sin presentar sus valores acumulados como ganancias del período y aclara que las impresiones de X abarcan todos los posts incluidos por Buffer.", "manual": "Sincronizá YouTube, TikTok y X en Resultados para renovar los informes."},
   {"v": 78, "fecha": "2026-11-25", "texto": "TikTok en sandbox solicita también los permisos de estadísticas de la cuenta y lista de videos para mostrar sus métricas en Resultados.", "manual": "En el sandbox de TikTok agregá user.info.stats y video.list; aplicá los cambios y reconectá la cuenta desde el panel para autorizarlos."},
   {"v": 77, "fecha": "2026-11-25", "texto": "Resultados muestra en X las impresiones, reacciones y posts medidos por Buffer. Vincula los insights de Instagram con la publicación original y muestra su fecha. YouTube Analytics distingue API deshabilitada de permisos faltantes cuando la red lo informa. TikTok indica los permisos concretos que faltan para leer métricas en sandbox.", "manual": null},

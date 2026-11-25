@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { db, exigir, responder, BUCKET } from '../lib/comun.js'
-import { REDES, TERMINALES, esPublicacionFotos, estadoInicialEnvio, prefijoFotosTikTok, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, errorPublicacion } from '../lib/publicacion.js'
+import { REDES, TERMINALES, esPublicacionFotos, estadoInicialEnvio, prefijoFotosTikTok, redesValidas, fuenteValida, contenidoValido, idFuente, promptSugerencia, cadenciaValida, errorPublicacion } from '../lib/publicacion.js'
 import { leerPub, listarPub, listarActividad, guardarPub, eventoPub, encolarPub as encolar } from '../lib/publicacion_store.js'
 import { estadosConexiones } from '../lib/conexiones.js'
 import { procesarPublicaciones, actualizarClipPublicado } from '../lib/publicacion_worker.js'
@@ -60,6 +60,7 @@ export default async function handler (req, res) {
       out.sugerencias = out.sugerencias.filter(s => s.estado !== 'descartada')
       out.fuentes = out.fuentes.filter(f => !f.eliminada)
       out.conexiones = await estadosConexiones()
+      out.cadencia = cadenciaValida((await leerPub('cadencia', 'global'))?.datos || {})
       out.tiktok_fotos_configurado = !!prefijoFotosTikTok()
       out.automatico_activo = process.env.PUBLICACION_ACTIVA === '1'
       // Respuesta condicional para ahorrar egress en el poll de 30 s.
@@ -313,6 +314,12 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       await guardarPub('cola', d.id, { ...d.datos, estado: 'publicado', enlace: url.href, confirmado_por: yo, publicado_el: Date.now() }, d.version)
       await eventoPub('publicacion_manual_confirmada', yo, { item_id: d.id, enlace: url.href })
       try { await actualizarClipPublicado(d.datos.clip_id, yo) } catch {}
+    } else if (b.op === 'cadencia_guardar') {
+      const actual = await leerPub('cadencia', 'global')
+      const datos = cadenciaValida(b.datos || {})
+      await guardarPub('cadencia', 'global', { ...datos, actualizado_por: yo, actualizado_el: Date.now() }, actual?.version || 0)
+      await eventoPub('cadencia_guardada', yo, {})
+      salida = { ok: true, cadencia: datos }
     } else if (b.op === 'procesar') salida = await procesarPublicaciones(yo)
     else throw errorPublicacion('Operación desconocida.')
     responder(res, 200, salida)

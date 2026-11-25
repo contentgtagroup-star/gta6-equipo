@@ -387,4 +387,14 @@ test('el avance editorial sube por etapas y llega a 100 solo al guardar el resul
   assert.equal(actual().estado, 'terminado')
 })
 
+test('cadencia_guardar persiste la config y el GET la devuelve limpia', async () => {
+  reset()
+  const r = await llamada({ op: 'cadencia_guardar', datos: { por_red: { youtube: { por_dia: 6, horarios: ['09:00', '18:00'] } }, activo: true } })
+  assert.equal(r.codigo, 200)
+  const out = (await llamada(undefined, 'GET')).datos
+  assert.equal(out.cadencia.por_red.youtube.por_dia, 6)
+  assert.deepEqual(out.cadencia.por_red.youtube.horarios, ['09:00', '18:00'])
+  assert.equal(out.cadencia.activo, true)
+})
+
 test.after(() => { globalThis.fetch = original })

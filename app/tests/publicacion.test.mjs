@@ -79,7 +79,7 @@ test('TikTok pide video.upload y usa un callback sin query', () => {
   assert.equal(c.callback, 'https://equipo.example/api/conexion/tiktok')
 })
 
-test('TikTok sandbox usa sus propias claves y solo los permisos ya preparados', () => {
+test('TikTok sandbox usa sus propias claves y solicita los permisos de métricas', () => {
   const nombres = ['TIKTOK_ENV', 'TIKTOK_SANDBOX_CLIENT_KEY', 'TIKTOK_SANDBOX_CLIENT_SECRET']
   const antes = nombres.map(n => process.env[n])
   try {
@@ -87,7 +87,7 @@ test('TikTok sandbox usa sus propias claves y solo los permisos ya preparados', 
     const c = configOAuth('tiktok')
     assert.equal(c.id, 'sandbox-prueba')
     assert.equal(c.secret, 'sandbox-secreto-prueba')
-    assert.deepEqual(c.scope.split(','), ['user.info.basic', 'video.upload'])
+    assert.deepEqual(c.scope.split(','), ['user.info.basic', 'user.info.stats', 'video.upload', 'video.list'])
     delete process.env.TIKTOK_SANDBOX_CLIENT_SECRET
     assert.throws(() => configOAuth('tiktok'), /Falta configurar/)
   } finally {

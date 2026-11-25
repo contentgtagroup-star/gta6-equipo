@@ -26,7 +26,7 @@ por lectura: una migración al panel requiere transferirlos por un canal seguro.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Solo para el OAuth alternativo; habilitar YouTube Data API y YouTube Analytics API |
 | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | Login Kit, `video.upload`, `video.list`, `user.info.basic`, `user.info.stats` |
 | `TIKTOK_ENV` | `sandbox` para reutilizar la app de pruebas de GTA; sin definir usa producción |
-| `TIKTOK_SANDBOX_CLIENT_KEY`, `TIKTOK_SANDBOX_CLIENT_SECRET` | Claves de la app sandbox existente; solicita solo `user.info.basic,video.upload` |
+| `TIKTOK_SANDBOX_CLIENT_KEY`, `TIKTOK_SANDBOX_CLIENT_SECRET` | Claves de la app sandbox existente; para métricas requiere `user.info.basic`, `user.info.stats` y `video.list` habilitados en ese sandbox y una nueva autorización de la cuenta. También solicita `video.upload` para el envío al Inbox. |
 | `BUFFER_API_KEY`, `BUFFER_CHANNEL_ID`, `BUFFER_ORGANIZATION_ID` | Integración personal de Buffer; canal de X y organización para métricas |
 | `PUBLICACION_ACTIVA` | Dejar sin definir durante la configuración; `1` habilita el procesamiento de los envíos aprobados |
 

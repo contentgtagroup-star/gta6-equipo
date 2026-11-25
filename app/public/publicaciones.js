@@ -635,7 +635,7 @@
         if (datos.no_disponibles?.length) resultado.append(el('p', { class: 'small muted' },
           'Datos no disponibles: ' + datos.no_disponibles.map(k => nombres[k] || k).join(', ')))
         const indicadores = el('div', { class: 'pub-metric-cards' })
-        for (const [clave, nombre] of [['vistas', 'Vistas'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores']]) {
+        for (const [clave, nombre] of (cuenta === 'x' ? [['impresiones', 'Impresiones'], ['reacciones', 'Reacciones'], ['publicaciones_buffer', 'Posts medidos'], ['alcance', 'Alcance']] : [['vistas', 'Vistas'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores']])) {
           const valor = datos.actual?.[clave]
           indicadores.append(el('article', { class: 'pub-metric-card' }, el('span', { class: 'small muted' }, nombre), el('strong', {}, num(valor))))
         }
@@ -644,7 +644,7 @@
         const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
         const vinculados = new Set()
         const filas = registros.map(p => {
-          const m = posts.find(x => x.id && (String(x.id) === String(p.remoto_id) || x.enlace && x.enlace === p.enlace))
+          const m = posts.find(x => x.id && ([p.publicacion_remota, p.remoto_id].some(id => id && String(x.id) === String(id)) || x.enlace && x.enlace === p.enlace))
           if (m) vinculados.add(m)
           return { ...p, metrica: m, titulo: p.titulo, fecha: p.publicado_el, enlace: p.enlace || m?.enlace, estado: 'Publicado' }
         })

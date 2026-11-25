@@ -93,6 +93,7 @@ export async function jsonRemoto (url, opciones = {}) {
     if (['invalid_grant', 'invalid_token', 'access_token_invalid'].includes(codigo)) e.codigoRemoto = codigo
     if (new URL(url).hostname === 'graph.facebook.com' && Number(codigo) === 190) e.codigoRemoto = 'invalid_token'
     if (d.errors?.length) e.detalleRemoto = d.errors.map(x => x.message).filter(Boolean).join(' | ').slice(0, 300)
+    if (new URL(url).hostname === 'youtubeanalytics.googleapis.com') e.detalleRemoto = String(d.error?.errors?.[0]?.reason || d.error?.status || '').slice(0, 80)
     if (new URL(url).hostname === 'open.tiktokapis.com') {
       const detalle = detalleTikTok(d)
       e.message = `TikTok (${detalle.codigo}): ${detalle.mensaje}`

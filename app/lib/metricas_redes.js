@@ -11,7 +11,12 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
   const hasta = Date.now(), desde = ventana === 'historico' ? Date.UTC(2020, 0, 1) : v.desde
   if (red === 'youtube') {
     const errorAcceso = e => {
-      if (e.status === 424) throw errorPublicacion('YouTube Analytics rechazó el acceso. Verificá que la API esté habilitada y que el token del canal tenga yt-analytics.readonly.', 424)
+      if (e.status === 424) {
+        const razon = e.detalleRemoto || ''
+        if (/accessNotConfigured|serviceDisabled|API_KEY_SERVICE_BLOCKED/i.test(razon)) throw errorPublicacion('Habilitá YouTube Analytics API en el proyecto de Google que emitió el token del canal.', 424)
+        if (/insufficientPermissions|insufficientAuthenticationScopes|forbidden/i.test(razon)) throw errorPublicacion('El token de YouTube permite publicar, pero no leer Analytics. Autorizá yt-analytics.readonly y renová el token.', 424)
+        throw errorPublicacion('YouTube Analytics rechazó el acceso. Revisá la API habilitada y el permiso yt-analytics.readonly del token.', 424)
+      }
       throw e
     }
     const hastaDia = new Date(hasta); hastaDia.setUTCHours(0, 0, 0, 0)
@@ -58,6 +63,9 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
     return { actual: await agregado(inicio, hasta), anterior: ventana === 'historico' ? null : await agregado(v.anterior_desde, v.anterior_hasta), posts, rango: { desde: inicio, hasta }, nota: 'Buffer sincroniza aproximadamente una vez por día. El detalle incluye hasta 10 publicaciones registradas por esta app; sus contadores son acumulados.' + (detalleParcial ? ' Buffer no devolvió el detalle por publicación en esta sincronización.' : '') }
   }
   if (red === 'tiktok') {
+    const permisos = String(t.scope || '').split(/[\s,]+/)
+    const faltan = ['user.info.stats', 'video.list'].filter(p => !permisos.includes(p))
+    if (faltan.length) throw errorPublicacion('TikTok no autorizó las métricas de esta cuenta. Faltan permisos: ' + faltan.join(', ') + '. El sandbox actual solo permite publicar al Inbox.', 424)
     const [u, videos] = await Promise.all([
       jsonRemoto('https://open.tiktokapis.com/v2/user/info/?fields=follower_count,likes_count,video_count', auth(t)),
       jsonRemoto('https://open.tiktokapis.com/v2/video/list/?fields=id,title,create_time,share_url,view_count,like_count,comment_count,share_count', { method: 'POST', headers: { ...auth(t).headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ max_count: 20 }) })
@@ -101,7 +109,7 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
   if (red === 'instagram') {
     const d = await jsonRemoto(GRAPH + '/' + id + '/media?fields=id,caption,permalink,timestamp,media_type,media_product_type,like_count,comments_count&limit=10', auth(t))
     await Promise.all((d.data || []).filter(p => Date.parse(p.timestamp) >= desde).map(async p => {
-      const out = { id: p.id, titulo: String(p.caption || p.id).slice(0, 80), enlace: p.permalink, likes: p.like_count, comentarios: p.comments_count }
+      const out = { id: p.id, titulo: String(p.caption || p.id).slice(0, 80), enlace: p.permalink, creado: Date.parse(p.timestamp), likes: p.like_count, comentarios: p.comments_count }
       try {
         const metric = 'views,reach,saved,shares' + (p.media_product_type === 'REELS' ? ',ig_reels_avg_watch_time' : '')
         const d = await jsonRemoto(params(GRAPH + '/' + p.id + '/insights', { metric }), auth(t))

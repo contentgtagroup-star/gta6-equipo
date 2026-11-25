@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { DOMINIOS_PUBLICACION, hostBase } from './plataformas.js'
 
 export const REDES = {
   instagram: { nombre: 'Instagram', cuenta: '@gta6.clipeado', modo: 'automatico', proveedor: 'meta' },
@@ -28,8 +29,8 @@ export function idFuente (url) { return createHash('sha256').update(url).digest(
 export function fuenteValida (datos) {
   let u
   try { u = new URL(/^https?:\/\//i.test(datos.url) ? datos.url : 'https://' + datos.url) } catch { throw errorPublicacion('Pegá un link válido.') }
-  const h = u.hostname.replace(/^(www|m|web|mobile)\./, '').toLowerCase()
-  const dominios = { 'x.com': 'X', 'twitter.com': 'X', 'youtube.com': 'YouTube', 'youtu.be': 'YouTube', 'tiktok.com': 'TikTok', 'instagram.com': 'Instagram', 'facebook.com': 'Facebook', 'fb.watch': 'Facebook', 'fb.com': 'Facebook', 'twitch.tv': 'Twitch', 'clips.twitch.tv': 'Twitch', 'kick.com': 'Kick', 'streamscharts.com': 'Web', 'github.com': 'Web', 'socialblade.com': 'Web' }
+  const h = hostBase(u.hostname)
+  const dominios = DOMINIOS_PUBLICACION
   if (!dominios[h] || u.protocol !== 'https:' || u.port || u.username || u.password || u.href.length > 1000) throw errorPublicacion('Usá un link HTTPS de una plataforma admitida.')
   if (!['perfil', 'publicacion', 'feed', 'referencia'].includes(datos.tipo)) throw errorPublicacion('Elegí el tipo de fuente.')
   u.hash = ''

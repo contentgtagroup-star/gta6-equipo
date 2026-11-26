@@ -1,6 +1,12 @@
 {
- "version": 83,
+ "version": 84,
  "cambios": [
+  {
+   "v": 84,
+   "fecha": "2026-11-25",
+   "texto": "El motor editorial pide una respuesta estructurada para las sugerencias y muestra un error claro si la CLI termina antes de devolver una propuesta.",
+   "manual": null
+  },
   {
    "v": 83,
    "fecha": "2026-11-25",

@@ -1,6 +1,12 @@
 {
- "version": 84,
+ "version": 85,
  "cambios": [
+  {
+   "v": 85,
+   "fecha": "2026-11-25",
+   "texto": "El Histórico de YouTube muestra el total acumulado del canal junto a las vistas procesadas por Analytics y los contadores de los videos listados.",
+   "manual": null
+  },
   {
    "v": 84,
    "fecha": "2026-11-25",

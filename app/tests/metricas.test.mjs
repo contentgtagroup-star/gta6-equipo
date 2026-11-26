@@ -43,4 +43,21 @@ test('la serie rechaza una red inválida', async () => {
   assert.equal(r.codigo, 400)
 })
 
+test('la serie separa ventanas del mismo día y conserva las capturas anteriores', async () => {
+  tabla.length = 0
+  const comun = { coleccion: 'metricas', version: 1 }
+  tabla.push(
+    { ...comun, id: 'dia-x-2026-11-23', datos: { red: 'x', dia: '2026-11-23', ventana: '7d', impresiones: 5 } },
+    { ...comun, id: 'dia-x-2026-11-24', datos: { red: 'x', dia: '2026-11-24', ventana: '7d', impresiones: 10, capturado_el: 1 } },
+    { ...comun, id: 'dia-x-2026-11-24-7d', datos: { red: 'x', dia: '2026-11-24', ventana: '7d', impresiones: 20, capturado_el: 2 } },
+    { ...comun, id: 'dia-x-2026-11-24-historico', datos: { red: 'x', dia: '2026-11-24', ventana: 'historico', impresiones: 50, capturado_el: 3 } }
+  )
+  for (const [ventana, esperadas] of [['7d', [5, 20]], ['historico', [50]]]) {
+    const r = await llamada({ serie: '1', red: 'x', ventana })
+    assert.equal(r.codigo, 200)
+    assert.deepEqual(r.datos.serie.map(s => s.impresiones), esperadas)
+  }
+  assert.equal((await llamada({ serie: '1', red: 'x', ventana: 'otra' })).codigo, 400)
+})
+
 test.after(() => { globalThis.fetch = original })

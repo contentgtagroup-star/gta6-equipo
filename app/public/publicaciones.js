@@ -721,9 +721,9 @@
         for (const control of [buscar, desde, hasta, filtro]) control.addEventListener('input', dibujarFilas)
         resultado.append(tituloTabla, el('div', { class: 'row' }, buscar, campo('Desde', desde), campo('Hasta', hasta), filtro), aviso, el('div', { class: 'tbl' }, tablaPosts))
         dibujarFilas()
-        // Histórico por día: un snapshot por día guardado en cada sincronización (evolución de seguidores, vistas, etc.).
+        // Mostrar capturas comparables de la ventana seleccionada.
         try {
-          const { serie } = await api('/api/metricas?serie=1&red=' + cuenta)
+          const { serie } = await api('/api/metricas?serie=1&red=' + cuenta + '&ventana=' + periodo)
           if (actual === pedido && resultado.isConnected && serie?.length) {
             const campos = ['vistas_canal', 'seguidores', 'vistas', 'likes', 'comentarios', 'compartidos', 'alcance', 'engagement'].filter(k => serie.some(s => typeof s[k] === 'number'))
             if (campos.length) {
@@ -732,7 +732,7 @@
                 esYouTube && el('td', {}, ventanas[s.ventana] || '—'),
                 ...campos.map(k => el('td', { class: 'n' }, k === 'engagement' && typeof s[k] === 'number' ? num(s[k] * 100) + '%' : num(s[k]))))))
               resultado.append(el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, esYouTube ? '· Capturas de métricas' : '· Histórico por día')),
-                el('p', { class: 'small muted' }, esYouTube ? 'Cada fila guarda los totales al sincronizar. Las vistas ganadas en un día se consultan en YouTube Studio.' : 'Un registro por día, guardado en cada sincronización (últimos 30). Sincronizá seguido para ir armando la serie.'),
+                el('p', { class: 'small muted' }, esYouTube ? 'Cada fila guarda los totales de esta ventana al sincronizar. Las vistas ganadas en un día se consultan en YouTube Studio.' : 'Última captura de esta ventana por día (hasta 30).'),
                 el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, esYouTube ? 'Sincronizado' : 'Día'),
                   esYouTube && el('th', {}, 'Ventana de Analytics'), ...campos.map(k => el('th', {}, k === 'vistas_canal' ? 'Vistas totales del canal' : nombres[k] || k)))), cuerpoSerie)))
             }

@@ -692,7 +692,8 @@
         const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= finContenido)
         const vinculados = new Set()
         const filas = registros.map(p => {
-          const m = posts.find(x => x.id && ([p.publicacion_remota, p.remoto_id].some(id => id && String(x.id) === String(id)) || x.enlace && x.enlace === p.enlace))
+          const idTikTok = cuenta === 'tiktok' ? p.enlace?.match(/\/(?:video|photo)\/(\d+)(?:[/?#]|$)/)?.[1] : null
+          const m = posts.find(x => x.id && ([p.publicacion_remota, p.remoto_id, idTikTok].some(id => id && String(x.id) === String(id)) || x.enlace && x.enlace === p.enlace))
           if (m) vinculados.add(m)
           return { ...p, metrica: m, titulo: p.titulo, fecha: p.publicado_el, enlace: p.enlace || m?.enlace, estado: 'Publicado' }
         })
@@ -704,7 +705,13 @@
         const filtro = selector([['', 'Todos los registros'], ['Publicado', 'Publicado desde el panel'], ['En la red', 'Encontrado en la red']], '')
         const aviso = el('p', { class: 'small muted' })
         const cuerpoPosts = el('tbody')
-        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {}, ['Contenido', 'Fecha', 'Estado', esYouTube ? 'Vistas acumuladas' : 'Vistas', 'Me gusta', 'Comentarios', 'Compartidos', 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
+        const columnasPosts = [
+          cuenta === 'x' ? ['impresiones', 'Impresiones'] : ['vistas', esYouTube ? 'Vistas acumuladas' : 'Vistas'],
+          ['likes', 'Me gusta'], ['comentarios', 'Comentarios'], ['compartidos', 'Compartidos']
+        ]
+        if (cuenta === 'instagram') columnasPosts.push(['alcance', 'Alcance'], ['guardados', 'Guardados'], ['tiempo_medio', 'Tiempo medio (s)'])
+        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {},
+          ['Contenido', 'Fecha', 'Estado', ...columnasPosts.map(([, titulo]) => titulo), 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
         const dia = t => new Date(t).toISOString().slice(0, 10)
         function dibujarFilas () {
           const texto = buscar.value.toLocaleLowerCase('es'), elegidas = filas.filter(p =>
@@ -715,7 +722,7 @@
           aviso.textContent = elegidas.length + ' registros · “—” indica dato no disponible en la conexión.'
           cuerpoPosts.replaceChildren(...elegidas.map(p => el('tr', {},
             el('td', {}, p.titulo), el('td', {}, p.fecha ? fecha(p.fecha) : '—'), el('td', {}, p.estado),
-            ...['vistas', 'likes', 'comentarios', 'compartidos'].map(k => el('td', { class: 'n' }, num(p.metrica?.[k]))),
+            ...columnasPosts.map(([k]) => el('td', { class: 'n' }, num(p.metrica?.[k]))),
             el('td', {}, p.enlace ? el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver') : '—'))))
         }
         for (const control of [buscar, desde, hasta, filtro]) control.addEventListener('input', dibujarFilas)

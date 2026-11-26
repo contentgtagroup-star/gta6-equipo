@@ -1,6 +1,12 @@
 {
- "version": 86,
+ "version": 87,
  "cambios": [
+  {
+   "v": 87,
+   "fecha": "2026-11-25",
+   "texto": "Resultados muestra impresiones por publicación en X y alcance, guardados y tiempo medio por pieza en Instagram.",
+   "manual": null
+  },
   {
    "v": 86,
    "fecha": "2026-11-25",

@@ -53,9 +53,11 @@ export async function obtenerMetricas (red, ventana, publicaciones = []) {
     if (process.env.YOUTUBE_CHANNEL_ID && canal.items?.[0]?.id !== process.env.YOUTUBE_CHANNEL_ID) throw errorPublicacion('El token de YouTube apunta a otro canal. Revisá YOUTUBE_CHANNEL_ID y reconectá.', 424)
     let recientes = [], detalleRecienteNoDisponible = false
     try { recientes = await videosRecientesYouTube(t, canal.items?.[0] || {}, desde, hasta) } catch { detalleRecienteNoDisponible = true }
+    const vistasCanal = canal.items?.[0]?.statistics?.viewCount
     return { actual, anterior: anterior?.[0] || null, posts: recientes, rango,
+      vistas_canal: vistasCanal == null ? null : Number(vistasCanal),
       recientes: detalleRecienteNoDisponible ? null : { videos: recientes.length, vistas: recientes.reduce((s, p) => s + p.vistas, 0) },
-      nota: 'YouTube Analytics tarda normalmente 48 a 72 horas en procesar datos. El período de arriba usa Analytics; la tabla muestra contadores actuales acumulados de videos publicados en la ventana (hasta 50 recientes).' + (detalleRecienteNoDisponible ? ' YouTube no devolvió el detalle reciente en esta sincronización.' : '') }
+      nota: 'Analytics procesa las métricas con demora y puede incluir menos días que el rango solicitado. Cada video muestra su contador acumulado actual (hasta 50 videos recientes de la ventana).' + (detalleRecienteNoDisponible ? ' YouTube no devolvió el detalle reciente en esta sincronización.' : '') }
   }
   if (red === 'x') {
     if (!t.organization_id) throw errorPublicacion('Configurá la organización de Buffer para leer sus métricas.', 424)

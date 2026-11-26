@@ -648,8 +648,17 @@
         if (actual !== pedido || !resultado.isConnected) return
         resultado.replaceChildren()
         if (!datos) { resultado.append(el('p', { class: 'small muted' }, conexion?.estado === 'conectada' ? 'Todavía no hay un informe para esta ventana. Tocá Sincronizar.' : 'Revisá la conexión de esta cuenta y después sincronizá.')); return }
-        resultado.append(el('p', { class: 'small muted' }, 'Sincronizado: ' + fecha(datos.sincronizada_el)), el('p', { class: 'small muted' }, datos.nota), el('p', { class: 'small muted' }, 'Período informado: ' + fecha(datos.rango.desde) + ' a ' + fecha(datos.rango.hasta)))
+        const esYouTube = cuenta === 'youtube', esHistoricoYouTube = esYouTube && periodo === 'historico'
+        const diaAnalytics = t => new Date(t).toLocaleDateString('es-AR', { timeZone: 'UTC' })
+        const rango = esYouTube
+          ? 'Rango solicitado a Analytics: ' + diaAnalytics(datos.rango.desde) + ' a ' + diaAnalytics(datos.rango.hasta)
+          : 'Período informado: ' + fecha(datos.rango.desde) + ' a ' + fecha(datos.rango.hasta)
+        resultado.append(el('p', { class: 'small muted' }, 'Sincronizado: ' + fecha(datos.sincronizada_el)), el('p', { class: 'small muted' }, datos.nota), el('p', { class: 'small muted' }, rango))
         const nombres = { publicaciones_buffer: 'Posts incluidos por Buffer', interacciones: 'Interacciones', reacciones: 'Reacciones', seguidores: 'Seguidores actuales', follows: 'Seguidores ganados', vistas: 'Vistas', likes: 'Likes', comentarios: 'Comentarios', compartidos: 'Compartidos', guardados: 'Guardados', alcance: 'Alcance', impresiones: 'Impresiones', tiempo_medio: 'Tiempo medio (s)', retencion: 'Porcentaje medio visto (%)', completado: 'Reproducciones completas (%)', ctr: 'CTR', clics: 'Clics al link', engagement: 'Interacciones / alcance' }
+        if (esYouTube) {
+          nombres.vistas = 'Vistas procesadas · Analytics'
+          nombres.seguidores = 'Suscriptores actuales'
+        }
         const tabla = el('table', {}, el('thead', {}, el('tr', {}, ['Métrica', 'Actual', 'Período anterior', 'Cambio'].map(t => el('th', {}, t)))))
         const cuerpo = el('tbody')
         const hay = Number.isFinite
@@ -666,14 +675,18 @@
         const indicadores = el('div', { class: 'pub-metric-cards' })
         const tarjetas = cuenta === 'x' ? [['impresiones', 'Impresiones · Buffer'], ['reacciones', 'Reacciones · Buffer'], ['publicaciones_buffer', 'Posts medidos'], ['alcance', 'Alcance']]
           : cuenta === 'tiktok' ? [['vistas', 'Vistas acumuladas · videos recientes', 'recientes'], ['interacciones', 'Interacciones acumuladas · videos recientes', 'recientes'], ['videos', 'Videos recientes', 'recientes'], ['seguidores', 'Seguidores actuales']]
-            : [['vistas', 'Vistas · Analytics'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores actuales']]
+            : esYouTube ? [
+              ...(esHistoricoYouTube ? [['vistas_canal', 'Vistas totales del canal', 'canal']] : []),
+              ['vistas', esHistoricoYouTube ? 'Vistas procesadas · Analytics' : 'Vistas del período · Analytics'],
+              ['vistas', 'Vistas acumuladas de los videos listados', 'recientes'], ['seguidores', 'Suscriptores actuales']
+            ] : [['vistas', 'Vistas · Analytics'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores actuales']]
         for (const [clave, nombre, fuente] of tarjetas) {
-          const valor = fuente === 'recientes' ? datos.recientes?.[clave] : datos.actual?.[clave]
+          const valor = fuente === 'canal' ? datos.vistas_canal : fuente === 'recientes' ? datos.recientes?.[clave] : datos.actual?.[clave]
           indicadores.append(el('article', { class: 'pub-metric-card' }, el('span', { class: 'small muted' }, nombre), el('strong', {}, num(valor))))
         }
         resultado.prepend(indicadores)
-        if (cuenta === 'youtube' && datos.recientes) resultado.insertBefore(el('p', { class: 'small muted' },
-          'Videos publicados en la ventana: ' + datos.recientes.videos + ' · Vistas actuales acumuladas: ' + num(datos.recientes.vistas) + '. Estos contadores son más recientes que Analytics y no miden las vistas ganadas en la ventana.'), indicadores.nextSibling)
+        if (esHistoricoYouTube && !Object.hasOwn(datos, 'vistas_canal')) resultado.insertBefore(el('p', { class: 'small muted' },
+          'Tocá Sincronizar para cargar el total del canal.'), indicadores.nextSibling)
         const posts = datos.posts || []
         const finContenido = cuenta === 'youtube' ? Date.now() : datos.rango.hasta
         const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= finContenido)
@@ -684,14 +697,14 @@
           return { ...p, metrica: m, titulo: p.titulo, fecha: p.publicado_el, enlace: p.enlace || m?.enlace, estado: 'Publicado' }
         })
         for (const m of posts.filter(x => !vinculados.has(x))) filas.push({ titulo: m.titulo || m.id || 'Publicación externa', fecha: m.creado || 0, enlace: m.enlace, estado: 'En la red', metrica: m })
-        const tituloTabla = el('h3', {}, 'Contenido publicado')
+        const tituloTabla = el('h3', {}, esYouTube ? 'Videos del período' : 'Contenido publicado')
         const buscar = entrada('', { type: 'search', placeholder: 'Buscar título o identificador', 'aria-label': 'Buscar contenido' })
         const desde = entrada('', { type: 'date', 'aria-label': 'Desde' })
         const hasta = entrada('', { type: 'date', 'aria-label': 'Hasta' })
         const filtro = selector([['', 'Todos los registros'], ['Publicado', 'Publicado desde el panel'], ['En la red', 'Encontrado en la red']], '')
         const aviso = el('p', { class: 'small muted' })
         const cuerpoPosts = el('tbody')
-        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {}, ['Contenido', 'Fecha', 'Estado', 'Vistas', 'Me gusta', 'Comentarios', 'Compartidos', 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
+        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {}, ['Contenido', 'Fecha', 'Estado', esYouTube ? 'Vistas acumuladas' : 'Vistas', 'Me gusta', 'Comentarios', 'Compartidos', 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
         const dia = t => new Date(t).toISOString().slice(0, 10)
         function dibujarFilas () {
           const texto = buscar.value.toLocaleLowerCase('es'), elegidas = filas.filter(p =>
@@ -712,13 +725,16 @@
         try {
           const { serie } = await api('/api/metricas?serie=1&red=' + cuenta)
           if (actual === pedido && resultado.isConnected && serie?.length) {
-            const campos = ['seguidores', 'vistas', 'likes', 'comentarios', 'compartidos', 'alcance', 'engagement'].filter(k => serie.some(s => typeof s[k] === 'number'))
+            const campos = ['vistas_canal', 'seguidores', 'vistas', 'likes', 'comentarios', 'compartidos', 'alcance', 'engagement'].filter(k => serie.some(s => typeof s[k] === 'number'))
             if (campos.length) {
-              const cuerpoSerie = el('tbody', {}, ...serie.slice(-30).reverse().map(s => el('tr', {}, el('td', {}, s.dia),
+              const ventanas = { historico: 'Histórico', '24h': '24 h', '7d': '7 días', '28d': '28 días' }
+              const cuerpoSerie = el('tbody', {}, ...serie.slice(-30).reverse().map(s => el('tr', {}, el('td', {}, esYouTube && s.capturado_el ? fecha(s.capturado_el) : s.dia),
+                esYouTube && el('td', {}, ventanas[s.ventana] || '—'),
                 ...campos.map(k => el('td', { class: 'n' }, k === 'engagement' && typeof s[k] === 'number' ? num(s[k] * 100) + '%' : num(s[k]))))))
-              resultado.append(el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, '· Histórico por día')),
-                el('p', { class: 'small muted' }, 'Un registro por día, guardado en cada sincronización (últimos 30). Sincronizá seguido para ir armando la serie.'),
-                el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, 'Día'), ...campos.map(k => el('th', {}, nombres[k] || k)))), cuerpoSerie)))
+              resultado.append(el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, esYouTube ? '· Capturas de métricas' : '· Histórico por día')),
+                el('p', { class: 'small muted' }, esYouTube ? 'Cada fila guarda los totales al sincronizar. Las vistas ganadas en un día se consultan en YouTube Studio.' : 'Un registro por día, guardado en cada sincronización (últimos 30). Sincronizá seguido para ir armando la serie.'),
+                el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, esYouTube ? 'Sincronizado' : 'Día'),
+                  esYouTube && el('th', {}, 'Ventana de Analytics'), ...campos.map(k => el('th', {}, k === 'vistas_canal' ? 'Vistas totales del canal' : nombres[k] || k)))), cuerpoSerie)))
             }
           }
         } catch {}

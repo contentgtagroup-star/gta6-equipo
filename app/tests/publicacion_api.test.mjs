@@ -488,7 +488,7 @@ test('YouTube muestra contadores actuales de videos aunque Analytics todavía no
     const u = new URL(url)
     if (u.hostname === 'unit.supabase.co') return antes(url, opciones)
     if (u.hostname === 'youtubeanalytics.googleapis.com') return Response.json({ columnHeaders: [{ name: 'views' }], rows: [] })
-    if (u.pathname.endsWith('/channels')) return Response.json({ items: [{ id: 'canal-test', statistics: { subscriberCount: '0' }, contentDetails: { relatedPlaylists: { uploads: 'lista' } } }] })
+    if (u.pathname.endsWith('/channels')) return Response.json({ items: [{ id: 'canal-test', statistics: { subscriberCount: '0', viewCount: '917' }, contentDetails: { relatedPlaylists: { uploads: 'lista' } } }] })
     if (u.pathname.endsWith('/playlistItems')) return Response.json({ items: [{ contentDetails: { videoId: 'video1' } }] })
     if (u.pathname.endsWith('/videos')) return Response.json({ items: [{ id: 'video1', snippet: { title: 'Short reciente', publishedAt: new Date(Date.now() - 3600000).toISOString() }, statistics: { viewCount: '838', likeCount: '4' } }] })
     throw new Error('Ruta inesperada: ' + u.pathname)
@@ -496,6 +496,7 @@ test('YouTube muestra contadores actuales de videos aunque Analytics todavía no
   try {
     const d = await obtenerMetricas('youtube', '7d')
     assert.equal(d.actual.vistas, undefined)
+    assert.equal(d.vistas_canal, 917)
     assert.deepEqual(d.recientes, { videos: 1, vistas: 838 })
     assert.equal(d.posts[0].vistas, 838)
   } finally {

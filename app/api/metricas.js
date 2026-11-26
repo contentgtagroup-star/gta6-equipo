@@ -31,7 +31,8 @@ export default async function handler (req, res) {
     const id = red + '-' + ventana, actual = await leerPub('metricas', id)
     if (req.method === 'GET') return responder(res, 200, { datos: actual?.datos || null })
     if (req.method !== 'POST') throw errorPublicacion('Método no permitido.', 405)
-    if (actual?.datos.sincronizada_el > Date.now() - 300000) return responder(res, 200, { datos: actual.datos })
+    const informeViejoYouTube = red === 'youtube' && actual && !Object.hasOwn(actual.datos, 'vistas_canal')
+    if (!informeViejoYouTube && actual?.datos.sincronizada_el > Date.now() - 300000) return responder(res, 200, { datos: actual.datos })
     const publicaciones = (await listarPub('cola')).map(p => p.datos)
     const d = { ...await obtenerMetricas(red, ventana, publicaciones), red, ventana, sincronizada_el: Date.now() }
     await guardarPub('metricas', id, d, actual?.version || 0)
@@ -41,6 +42,7 @@ export default async function handler (req, res) {
     const campos = ['seguidores', 'vistas', 'likes', 'comentarios', 'compartidos', 'alcance', 'guardados', 'interacciones', 'engagement', 'tiempo_medio', 'retencion']
     const snap = { red, dia, ventana, capturado_el: Date.now() }
     for (const k of campos) if (typeof a[k] === 'number') snap[k] = a[k]
+    if (Number.isFinite(d.vistas_canal)) snap.vistas_canal = d.vistas_canal
     const prevSnap = await leerPub('metricas', snapId)
     await guardarPub('metricas', snapId, snap, prevSnap?.version || 0)
     await eventoPub('metricas_sincronizadas', yo, { plataforma: red, ventana })

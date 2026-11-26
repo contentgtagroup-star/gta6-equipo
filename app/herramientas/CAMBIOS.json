@@ -1,6 +1,12 @@
 {
- "version": 85,
+ "version": 86,
  "cambios": [
+  {
+   "v": 86,
+   "fecha": "2026-11-25",
+   "texto": "Resultados conserva las capturas de cada ventana por separado y muestra el histórico de la ventana seleccionada.",
+   "manual": null
+  },
   {
    "v": 85,
    "fecha": "2026-11-25",

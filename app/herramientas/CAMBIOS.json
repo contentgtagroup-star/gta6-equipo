@@ -1,6 +1,12 @@
 {
- "version": 87,
+ "version": 88,
  "cambios": [
+  {
+   "v": 88,
+   "fecha": "2026-11-26",
+   "texto": "El panel aprovecha mejor las pantallas grandes: el ancho máximo pasa de 1440 a 1560 px y en Resultados la comparación con el período anterior y el histórico por día se muestran lado a lado en vez de uno abajo del otro. En pantallas chicas se siguen apilando igual que antes.",
+   "manual": null
+  },
   {
    "v": 87,
    "fecha": "2026-11-25",

@@ -668,7 +668,10 @@
           cuerpo.append(el('tr', {}, el('td', {}, nombre), el('td', { class: 'n' }, valor(a)), el('td', { class: 'n' }, valor(b)), el('td', { class: 'n' }, cambio)))
         }
         tabla.append(cuerpo)
-        if (cuerpo.children.length) resultado.append(el('div', { class: 'tbl' }, tabla))
+        // Comparación y capturas son tablas angostas: van de a dos en pantallas grandes.
+        const col2 = el('div', { class: 'res-col2' })
+        resultado.append(col2)
+        if (cuerpo.children.length) col2.append(el('section', {}, el('h3', {}, 'Comparación con el período anterior'), el('div', { class: 'tbl' }, tabla)))
         else resultado.append(el('p', { class: 'small muted' }, 'La plataforma no devolvió totales para esta ventana.'))
         if (datos.no_disponibles?.length) resultado.append(el('p', { class: 'small muted' },
           'Datos no disponibles: ' + datos.no_disponibles.map(k => nombres[k] || k).join(', ')))
@@ -738,10 +741,10 @@
               const cuerpoSerie = el('tbody', {}, ...serie.slice(-30).reverse().map(s => el('tr', {}, el('td', {}, esYouTube && s.capturado_el ? fecha(s.capturado_el) : s.dia),
                 esYouTube && el('td', {}, ventanas[s.ventana] || '—'),
                 ...campos.map(k => el('td', { class: 'n' }, k === 'engagement' && typeof s[k] === 'number' ? num(s[k] * 100) + '%' : num(s[k]))))))
-              resultado.append(el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, esYouTube ? '· Capturas de métricas' : '· Histórico por día')),
+              col2.append(el('section', {}, el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, esYouTube ? '· Capturas de métricas' : '· Histórico por día')),
                 el('p', { class: 'small muted' }, esYouTube ? 'Cada fila guarda los totales de esta ventana al sincronizar. Las vistas ganadas en un día se consultan en YouTube Studio.' : 'Última captura de esta ventana por día (hasta 30).'),
                 el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, esYouTube ? 'Sincronizado' : 'Día'),
-                  esYouTube && el('th', {}, 'Ventana de Analytics'), ...campos.map(k => el('th', {}, k === 'vistas_canal' ? 'Vistas totales del canal' : nombres[k] || k)))), cuerpoSerie)))
+                  esYouTube && el('th', {}, 'Ventana de Analytics'), ...campos.map(k => el('th', {}, k === 'vistas_canal' ? 'Vistas totales del canal' : nombres[k] || k)))), cuerpoSerie))))
             }
           }
         } catch {}

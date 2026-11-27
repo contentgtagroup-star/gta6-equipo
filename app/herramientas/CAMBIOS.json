@@ -1,6 +1,12 @@
 {
- "version": 87,
+ "version": 88,
  "cambios": [
+  {
+   "v": 88,
+   "fecha": "2026-11-26",
+   "texto": "El panel abre en una vista «Hoy» que responde qué sale hoy y qué falta hacer: estado de la agenda, las franjas del día con la pieza asignada a cada una, piezas esperando una mano o trabadas, publicadas hace más de 24 h sin métrica registrada, y el bloque manual del día como checklist que se guarda en tu navegador y se reinicia cada día. La interacción con la comunidad sigue siendo manual a propósito: X prohíbe la interacción automatizada y YouTube la cuenta como interacción falsa.",
+   "manual": null
+  },
   {
    "v": 87,
    "fecha": "2026-11-25",

@@ -77,6 +77,7 @@
     finally { P.cargando = false }
   }
   function render() {
+    if (window.estoyEn?.('hoy')) return hoy($('hoyContenido'))
     const enResultados = window.estoyEn?.('resultados')
     const enTrazabilidad = window.estoyEn?.('trazabilidad')
     const tabs = { conexiones: 'Conexiones', fuentes: 'Cuentas a rastrear', sugerencias: 'Sugerencias', cola: 'Cola', actividad: 'Actividad' }
@@ -761,10 +762,134 @@
     if (!P.datos) return toast(P.error || 'Las cuentas todavía están cargando. Volvé a tocar Aprobar.')
     publicarSugerencia(c, true)
   }
+  /* ---------- Vista «Hoy» ----------
+     Responde dos preguntas que ninguna otra sección contesta: qué sale hoy y qué falta que haga una persona.
+     No duplica la Cola: muestra el estado del día y manda a la sección que corresponde para operar. */
+  const TAREAS_HOY = [
+    ['comentarios', 'Responder los comentarios de las piezas de ayer', 'Las primeras horas de una pieza son las que deciden su alcance. 10 min.'],
+    ['aportar', 'Comentar en 5 videos grandes de GTA 6 del día', 'Aportando un dato o un detalle, no «buen video». 10 min.'],
+    ['seguir', 'Seguir 10 cuentas del nicho y devolver los seguimientos', '5 min. Nunca automatizado: X lo prohíbe y YouTube lo cuenta como interacción falsa.'],
+    ['grupos', 'Publicar en un grupo de Facebook de GTA 6', 'Es el canal más desaprovechado que tenemos.'],
+    ['radar', 'Mirar el radar y marcar si hay algo urgente', 'Si hay algo muy nuevo, va a la cola con prioridad: desplaza, no cancela.'],
+    ['lectura', 'Anotar la lectura de 24 h de las piezas de ayer', 'Sin esto, Resultados compara piezas de edades distintas.']
+  ]
+  function hoy (box) {
+    box.replaceChildren()
+    if (!S.clave) { box.append(el('p', { class: 'small muted' }, 'Entrá al panel para ver el día.')); return }
+    if (!P.datos) { box.append(el('p', { class: 'small muted' }, P.error || 'Cargando el día…')); return }
+    const d = P.datos, cad = d.cadencia || {}, zona = cad.zona_horaria || 'America/Argentina/Buenos_Aires'
+    const dia = t => new Intl.DateTimeFormat('en-CA', { timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t))
+    const hora = t => new Intl.DateTimeFormat('es-AR', { timeZone: zona, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(t))
+    const clave = dia(Date.now()), esHoy = t => !!t && dia(t) === clave
+    const cola = d.cola || []
+    $('hoyFecha').textContent = new Intl.DateTimeFormat('es-AR', { timeZone: zona, dateStyle: 'full' }).format(new Date()) + ' · ' + zona.split('/').at(-1).replace(/_/g, ' ')
+
+    const trabado = p => ['error', 'revisar'].includes(p.estado) || (p.estado === 'enviando' && (p.vence || 0) < Date.now())
+    const aMano = cola.filter(p => ['manual', 'borrador'].includes(p.estado))
+    const trabadas = cola.filter(trabado)
+    const programadasHoy = cola.filter(p => p.estado === 'pendiente' && esHoy(p.programado_el))
+    const enviadasHoy = cola.filter(p => p.estado === 'publicado' && esHoy(p.publicado_el))
+    const pendientesSugerencia = (d.sugerencias || []).filter(s => s.estado === 'pendiente')
+    const sinLectura = cola.filter(p => p.estado === 'publicado' && p.publicado_el && Date.now() - p.publicado_el > 864e5 && !p.metrica)
+
+    const kpi = (n, texto, clase = '') => el('div', { class: 'hoy-kpi' + (clase ? ' ' + clase : '') }, el('b', {}, String(n)), el('span', {}, texto))
+    box.append(el('div', { class: 'hoy-kpis' },
+      el('div', { class: 'hoy-kpi' + (cad.activo ? ' bien' : ' alerta') }, el('b', {}, cad.activo ? 'Sí' : 'No'), el('span', {}, cad.activo ? 'La agenda está publicando' : 'La agenda está apagada')),
+      kpi(programadasHoy.length, 'programadas para hoy', programadasHoy.length ? '' : 'alerta'),
+      kpi(enviadasHoy.length, 'ya salieron hoy'),
+      kpi(aMano.length, 'esperando una mano', aMano.length ? 'alerta' : ''),
+      kpi(trabadas.length, 'trabadas', trabadas.length ? 'alerta' : ''),
+      kpi(pendientesSugerencia.length, 'sugerencias sin decidir'),
+      kpi(d.cupos_short?.libres ?? 6, 'shorts libres de 6')))
+
+    const grid = el('div', { class: 'hoy-grid' })
+    box.append(grid)
+
+    if (!cad.activo) {
+      grid.append(el('div', { class: 'hoy-card hoy-ancho', style: 'border-color:var(--sun)' },
+        el('h3', {}, 'La agenda está apagada'),
+        el('p', { class: 'small muted' }, 'Mientras esté apagada, nada sale solo: cada pieza hay que empujarla a mano. Se prende en Publicaciones → Cola → Cadencia de publicaciones.'),
+        el('div', { class: 'row' }, boton('Ir a la cadencia', () => { P.tab = 'cola'; window.irA?.('publicaciones') }, 'tiny primary'))))
+    }
+
+    /* Qué sale hoy: las franjas que define la cadencia, con la pieza que cae en cada una. */
+    const franjas = el('div', { class: 'hoy-card hoy-ancho' }, el('h3', {}, 'Qué sale hoy'))
+    const filas = []
+    for (const [red, nombre] of Object.entries(redes)) {
+      const c = cad.por_red?.[red] || { por_dia: 0, horarios: [] }
+      if (!c.por_dia && !(c.horarios || []).length) continue
+      if ((c.horarios || []).length) {
+        for (const h of c.horarios) {
+          const pieza = programadasHoy.find(p => p.plataforma === red && hora(p.programado_el) === h.padStart(5, '0'))
+          filas.push([h, red, nombre, pieza])
+        }
+      } else {
+        filas.push([null, red, nombre, null, c.por_dia])
+      }
+    }
+    filas.sort((a, b) => (a[0] || '99:99').localeCompare(b[0] || '99:99'))
+    const lista = el('ul', { class: 'hoy-lista' })
+    for (const [h, red, nombre, pieza, porDia] of filas) {
+      lista.append(el('li', { class: 'hoy-fila' + (pieza ? '' : ' vacia') },
+        el('span', { class: 'hora' }, h || 'suelto'),
+        el('span', { class: 'que' }, pieza ? pieza.titulo || 'Sin título' : h ? 'Franja libre: no hay pieza asignada' : porDia + ' por día, repartidas entre las 9 y las 21'),
+        redChip(red, nombre)))
+    }
+    const sueltas = programadasHoy.filter(p => !filas.some(f => f[3] === p))
+    for (const p of sueltas) {
+      lista.append(el('li', { class: 'hoy-fila' },
+        el('span', { class: 'hora' }, hora(p.programado_el)),
+        el('span', { class: 'que' }, p.titulo || 'Sin título'),
+        redChip(p.plataforma)))
+    }
+    franjas.append(lista.children.length ? lista : el('p', { class: 'empty' }, 'Ninguna red tiene cupo diario configurado. Se define en Publicaciones → Cola → Cadencia.'))
+    if (enviadasHoy.length) franjas.append(el('p', { class: 'small dim' }, 'Ya salieron hoy: ' + enviadasHoy.map(p => (redes[p.plataforma] || p.plataforma) + ' ' + hora(p.publicado_el)).join(' · ')))
+    grid.append(franjas)
+
+    const tarjetaLista = (titulo, items, vacio, pie, etiquetaDe = p => etiquetas[p.estado] || p.estado) => {
+      const c = el('div', { class: 'hoy-card' }, el('h3', {}, titulo, el('span', { class: 'chip' }, String(items.length))))
+      if (!items.length) { c.append(el('p', { class: 'small dim' }, vacio)); return c }
+      const ul = el('ul', { class: 'hoy-lista' })
+      for (const p of items.slice(0, 8)) ul.append(el('li', { class: 'hoy-fila hoy-fila-b' },
+        el('span', { class: 'que' }, p.titulo || 'Sin título'),
+        el('span', { class: 'row', style: 'gap:6px' }, el('span', { class: 'chip' }, etiquetaDe(p)), redChip(p.plataforma))))
+      c.append(ul)
+      if (items.length > 8) c.append(el('p', { class: 'small dim' }, 'y ' + (items.length - 8) + ' más'))
+      if (pie) c.append(el('p', { class: 'small muted' }, pie))
+      return c
+    }
+    grid.append(tarjetaLista('Esperando una mano', aMano.concat(trabadas), 'Nada trabado ni esperando. La cola está al día.', 'Se resuelven en Publicaciones → Cola.'))
+    const antiguedad = p => { const h = Math.floor((Date.now() - p.publicado_el) / 36e5); return h < 48 ? 'hace ' + h + ' h' : 'hace ' + Math.floor(h / 24) + ' días' }
+    grid.append(tarjetaLista('Sin lectura de 24 h', sinLectura, 'Todas las piezas publicadas tienen métrica registrada.', 'Sin la lectura de 24 h, Resultados compara piezas de edades distintas.', antiguedad))
+
+    /* Bloque manual: lo que no se puede automatizar, como checklist del día. */
+    const kTareas = 'gta6_hoy_tareas_' + clave
+    let hechas = []
+    try { hechas = JSON.parse(ls(kTareas) || '[]') } catch (e) { hechas = [] }
+    const tarjetaTareas = el('div', { class: 'hoy-card hoy-ancho' })
+    const titulo = el('h3', {}, 'Tu bloque manual de hoy', el('span', { class: 'chip' }, hechas.length + '/' + TAREAS_HOY.length))
+    tarjetaTareas.append(titulo, el('p', { class: 'small muted' }, 'Esto no se automatiza por decisión: X prohíbe la interacción automatizada y YouTube la trata como interacción falsa. Son unos 30 minutos.'))
+    const ul = el('ul', { class: 'hoy-lista' })
+    for (const [id, texto, detalle] of TAREAS_HOY) {
+      const marcada = hechas.includes(id)
+      const check = el('input', { type: 'checkbox' }); check.checked = marcada
+      const li = el('label', { class: 'hoy-tarea' + (marcada ? ' hecha' : '') }, check, el('span', {}, texto, el('small', {}, detalle)))
+      check.addEventListener('change', () => {
+        hechas = check.checked ? [...new Set([...hechas, id])] : hechas.filter(x => x !== id)
+        ls(kTareas, JSON.stringify(hechas))
+        li.classList.toggle('hecha', check.checked)
+        titulo.lastChild.textContent = hechas.length + '/' + TAREAS_HOY.length
+      })
+      ul.append(el('li', {}, li))
+    }
+    tarjetaTareas.append(ul)
+    grid.append(tarjetaTareas)
+  }
   $('pubActualizar').addEventListener('click', () => cargar(true))
   // Publicaciones se consulta solo cuando el panel abre esa sección: crear clips no debe esperar a la base.
-  const enSeccion = () => !window.estoyEn || window.estoyEn('publicaciones') || window.estoyEn('resultados') || window.estoyEn('trazabilidad')
+  const enSeccion = () => !window.estoyEn || window.estoyEn('hoy') || window.estoyEn('publicaciones') || window.estoyEn('resultados') || window.estoyEn('trazabilidad')
   window.publicacionesAlEntrar = () => { render(); cargar() }
+  window.panelHoyAlEntrar = () => { render(); cargar() }
   render(); if (enSeccion()) cargar()
   setInterval(() => {
     if (document.hidden || !enSeccion()) return

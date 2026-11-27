@@ -161,6 +161,31 @@ label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--mu
 .chip{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
 .ch-nuevo{color:var(--sun)} .ch-ok{color:var(--ok)} .ch-pub{color:var(--sea)} .ch-corr{color:var(--bad)} .ch-stock{color:var(--sea)}
 .empty{font-size:14px;color:var(--dim);padding:24px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+/* Vista Hoy: aprovecha el ancho en pantallas grandes en lugar de apilar todo en una columna */
+.hoy-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));gap:10px;margin-bottom:18px}
+.hoy-kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 13px;min-width:0}
+.hoy-kpi b{display:block;font-family:var(--display);font-size:27px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--pink)}
+.hoy-kpi span{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.hoy-kpi.alerta{border-color:var(--sun)} .hoy-kpi.alerta b{color:var(--sun)}
+.hoy-kpi.bien b{color:var(--ok)}
+.hoy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+.hoy-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 17px;min-width:0;display:flex;flex-direction:column;gap:9px}
+.hoy-card>h3{display:flex;gap:9px;align-items:baseline;justify-content:space-between}
+.hoy-card>p{margin:0}
+.hoy-ancho{grid-column:1/-1}
+.hoy-lista{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+.hoy-fila{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:10px;align-items:baseline;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:13.5px}
+.hoy-fila .hora{font-family:var(--mono);font-size:12.5px;color:var(--sea)}
+.hoy-fila .que{min-width:0;overflow-wrap:anywhere}
+.hoy-fila.vacia{opacity:.6}
+/* En las tarjetas angostas el título manda: las etiquetas bajan a una segunda línea en vez de estrujarlo */
+.hoy-fila-b{grid-template-columns:minmax(0,1fr);gap:5px}
+.hoy-fila-b .que{font-weight:600}
+.hoy-tarea{display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;font-size:13.5px;color:var(--fg)}
+.hoy-tarea input{width:16px;height:16px;flex:0 0 16px;margin:2px 0 0;padding:0;accent-color:var(--pink)}
+.hoy-tarea small{display:block;color:var(--muted);margin-top:2px}
+.hoy-tarea.hecha>span{text-decoration:line-through;color:var(--dim)}
+@media (max-width:520px){.hoy-fila{grid-template-columns:52px minmax(0,1fr)}.hoy-fila>:last-child{grid-column:2}.hoy-fila-b{grid-template-columns:minmax(0,1fr)}.hoy-fila-b>:last-child{grid-column:1}}
 details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
 details+details{margin-top:10px}
 summary{cursor:pointer;font-weight:700}
@@ -212,7 +237,8 @@ html{-webkit-text-size-adjust:100%}
 
   <div class="app">
   <nav class="sidebar" id="sidebar" aria-label="Secciones">
-    <button type="button" data-ir="crear" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>Crear clips</button>
+    <button type="button" data-ir="hoy" aria-current="page"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4m8-4v4m-6 9h4"/></svg>Hoy</button>
+    <button type="button" data-ir="crear"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>Crear clips</button>
     <button type="button" data-ir="biblioteca"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4h12M4 7h16"/><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M9 14h6"/></svg>Biblioteca <span class="num" id="navLibCount"></span></button>
     <button type="button" data-ir="publicaciones"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v12H9l-5 4zM8 8h8m-8 4h6"/></svg>Publicaciones</button>
     <button type="button" data-ir="resultados"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg>Resultados</button>
@@ -221,6 +247,14 @@ html{-webkit-text-size-adjust:100%}
     <button type="button" data-ir="ayuda"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8m-6-11 2 2-2 2m4 0h2"/></svg>Ayuda y compu</button>
   </nav>
   <main class="contenido">
+  <section id="hoy" data-seccion="hoy" hidden>
+    <header>
+      <h2>Hoy</h2>
+      <p id="hoyFecha" class="small"></p>
+    </header>
+    <div id="hoyContenido"></div>
+  </section>
+
   <section id="seccionCrearLink" data-seccion="crear">
     <h2>Pegá un link</h2>
     <p class="small dim" style="margin:4px 0 0">ALIMENTAR lo guarda como referencia para la IA. CREAR CLIP hace un short con ese material específico en tu compu (YouTube, Twitch o Kick).</p>
@@ -912,21 +946,23 @@ function renderSetup(){
     el('div', {class:'row'}, ['Mac','Windows','Linux'].map(so => el('button', {onclick:()=>{ if(!S.clave){ toast('Primero entrá con tu clave'); return; } abrirPrompt('Preparar ' + so, promptSetup(so)); }}, so))));
 }
 /* ---------- secciones: lo pesado se dibuja solo cuando entrás ---------- */
-const SECCIONES = ['crear','biblioteca','publicaciones','resultados','trazabilidad','links','ayuda'];
+const SECCIONES = ['hoy','crear','biblioteca','publicaciones','resultados','trazabilidad','links','ayuda'];
 function estoyEn(k){ return S.seccion === k; }
 function irA(k, fijar = true){
-  if(!SECCIONES.includes(k)) k = 'crear';
+  if(!SECCIONES.includes(k)) k = 'hoy';
   S.seccion = k;
   document.querySelectorAll('[data-seccion]').forEach(sec => { sec.hidden = sec.dataset.seccion !== k; });
   document.querySelectorAll('#sidebar button').forEach(b => b.setAttribute('aria-current', b.dataset.ir === k ? 'page' : 'false'));
   ls('gta6_seccion', k);
   if(fijar && location.hash.slice(1) !== k) history.replaceState(null, '', '#' + k);
+  if(k === 'hoy') window.panelHoyAlEntrar?.();
   if(k === 'biblioteca') renderLib();
   if(k === 'links') renderRadar();
   if(k === 'publicaciones' || k === 'resultados' || k === 'trazabilidad') window.publicacionesAlEntrar?.();
   window.scrollTo({top:0, behavior:fijar ? 'smooth' : 'auto'});
 }
 window.estoyEn = estoyEn;
+window.irA = irA;
 function render(){
   renderPeople(); renderTurno(); renderFiltros();
   if(S.seccion === 'biblioteca') renderLib();
@@ -943,7 +979,7 @@ renderSetup();
 renderTurno();
 $('sidebar').addEventListener('click', e => { const b = e.target.closest('button[data-ir]'); if(b) irA(b.dataset.ir); });
 window.addEventListener('hashchange', () => irA(location.hash.slice(1), false));
-irA(location.hash.slice(1) || ls('gta6_seccion') || 'crear', false);
+irA(location.hash.slice(1) || ls('gta6_seccion') || 'hoy', false);
 S.clave = ls('gta6_clave');
 if(!S.clave) $('login').hidden = false; else cargar();
 // Con pedidos en curso se refresca seguido; si no, más espaciado para no gastar cuota del backend

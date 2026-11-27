@@ -1,6 +1,12 @@
 {
- "version": 87,
+ "version": 88,
  "cambios": [
+  {
+   "v": 88,
+   "fecha": "2026-11-26",
+   "texto": "Al revisar y publicar ahora se elige cuándo sale: «En su turno de la cola», que toma la próxima franja libre de cada red según la cadencia, o «Publicar ahora», que saltea la franja y lo manda en el próximo envío sin ocupar un turno de la agenda compartida. La opción queda guardada con la aprobación, así que si se corta la conexión en el medio se respeta igual.",
+   "manual": null
+  },
   {
    "v": 87,
    "fecha": "2026-11-25",

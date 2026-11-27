@@ -710,23 +710,46 @@
           ['likes', 'Me gusta'], ['comentarios', 'Comentarios'], ['compartidos', 'Compartidos']
         ]
         if (cuenta === 'instagram') columnasPosts.push(['alcance', 'Alcance'], ['guardados', 'Guardados'], ['tiempo_medio', 'Tiempo medio (s)'])
-        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {},
-          ['Contenido', 'Fecha', 'Estado', ...columnasPosts.map(([, titulo]) => titulo), 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
+        // Las métricas son acumuladas: una pieza de ayer y una de hace un mes no se comparan de frente.
+        // Agrupamos por edad de la medición para que cada comparación sea entre piezas de la misma edad.
+        const TRAMOS = [[0, 24, 'Menos de 24 h'], [24, 72, 'Entre 24 y 72 h'], [72, 168, 'Entre 3 y 7 días'], [168, Infinity, 'Más de 7 días']]
+        const horas = p => p.fecha ? (Date.now() - p.fecha) / 36e5 : null
+        const tramoDe = p => { const h = horas(p); return h === null ? 'Sin fecha' : (TRAMOS.find(([a, b]) => h >= a && h < b) || TRAMOS.at(-1))[2] }
+        const edadTexto = p => { const h = horas(p); return h === null ? '—' : h < 48 ? Math.floor(h) + ' h' : Math.floor(h / 24) + ' d' }
+        const agrupar = selector([['edad', 'Por edad de la medición'], ['', 'Lista corrida']], P.agruparPosts ?? 'edad')
+        const columnas = ['Contenido', 'Fecha', 'Edad', 'Estado', ...columnasPosts.map(([, titulo]) => titulo), 'Enlace']
+        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {}, columnas.map(t => el('th', {}, t)))), cuerpoPosts)
         const dia = t => new Date(t).toISOString().slice(0, 10)
+        const filaPost = p => el('tr', {},
+          el('td', {}, p.titulo), el('td', {}, p.fecha ? fecha(p.fecha) : '—'), el('td', { class: 'n' }, edadTexto(p)), el('td', {}, p.estado),
+          ...columnasPosts.map(([k]) => el('td', { class: 'n' }, num(p.metrica?.[k]))),
+          el('td', {}, p.enlace ? el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver') : '—'))
+        function filaPromedio (nombre, grupo) {
+          const promedio = k => { const v = grupo.map(p => p.metrica?.[k]).filter(Number.isFinite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : undefined }
+          return el('tr', { class: 'grupo' },
+            el('td', { colspan: 4 }, nombre + ' · ' + grupo.length + (grupo.length === 1 ? ' pieza' : ' piezas') + ' · promedio'),
+            ...columnasPosts.map(([k]) => el('td', { class: 'n' }, num(promedio(k)))), el('td', {}, ''))
+        }
         function dibujarFilas () {
+          P.agruparPosts = agrupar.value
           const texto = buscar.value.toLocaleLowerCase('es'), elegidas = filas.filter(p =>
             (!texto || (p.titulo + ' ' + (p.metrica?.id || '')).toLocaleLowerCase('es').includes(texto)) &&
             (!filtro.value || p.estado === filtro.value) &&
             (!desde.value || p.fecha && dia(p.fecha) >= desde.value) && (!hasta.value || p.fecha && dia(p.fecha) <= hasta.value))
             .sort((a, b) => b.fecha - a.fecha)
-          aviso.textContent = elegidas.length + ' registros · “—” indica dato no disponible en la conexión.'
-          cuerpoPosts.replaceChildren(...elegidas.map(p => el('tr', {},
-            el('td', {}, p.titulo), el('td', {}, p.fecha ? fecha(p.fecha) : '—'), el('td', {}, p.estado),
-            ...columnasPosts.map(([k]) => el('td', { class: 'n' }, num(p.metrica?.[k]))),
-            el('td', {}, p.enlace ? el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver') : '—'))))
+          aviso.textContent = elegidas.length + ' registros · las métricas son acumuladas desde que se publicó cada pieza, por eso se agrupan por edad · “—” indica dato no disponible en la conexión.'
+          if (agrupar.value !== 'edad') { cuerpoPosts.replaceChildren(...elegidas.map(filaPost)); return }
+          const nodos = []
+          for (const nombre of [...TRAMOS.map(t => t[2]), 'Sin fecha']) {
+            const grupo = elegidas.filter(p => tramoDe(p) === nombre)
+            if (!grupo.length) continue
+            nodos.push(filaPromedio(nombre, grupo), ...grupo.map(filaPost))
+          }
+          cuerpoPosts.replaceChildren(...nodos)
         }
-        for (const control of [buscar, desde, hasta, filtro]) control.addEventListener('input', dibujarFilas)
-        resultado.append(tituloTabla, el('div', { class: 'row' }, buscar, campo('Desde', desde), campo('Hasta', hasta), filtro), aviso, el('div', { class: 'tbl' }, tablaPosts))
+        for (const control of [buscar, desde, hasta, filtro, agrupar]) control.addEventListener('input', dibujarFilas)
+        agrupar.addEventListener('change', dibujarFilas)
+        resultado.append(tituloTabla, el('div', { class: 'row' }, buscar, campo('Desde', desde), campo('Hasta', hasta), filtro, campo('Agrupar', agrupar)), aviso, el('div', { class: 'tbl' }, tablaPosts))
         dibujarFilas()
         // Mostrar capturas comparables de la ventana seleccionada.
         try {

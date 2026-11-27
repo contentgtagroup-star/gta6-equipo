@@ -30,7 +30,7 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15.5px;line-height:1.5;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.wrap{max-width:1440px;margin:0 auto;padding-block:28px 72px}
+.wrap{max-width:1560px;margin:0 auto;padding-block:28px 72px}
 .app{display:grid;grid-template-columns:196px minmax(0,1fr);gap:22px;align-items:start}
 .sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:5px;background:linear-gradient(155deg,var(--surface2),var(--surface) 55%);border:1px solid var(--line);border-radius:16px;padding:8px}
 .sidebar button{text-align:left;background:transparent;border-color:transparent;display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 10px;color:var(--muted)}
@@ -53,6 +53,13 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15.5
 #pubResultadosContenido .row>select{flex:1 1 180px;width:auto}
 #pubResultadosContenido .tbl{overflow:auto;margin-top:12px}
 #pubResultadosContenido table{min-width:840px;width:100%}
+/* Las tablas angostas (comparación y capturas) van de a dos: una sola estirada a 1200 px es aire */
+.res-col2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));gap:18px;align-items:start;margin-top:12px}
+.res-col2>section{min-width:0}
+.res-col2 h3{margin-bottom:4px}
+#pubResultadosContenido .res-col2 .tbl{margin-top:8px}
+#pubResultadosContenido .res-col2 table{min-width:0}
+#pubResultadosContenido .res-col2 td:first-child{min-width:0}
 #pubResultadosContenido td:first-child{min-width:180px;max-width:280px;overflow-wrap:anywhere}
 .pub-suggestion{margin:14px 0;border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
 .pub-suggestion h3{font-size:clamp(18px,2.2vw,24px)}

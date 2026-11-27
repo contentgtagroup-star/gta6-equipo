@@ -1,6 +1,7 @@
 {
- "version": 78,
+ "version": 79,
  "cambios": [
+  {"v": 79, "fecha": "2026-11-26", "texto": "El panel abre en una vista «Hoy» que responde qué sale hoy y qué falta hacer: estado de la agenda, franjas del día con la pieza asignada a cada una, piezas esperando una mano o trabadas, publicadas hace más de 24 h sin métrica registrada, y el bloque manual del día como checklist (se guarda en tu navegador y se reinicia cada día). La interacción con la comunidad sigue siendo manual a propósito: X prohíbe la interacción automatizada y YouTube la cuenta como interacción falsa.", "manual": null},
   {"v": 78, "fecha": "2026-11-25", "texto": "TikTok en sandbox solicita también los permisos de estadísticas de la cuenta y lista de videos para mostrar sus métricas en Resultados.", "manual": "En el sandbox de TikTok agregá user.info.stats y video.list; aplicá los cambios y reconectá la cuenta desde el panel para autorizarlos."},
   {"v": 77, "fecha": "2026-11-25", "texto": "Resultados muestra en X las impresiones, reacciones y posts medidos por Buffer. Vincula los insights de Instagram con la publicación original y muestra su fecha. YouTube Analytics distingue API deshabilitada de permisos faltantes cuando la red lo informa. TikTok indica los permisos concretos que faltan para leer métricas en sandbox.", "manual": null},
   {"v": 76, "fecha": "2026-11-25", "texto": "Conexiones permite verificar Meta, YouTube, X y TikTok desde el panel sin publicar contenido. Muestra configuración incompleta y cola pausada de Buffer; YouTube y TikTok renuevan el acceso sin marcarlo vencido antes de tiempo. Cuando el token renovable realmente caduca, indica que hay que reconectar. Los errores de permisos no invalidan automáticamente la conexión.", "manual": null},

@@ -1,6 +1,12 @@
 {
- "version": 87,
+ "version": 88,
  "cambios": [
+  {
+   "v": 88,
+   "fecha": "2026-11-26",
+   "texto": "La tabla de contenido publicado en Resultados agrupa las piezas por edad de la medición (menos de 24 h, 24 a 72 h, 3 a 7 días, más de 7 días) y muestra el promedio de cada tramo, con una columna nueva de edad. Las métricas de las redes son acumuladas desde que se publicó cada pieza, así que comparar una de ayer con una de hace un mes no decía nada; dentro de un tramo la comparación sí sirve. Se puede volver a la lista corrida con el selector Agrupar.",
+   "manual": null
+  },
   {
    "v": 87,
    "fecha": "2026-11-25",

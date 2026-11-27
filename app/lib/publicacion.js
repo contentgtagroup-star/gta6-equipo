@@ -51,8 +51,14 @@ export function contenidoValido (d) {
   if (imagenes.length > 10 || imagenes.some(p => typeof p !== 'string' || !/^[A-Za-z0-9_-]{1,40}\/[A-Za-z0-9_.-]{1,120}\.(png|jpe?g|webp)$/.test(p))) throw errorPublicacion('Usá hasta 10 imágenes de la biblioteca del equipo.')
   if (imagenes.length && video_path) throw errorPublicacion('Elegí video o imágenes para esta publicación.')
   const hashtags = (Array.isArray(d.hashtags) ? d.hashtags : String(d.hashtags || '').split(/\s+/)).filter(Boolean).slice(0, 10).map(x => '#' + String(x).replace(/^#/, '').replace(/[^\p{L}\p{N}_]/gu, '').slice(0, 60))
-  return { titulo, descripcion, hashtags, plataformas: redesValidas(d.plataformas), media: d.media, video_path, imagenes,
+  return { titulo, descripcion, hashtags, plataformas: redesValidas(d.plataformas), media: d.media, video_path, imagenes, carril: carrilValido(d.carril),
     motivo: String(d.motivo || '').slice(0, 1500), recorte: String(d.recorte || '').slice(0, 300), instrucciones_media: String(d.instrucciones_media || '').slice(0, 2000) }
+}
+// Carril A: volumen y descubrimiento, automatizable, no monetizable.
+// Carril B: captura y voz propia, es lo único que cuenta para los programas de monetización.
+// Vacío = sin clasificar: lo de antes sigue funcionando igual.
+export function carrilValido (valor) {
+  return valor === 'A' || valor === 'B' ? valor : ''
 }
 export function ventanaMetricas (valor, ahora = Date.now()) {
   const dias = { '24h': 1, '7d': 7, '28d': 28 }

@@ -265,9 +265,10 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         const plataformas = redesValidas(b.plataformas)
         if (!d.datos.video_path && !d.datos.imagenes?.length && (d.datos.fuente_url || plataformas.some(p => p !== 'x'))) throw errorPublicacion('Prepará el material antes de publicar.', 422)
         await destinosPublicacion(plataformas, d.datos)
-        const { titulo, descripcion, hashtags } = contenidoValido({ ...d.datos, plataformas,
-          titulo: b.titulo ?? d.datos.titulo, descripcion: b.descripcion ?? d.datos.descripcion, hashtags: b.hashtags ?? d.datos.hashtags })
-        d = await guardarPub('sugerencias', d.id, { ...d.datos, titulo, descripcion, hashtags, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now() }, d.version)
+        const { titulo, descripcion, hashtags, carril } = contenidoValido({ ...d.datos, plataformas,
+          titulo: b.titulo ?? d.datos.titulo, descripcion: b.descripcion ?? d.datos.descripcion, hashtags: b.hashtags ?? d.datos.hashtags,
+          carril: b.carril ?? d.datos.carril })
+        d = await guardarPub('sugerencias', d.id, { ...d.datos, titulo, descripcion, hashtags, carril, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now() }, d.version)
       }
       salida.ids = await encolar('sug-' + d.id, d.datos, d.datos.aprobado_por)
       try { await guardarPub('sugerencias', d.id, { ...d.datos, encolado: true }, d.version) } catch (e) { if (e.status !== 409) throw e }
@@ -278,10 +279,10 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       if (b.version !== c.version) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
       const datos = contenidoValido({ ...c.datos, titulo: b.titulo ?? String(c.datos.titulo || c.datos.gancho || 'Clip GTA 6').slice(0, 60),
         descripcion: b.descripcion ?? (c.datos.descripcion || 'Un momento de GTA 6.'), hashtags: b.hashtags ?? c.datos.hashtags,
-        plataformas: await destinosPublicacion(b.plataformas), media: 'reusar' })
+        carril: b.carril ?? c.datos.carril, plataformas: await destinosPublicacion(b.plataformas), media: 'reusar' })
       if (!datos.video_path) throw errorPublicacion('El clip todavía no tiene video.', 422)
       const snapshot = { ...datos, clip_id: c.id, fuente_url: c.datos.url || '', aprobado_el: Date.now() }
-      const aprobacion = { ...c.datos, titulo: datos.titulo, descripcion: datos.descripcion, hashtags: datos.hashtags, estado: 'aprobado', aprobado_por: yo, publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: snapshot }
+      const aprobacion = { ...c.datos, titulo: datos.titulo, descripcion: datos.descripcion, hashtags: datos.hashtags, carril: datos.carril, estado: 'aprobado', aprobado_por: yo, publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: snapshot }
       const { data, error: e } = await db().from('docs').update({ datos: aprobacion, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version).select('version')
       if (e || !data?.length) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
       salida.ids = await encolar('clip-' + c.id, snapshot, yo)

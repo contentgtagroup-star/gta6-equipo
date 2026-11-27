@@ -372,6 +372,17 @@
     }
     for (const campoTexto of [titulo, descripcion, hashtags]) campoTexto.addEventListener('input', actualizarTexto)
     actualizarTexto()
+    // Carril: A es volumen (automatizable, no cuenta para monetizar), B es captura y voz propia.
+    // Se clasifica acá, al aprobar, que es donde se sabe; el motor solo propaga lo que ya venga.
+    const carril = selector([['', 'Sin clasificar'], ['A', 'A · volumen y descubrimiento'], ['B', 'B · original propio']], item.carril || '')
+    const carrilNota = el('small', { class: 'muted' })
+    const notasCarril = {
+      A: 'Material ajeno adaptado. Suma vistas y seguidores, no cuenta para los programas de monetización.',
+      B: 'Captura y voz propia. Es lo único elegible para YPP, Creator Rewards y Original Content Rewards.',
+      '': 'Sin clasificar. Se puede dejar así, pero después no se sabe de qué carril salió cada resultado.'
+    }
+    const verNotaCarril = () => { carrilNota.textContent = notasCarril[carril.value] }
+    carril.addEventListener('change', verNotaCarril); verNotaCarril()
     let vistaLista = !tieneMedia
     const modal = dialogo('Revisar y publicar', el('div', { class: 'pub-review-layout' },
       el('div', { class: 'pub-review-main' },
@@ -381,13 +392,14 @@
       el('div', { class: 'pub-review-routing' },
       el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Destinos de publicación'), opciones.map(c => c.label),
         !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
+      el('div', { style: 'display:grid;gap:4px' }, campo('Carril', carril), carrilNota),
       el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material'))), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
       const plataformas = opciones.filter(c => !c.input.disabled && c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
       if (!titulo.value.trim() || !descripcion.value.trim()) throw new Error('Completá el título y la descripción.')
       await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas,
-        titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value })
+        titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value, carril: carril.value })
       if (clip) await window.cargar?.()
       P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
     }, 'Confirmar publicación')
@@ -506,6 +518,12 @@
     fRed.onchange = () => { P.colaRed = fRed.value; render() }
     box.append(el('div', { class: 'row' }, campo('Estado', fEstado), campo('Red', fRed)))
     box.append(el('p', { class: 'small muted' }, items.length + ' en cola · ' + (cuenta.pendiente || 0) + ' pendientes · ' + (cuenta.error || 0) + ' con error · ' + nTrabados + ' trabados'))
+    // Profundidad por carril: cuántas piezas sin publicar quedan de cada uno.
+    const porSalir = items.filter(p => !['publicado', 'cancelado'].includes(p.estado))
+    const hondo = c => porSalir.filter(p => (p.carril || '') === c).length
+    box.append(el('p', { class: 'small muted' }, 'Por carril, sin publicar: ',
+      el('strong', {}, 'A ' + hondo('A')), ' (volumen) · ', el('strong', {}, 'B ' + hondo('B')), ' (original propio) · ',
+      hondo('') + ' sin clasificar'))
     const barra = el('div', { class: 'row' })
     barra.append(boton('Procesar próximo envío', async () => { const d = await post({ op: 'procesar' }); toast(d.activo === false ? 'Los envíos automáticos todavía están en espera.' : 'Cola revisada'); await cargar(true) }))
     if (cuenta.error) barra.append(boton('Reintentar fallados (' + cuenta.error + ')', async () => { const d = await post({ op: 'cola_reintentar_masa' }); toast(d.reintentados + ' reencolados'); await cargar(true) }, 'tiny primary'))
@@ -544,7 +562,8 @@
         el('p', {}, (youtubeFotos ? 'Pendiente manual' : tiktokFotos ? 'En bandeja de TikTok' : etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
         p.programado_el && el('p', { class: 'small muted' }, 'Programado: ' + new Intl.DateTimeFormat('es-AR', { timeZone: p.zona_horaria || 'America/Argentina/Cordoba', dateStyle: 'short', timeStyle: 'short' }).format(new Date(p.programado_el)) + ' · ' + (p.zona_horaria || 'Argentina')),
         p.estado === 'manual' && el('p', { class: 'small muted' }, youtubeFotos ? 'Bajá las placas en orden, copiá el texto y subilo desde + → Publicación en YouTube. Después pegá el enlace.' : 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
-        el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el)), p.error && el('details', {}, el('summary', { class: 'small', style: 'color:var(--bad)' }, p.estado === 'revisar' ? 'Ver motivo y qué revisar' : 'Ver motivo del error'), el('p', { class: 'small' }, p.error)),
+        el('p', { class: 'small muted' }, 'Aprobó ' + p.aprobado_por + ' · ' + fecha(p.aprobado_el) +
+          (p.carril ? ' · Carril ' + p.carril + (p.carril === 'A' ? ' (volumen)' : ' (original propio)') : '')), p.error && el('details', {}, el('summary', { class: 'small', style: 'color:var(--bad)' }, p.estado === 'revisar' ? 'Ver motivo y qué revisar' : 'Ver motivo del error'), el('p', { class: 'small' }, p.error)),
         p.enlace && el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, p.estado === 'borrador' ? 'Abrir borrador' : 'Ver publicación'), preview, acciones))
       if (p.estado === 'manual') vista(p, preview)
     }

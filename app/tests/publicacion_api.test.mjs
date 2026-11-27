@@ -166,6 +166,22 @@ test('aprobar crea un envío por red y la repetición no duplica la cola', async
   assert.ok(cola.every(x => x.datos.aprobado_por === 'Eze'))
   assert.equal(remotas.length, 0)
 })
+test('el carril elegido al aprobar queda en la sugerencia y en cada envío de la cola', async () => {
+  reset()
+  tablas.publicacion_docs.push(sugerencia(), { ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['instagram'], carril: 'B' })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(x => x.coleccion === 'sugerencias').datos.carril, 'B')
+  assert.deepEqual(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos.carril), ['B'])
+})
+
+test('sin carril, o con uno inventado, la pieza queda sin clasificar y se aprueba igual', async () => {
+  reset()
+  tablas.publicacion_docs.push(sugerencia(), { ...conexionMeta(), datos: { estado: 'conectada', ig_id: 'ig' } })
+  assert.equal((await llamada({ op: 'aprobar', id: 's1', version: 1, revisado: true, plataformas: ['instagram'], carril: 'C' })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(x => x.coleccion === 'sugerencias').datos.carril, '')
+  assert.deepEqual(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos.carril), [''])
+})
+
 test('la descripción confirmada deja las fuentes en la ficha interna', async () => {
   reset()
   const s = sugerencia()

@@ -1,6 +1,12 @@
 {
- "version": 87,
+ "version": 88,
  "cambios": [
+  {
+   "v": 88,
+   "fecha": "2026-11-27",
+   "texto": "Al aprobar una publicación se elige su carril: A (volumen y descubrimiento, material adaptado) o B (original propio, captura y voz propias), o se deja sin clasificar. El carril viaja con la pieza a la cola y a cada envío, la Cola muestra cuántas piezas sin publicar quedan de cada carril, y cada envío lo indica en su ficha. Importa porque solo el Carril B cuenta para YPP, Creator Rewards y Original Content Rewards.",
+   "manual": null
+  },
   {
    "v": 87,
    "fecha": "2026-11-25",

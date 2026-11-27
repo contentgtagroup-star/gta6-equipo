@@ -2,6 +2,14 @@
 (() => {
   const P = { tab: 'conexiones', datos: null, cargando: false, modal: false, firma: '', error: '', etag: '' }
   const redes = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', youtube: 'YouTube', tiktok: 'TikTok' }
+  // Color de marca por red (legible en el panel oscuro), para reconocerlas a la vista.
+  const redColor = { instagram: '#E1306C', facebook: '#4599FF', x: '#E7E9EA', youtube: '#FF4E45', tiktok: '#25F4EE' }
+  function redChip (id, texto) {
+    const c = redColor[id] || 'var(--fg)'
+    return el('span', { style: 'display:inline-flex;align-items:center;gap:6px;font-weight:700;color:' + c },
+      el('span', { 'aria-hidden': 'true', style: 'width:9px;height:9px;border-radius:50%;background:' + c + ';display:inline-block;flex:none' }),
+      el('span', {}, texto || redes[id] || id))
+  }
   const etiquetas = { sin_conectar: 'Sin conectar', sin_verificar: 'Por verificar', config_incompleta: 'Configuración incompleta', conectada: 'Conectada', pausada: 'Cola pausada', token_vencido: 'Token vencido', pendiente: 'En cola', procesando: 'Procesando', enviando: 'Enviando', revisar: 'Revisar en la red', error: 'Error', borrador: 'Borrador · falta publicar', manual: 'Para subir a mano a X', publicado: 'Publicado', cancelado: 'Cancelado', ejecutando: 'Trabajando', terminado: 'Terminado' }
   const fecha = t => t ? new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Todavía no'
   const num = n => typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—'
@@ -87,7 +95,7 @@
   }
   function trazabilidad (box) {
     const red = selector([['', 'Todas las redes'], ...Object.entries(redes)], '')
-    const accion = entrada('', { placeholder: 'Acción exacta, por ejemplo encolado' })
+    const accion = selector([['', 'Todas las acciones'], ['publicado', 'Publicado'], ['borrador', 'Borrador'], ['revisar', 'A revisar'], ['error', 'Error'], ['encolado', 'Encolado'], ['trabajo_creado', 'Trabajo creado'], ['sugerencia_generada', 'Sugerencia generada'], ['sugerencia_error', 'Sugerencia con error'], ['preparacion_media', 'Preparación de material'], ['cola_desestimada', 'Subida detenida'], ['cola_reintentar', 'Reintento'], ['cola_prioridad', 'Prioridad cambiada'], ['metricas_sincronizadas', 'Métricas sincronizadas'], ['cadencia_guardada', 'Cadencia guardada']], '')
     const desde = entrada('', { type: 'date' }), hasta = entrada('', { type: 'date' })
     const estado = el('p', { class: 'small muted', role: 'status' })
     const cuerpo = el('tbody')
@@ -108,7 +116,7 @@
         const d = await api('/api/trazabilidad?' + q)
         if (actual !== pedido || !box.isConnected) return
         for (const e of d.eventos || []) cuerpo.append(el('tr', {},
-          el('td', {}, fecha(e.el)), el('td', {}, redes[e.plataforma] || '—'),
+          el('td', {}, fecha(e.el)), el('td', {}, e.plataforma && redes[e.plataforma] ? redChip(e.plataforma) : '—'),
           el('td', {}, e.accion || '—'), el('td', {}, e.por || '—'),
           el('td', {}, e.titulo || e.item_id || e.fuente_id || e.trabajo_id || '—')))
         cursor = d.siguiente
@@ -533,7 +541,7 @@
       }), boton('Ya lo publiqué', confirmar))
       if (p.estado === 'borrador') acciones.append(boton('Confirmar que ya lo publiqué', confirmar))
       const preview = el('div', { class: 'row', style: 'overflow:auto;margin:8px 0' })
-      box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', {}, redes[p.plataforma] + ' · ' + p.titulo),
+      box.append(el('article', { style: 'padding:18px 0;border-bottom:1px solid var(--line)' }, el('h3', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' }, redChip(p.plataforma), el('span', {}, '· ' + p.titulo)),
         el('p', {}, (youtubeFotos ? 'Pendiente manual' : tiktokFotos ? 'En bandeja de TikTok' : etiquetas[p.estado] || p.estado) + (trabado(p) ? ' · ⚠ trabado' : '')),
         p.programado_el && el('p', { class: 'small muted' }, 'Programado: ' + new Intl.DateTimeFormat('es-AR', { timeZone: p.zona_horaria || 'America/Argentina/Cordoba', dateStyle: 'short', timeStyle: 'short' }).format(new Date(p.programado_el)) + ' · ' + (p.zona_horaria || 'Argentina')),
         p.estado === 'manual' && el('p', { class: 'small muted' }, youtubeFotos ? 'Bajá las placas en orden, copiá el texto y subilo desde + → Publicación en YouTube. Después pegá el enlace.' : 'Copiá el texto, bajá el video y subilo a mano en X. Después tocá "Ya lo publiqué".'),
@@ -594,7 +602,28 @@
       seccion('Historial', P.historial, true)
     }
   }
+  async function panelMonetizacion(box) {
+    const cont = el('section', { class: 'bloque', style: 'margin:0 0 18px;padding-bottom:12px;border-bottom:1px solid var(--line)' }, el('h3', { style: 'margin:0 0 6px' }, 'Monetización'), el('p', { class: 'small muted' }, 'Cargando avance…'))
+    box.append(cont)
+    try {
+      const { monetizacion } = await api('/api/metricas?monetizacion=1')
+      if (!box.isConnected) return
+      cont.replaceChildren(el('h3', { style: 'margin:0 0 6px' }, 'Monetización'),
+        el('p', { class: 'small muted' }, 'Avance hacia los requisitos de cada red, con el último informe sincronizado. Sincronizá en Resultados para actualizar los números.'))
+      for (const [red, m] of Object.entries(monetizacion)) {
+        if (!m) continue
+        cont.append(el('article', { style: 'padding:12px 0;border-top:1px solid var(--line)' },
+          el('div', { style: 'display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap' },
+            el('span', { style: 'display:flex;align-items:center;gap:8px' }, redChip(red), el('span', { class: 'small muted' }, m.programa)),
+            el('strong', { style: 'color:' + (redColor[red] || 'var(--fg)') }, m.pct + '%')),
+          el('div', { style: 'height:8px;border-radius:5px;background:var(--surface2);overflow:hidden;margin:6px 0' }, el('div', { style: 'height:100%;width:' + m.pct + '%;background:' + (redColor[red] || 'var(--acento,#E1306C)') })),
+          el('div', { class: 'small muted' }, m.metas.map(mt => el('div', {}, mt.nombre + ': ' + num(mt.valor) + ' / ' + num(mt.meta) + (mt.falta > 0 ? ' · faltan ' + num(mt.falta) : ' ✓')))),
+          el('p', { class: 'small muted', style: 'margin:6px 0 0' }, m.nota)))
+      }
+    } catch { if (box.isConnected) cont.replaceChildren(el('h3', {}, 'Monetización'), el('p', { class: 'small muted' }, 'No se pudo cargar el avance de monetización.')) }
+  }
   function metricas(box) {
+    panelMonetizacion(box)
     const red = selector(Object.entries(redes), P.red || 'instagram'), ventana = selector([['24h', '24 h'], ['7d', '7 días'], ['28d', '28 días'], ['historico', 'Histórico']], P.ventana || '7d')
     const resultado = el('div')
     const acceso = el('p', { class: 'small muted', 'aria-live': 'polite' })
@@ -620,8 +649,17 @@
         if (actual !== pedido || !resultado.isConnected) return
         resultado.replaceChildren()
         if (!datos) { resultado.append(el('p', { class: 'small muted' }, conexion?.estado === 'conectada' ? 'Todavía no hay un informe para esta ventana. Tocá Sincronizar.' : 'Revisá la conexión de esta cuenta y después sincronizá.')); return }
-        resultado.append(el('p', { class: 'small muted' }, 'Sincronizado: ' + fecha(datos.sincronizada_el)), el('p', { class: 'small muted' }, datos.nota), el('p', { class: 'small muted' }, 'Período informado: ' + fecha(datos.rango.desde) + ' a ' + fecha(datos.rango.hasta)))
+        const esYouTube = cuenta === 'youtube', esHistoricoYouTube = esYouTube && periodo === 'historico'
+        const diaAnalytics = t => new Date(t).toLocaleDateString('es-AR', { timeZone: 'UTC' })
+        const rango = esYouTube
+          ? 'Rango solicitado a Analytics: ' + diaAnalytics(datos.rango.desde) + ' a ' + diaAnalytics(datos.rango.hasta)
+          : 'Período informado: ' + fecha(datos.rango.desde) + ' a ' + fecha(datos.rango.hasta)
+        resultado.append(el('p', { class: 'small muted' }, 'Sincronizado: ' + fecha(datos.sincronizada_el)), el('p', { class: 'small muted' }, datos.nota), el('p', { class: 'small muted' }, rango))
         const nombres = { publicaciones_buffer: 'Posts incluidos por Buffer', interacciones: 'Interacciones', reacciones: 'Reacciones', seguidores: 'Seguidores actuales', follows: 'Seguidores ganados', vistas: 'Vistas', likes: 'Likes', comentarios: 'Comentarios', compartidos: 'Compartidos', guardados: 'Guardados', alcance: 'Alcance', impresiones: 'Impresiones', tiempo_medio: 'Tiempo medio (s)', retencion: 'Porcentaje medio visto (%)', completado: 'Reproducciones completas (%)', ctr: 'CTR', clics: 'Clics al link', engagement: 'Interacciones / alcance' }
+        if (esYouTube) {
+          nombres.vistas = 'Vistas procesadas · Analytics'
+          nombres.seguidores = 'Suscriptores actuales'
+        }
         const tabla = el('table', {}, el('thead', {}, el('tr', {}, ['Métrica', 'Actual', 'Período anterior', 'Cambio'].map(t => el('th', {}, t)))))
         const cuerpo = el('tbody')
         const hay = Number.isFinite
@@ -636,28 +674,45 @@
         if (datos.no_disponibles?.length) resultado.append(el('p', { class: 'small muted' },
           'Datos no disponibles: ' + datos.no_disponibles.map(k => nombres[k] || k).join(', ')))
         const indicadores = el('div', { class: 'pub-metric-cards' })
-        for (const [clave, nombre] of (cuenta === 'x' ? [['impresiones', 'Impresiones'], ['reacciones', 'Reacciones'], ['publicaciones_buffer', 'Posts medidos'], ['alcance', 'Alcance']] : [['vistas', 'Vistas'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores']])) {
-          const valor = datos.actual?.[clave]
+        const tarjetas = cuenta === 'x' ? [['impresiones', 'Impresiones · Buffer'], ['reacciones', 'Reacciones · Buffer'], ['publicaciones_buffer', 'Posts medidos'], ['alcance', 'Alcance']]
+          : cuenta === 'tiktok' ? [['vistas', 'Vistas acumuladas · videos recientes', 'recientes'], ['interacciones', 'Interacciones acumuladas · videos recientes', 'recientes'], ['videos', 'Videos recientes', 'recientes'], ['seguidores', 'Seguidores actuales']]
+            : esYouTube ? [
+              ...(esHistoricoYouTube ? [['vistas_canal', 'Vistas totales del canal', 'canal']] : []),
+              ['vistas', esHistoricoYouTube ? 'Vistas procesadas · Analytics' : 'Vistas del período · Analytics'],
+              ['vistas', 'Vistas acumuladas de los videos listados', 'recientes'], ['seguidores', 'Suscriptores actuales']
+            ] : [['vistas', 'Vistas · Analytics'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['seguidores', 'Seguidores actuales']]
+        for (const [clave, nombre, fuente] of tarjetas) {
+          const valor = fuente === 'canal' ? datos.vistas_canal : fuente === 'recientes' ? datos.recientes?.[clave] : datos.actual?.[clave]
           indicadores.append(el('article', { class: 'pub-metric-card' }, el('span', { class: 'small muted' }, nombre), el('strong', {}, num(valor))))
         }
         resultado.prepend(indicadores)
+        if (esHistoricoYouTube && !Object.hasOwn(datos, 'vistas_canal')) resultado.insertBefore(el('p', { class: 'small muted' },
+          'Tocá Sincronizar para cargar el total del canal.'), indicadores.nextSibling)
         const posts = datos.posts || []
-        const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= datos.rango.hasta)
+        const finContenido = cuenta === 'youtube' ? Date.now() : datos.rango.hasta
+        const registros = P.datos.cola.filter(p => p.plataforma === cuenta && p.estado === 'publicado' && p.publicado_el >= datos.rango.desde && p.publicado_el <= finContenido)
         const vinculados = new Set()
         const filas = registros.map(p => {
-          const m = posts.find(x => x.id && ([p.publicacion_remota, p.remoto_id].some(id => id && String(x.id) === String(id)) || x.enlace && x.enlace === p.enlace))
+          const idTikTok = cuenta === 'tiktok' ? p.enlace?.match(/\/(?:video|photo)\/(\d+)(?:[/?#]|$)/)?.[1] : null
+          const m = posts.find(x => x.id && ([p.publicacion_remota, p.remoto_id, idTikTok].some(id => id && String(x.id) === String(id)) || x.enlace && x.enlace === p.enlace))
           if (m) vinculados.add(m)
           return { ...p, metrica: m, titulo: p.titulo, fecha: p.publicado_el, enlace: p.enlace || m?.enlace, estado: 'Publicado' }
         })
         for (const m of posts.filter(x => !vinculados.has(x))) filas.push({ titulo: m.titulo || m.id || 'Publicación externa', fecha: m.creado || 0, enlace: m.enlace, estado: 'En la red', metrica: m })
-        const tituloTabla = el('h3', {}, 'Contenido publicado')
+        const tituloTabla = el('h3', {}, esYouTube ? 'Videos del período' : 'Contenido publicado')
         const buscar = entrada('', { type: 'search', placeholder: 'Buscar título o identificador', 'aria-label': 'Buscar contenido' })
         const desde = entrada('', { type: 'date', 'aria-label': 'Desde' })
         const hasta = entrada('', { type: 'date', 'aria-label': 'Hasta' })
         const filtro = selector([['', 'Todos los registros'], ['Publicado', 'Publicado desde el panel'], ['En la red', 'Encontrado en la red']], '')
         const aviso = el('p', { class: 'small muted' })
         const cuerpoPosts = el('tbody')
-        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {}, ['Contenido', 'Fecha', 'Estado', 'Vistas', 'Me gusta', 'Comentarios', 'Compartidos', 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
+        const columnasPosts = [
+          cuenta === 'x' ? ['impresiones', 'Impresiones'] : ['vistas', esYouTube ? 'Vistas acumuladas' : 'Vistas'],
+          ['likes', 'Me gusta'], ['comentarios', 'Comentarios'], ['compartidos', 'Compartidos']
+        ]
+        if (cuenta === 'instagram') columnasPosts.push(['alcance', 'Alcance'], ['guardados', 'Guardados'], ['tiempo_medio', 'Tiempo medio (s)'])
+        const tablaPosts = el('table', {}, el('thead', {}, el('tr', {},
+          ['Contenido', 'Fecha', 'Estado', ...columnasPosts.map(([, titulo]) => titulo), 'Enlace'].map(t => el('th', {}, t)))), cuerpoPosts)
         const dia = t => new Date(t).toISOString().slice(0, 10)
         function dibujarFilas () {
           const texto = buscar.value.toLocaleLowerCase('es'), elegidas = filas.filter(p =>
@@ -668,12 +723,29 @@
           aviso.textContent = elegidas.length + ' registros · “—” indica dato no disponible en la conexión.'
           cuerpoPosts.replaceChildren(...elegidas.map(p => el('tr', {},
             el('td', {}, p.titulo), el('td', {}, p.fecha ? fecha(p.fecha) : '—'), el('td', {}, p.estado),
-            ...['vistas', 'likes', 'comentarios', 'compartidos'].map(k => el('td', { class: 'n' }, num(p.metrica?.[k]))),
+            ...columnasPosts.map(([k]) => el('td', { class: 'n' }, num(p.metrica?.[k]))),
             el('td', {}, p.enlace ? el('a', { href: p.enlace, target: '_blank', rel: 'noopener noreferrer' }, 'Ver') : '—'))))
         }
         for (const control of [buscar, desde, hasta, filtro]) control.addEventListener('input', dibujarFilas)
         resultado.append(tituloTabla, el('div', { class: 'row' }, buscar, campo('Desde', desde), campo('Hasta', hasta), filtro), aviso, el('div', { class: 'tbl' }, tablaPosts))
         dibujarFilas()
+        // Mostrar capturas comparables de la ventana seleccionada.
+        try {
+          const { serie } = await api('/api/metricas?serie=1&red=' + cuenta + '&ventana=' + periodo)
+          if (actual === pedido && resultado.isConnected && serie?.length) {
+            const campos = ['vistas_canal', 'seguidores', 'vistas', 'likes', 'comentarios', 'compartidos', 'alcance', 'engagement'].filter(k => serie.some(s => typeof s[k] === 'number'))
+            if (campos.length) {
+              const ventanas = { historico: 'Histórico', '24h': '24 h', '7d': '7 días', '28d': '28 días' }
+              const cuerpoSerie = el('tbody', {}, ...serie.slice(-30).reverse().map(s => el('tr', {}, el('td', {}, esYouTube && s.capturado_el ? fecha(s.capturado_el) : s.dia),
+                esYouTube && el('td', {}, ventanas[s.ventana] || '—'),
+                ...campos.map(k => el('td', { class: 'n' }, k === 'engagement' && typeof s[k] === 'number' ? num(s[k] * 100) + '%' : num(s[k]))))))
+              resultado.append(el('h3', { style: 'display:flex;align-items:center;gap:8px' }, redChip(cuenta), el('span', {}, esYouTube ? '· Capturas de métricas' : '· Histórico por día')),
+                el('p', { class: 'small muted' }, esYouTube ? 'Cada fila guarda los totales de esta ventana al sincronizar. Las vistas ganadas en un día se consultan en YouTube Studio.' : 'Última captura de esta ventana por día (hasta 30).'),
+                el('div', { class: 'tbl' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, esYouTube ? 'Sincronizado' : 'Día'),
+                  esYouTube && el('th', {}, 'Ventana de Analytics'), ...campos.map(k => el('th', {}, k === 'vistas_canal' ? 'Vistas totales del canal' : nombres[k] || k)))), cuerpoSerie)))
+            }
+          }
+        } catch {}
       } catch (e) {
         if (actual === pedido && resultado.isConnected) resultado.replaceChildren(el('p', { class: 'small', role: 'alert' }, e.message),
           el('p', { class: 'small muted' }, ayudaAcceso[cuenta]))
@@ -701,8 +773,6 @@
     ['radar', 'Mirar el radar y marcar si hay algo urgente', 'Si hay algo muy nuevo, va a la cola con prioridad: desplaza, no cancela.'],
     ['lectura', 'Anotar la lectura de 24 h de las piezas de ayer', 'Sin esto, Resultados compara piezas de edades distintas.']
   ]
-  // Chip de red propio: cuando entre el color de marca por red (#58) se puede reemplazar por ese.
-  const redEtiqueta = (red, nombre) => el('span', { class: 'chip' }, nombre || redes[red] || red)
   function hoy (box) {
     box.replaceChildren()
     if (!S.clave) { box.append(el('p', { class: 'small muted' }, 'Entrá al panel para ver el día.')); return }
@@ -763,14 +833,14 @@
       lista.append(el('li', { class: 'hoy-fila' + (pieza ? '' : ' vacia') },
         el('span', { class: 'hora' }, h || 'suelto'),
         el('span', { class: 'que' }, pieza ? pieza.titulo || 'Sin título' : h ? 'Franja libre: no hay pieza asignada' : porDia + ' por día, repartidas entre las 9 y las 21'),
-        redEtiqueta(red, nombre)))
+        redChip(red, nombre)))
     }
     const sueltas = programadasHoy.filter(p => !filas.some(f => f[3] === p))
     for (const p of sueltas) {
       lista.append(el('li', { class: 'hoy-fila' },
         el('span', { class: 'hora' }, hora(p.programado_el)),
         el('span', { class: 'que' }, p.titulo || 'Sin título'),
-        redEtiqueta(p.plataforma)))
+        redChip(p.plataforma)))
     }
     franjas.append(lista.children.length ? lista : el('p', { class: 'empty' }, 'Ninguna red tiene cupo diario configurado. Se define en Publicaciones → Cola → Cadencia.'))
     if (enviadasHoy.length) franjas.append(el('p', { class: 'small dim' }, 'Ya salieron hoy: ' + enviadasHoy.map(p => (redes[p.plataforma] || p.plataforma) + ' ' + hora(p.publicado_el)).join(' · ')))
@@ -782,7 +852,7 @@
       const ul = el('ul', { class: 'hoy-lista' })
       for (const p of items.slice(0, 8)) ul.append(el('li', { class: 'hoy-fila hoy-fila-b' },
         el('span', { class: 'que' }, p.titulo || 'Sin título'),
-        el('span', { class: 'row', style: 'gap:6px' }, el('span', { class: 'chip' }, etiquetaDe(p)), redEtiqueta(p.plataforma))))
+        el('span', { class: 'row', style: 'gap:6px' }, el('span', { class: 'chip' }, etiquetaDe(p)), redChip(p.plataforma))))
       c.append(ul)
       if (items.length > 8) c.append(el('p', { class: 'small dim' }, 'y ' + (items.length - 8) + ' más'))
       if (pie) c.append(el('p', { class: 'small muted' }, pie))

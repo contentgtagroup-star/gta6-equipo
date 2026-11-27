@@ -337,6 +337,14 @@ test('confirmar_manual publica X con un link de x.com y rechaza otros hosts', as
   const item = tablas.publicacion_docs.find(d => d.id === 'cx')
   assert.equal(item.datos.estado, 'publicado')
   assert.equal(item.datos.enlace, 'https://x.com/Gta6univers0/status/123')
+  assert.ok(tablas.publicacion_docs.some(e => e.coleccion === 'eventos' && e.datos.accion === 'publicado' && e.datos.plataforma === 'x' && e.datos.manual), 'confirmar emite evento publicado')
+})
+test('confirmar_manual de un borrador de YouTube lo deja publicado y lo cuenta', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cola', id: 'cy', version: 1, datos: { estado: 'borrador', plataforma: 'youtube', aprobado_por: 'Eze', titulo: 't', descripcion: 'd' } })
+  assert.equal((await llamada({ op: 'confirmar_manual', id: 'cy', version: 1, url: 'https://youtube.com/watch?v=abc' })).codigo, 200)
+  assert.equal(tablas.publicacion_docs.find(d => d.id === 'cy').datos.estado, 'publicado')
+  assert.ok(tablas.publicacion_docs.some(e => e.coleccion === 'eventos' && e.datos.accion === 'publicado' && e.datos.plataforma === 'youtube'))
 })
 const enCola = (id, datos) => ({ coleccion: 'cola', id, version: 1, datos: { plataforma: 'instagram', titulo: 'Envío ' + id, aprobado_por: 'Eze', creado: 1, proximo_el: 1, ...datos } })
 
@@ -444,6 +452,58 @@ test('TikTok sandbox informa los permisos de métricas faltantes sin consultar e
   } })
   await assert.rejects(obtenerMetricas('tiktok', '7d'), e => e.status === 424 && /user.info.stats, video.list/.test(e.message))
   assert.equal(remotas.length, 0)
+})
+
+test('TikTok separa seguidores actuales de contadores acumulados de videos recientes', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'conexiones', id: 'tiktok', version: 1, datos: {
+    estado: 'conectada', sobre: cifrarConexion('tiktok', { access_token: 'sandbox', scope: 'user.info.basic,user.info.stats,video.list', expira_el: Date.now() + 3600000 })
+  } })
+  const antes = globalThis.fetch
+  globalThis.fetch = async (url, opciones) => {
+    if (new URL(url).hostname !== 'open.tiktokapis.com') return antes(url, opciones)
+    if (String(url).includes('/user/info/')) return Response.json({ data: { user: { follower_count: 1 } }, error: { code: 'ok' } })
+    return Response.json({ data: { videos: [
+      { id: 'a', create_time: Math.floor(Date.now() / 1000) - 60, view_count: 191, like_count: 7, comment_count: 0, share_count: 0 },
+      { id: 'b', create_time: Math.floor(Date.now() / 1000) - 120, view_count: 169, like_count: 11, comment_count: 1, share_count: 2 }
+    ] }, error: { code: 'ok' } })
+  }
+  try {
+    const d = await obtenerMetricas('tiktok', '7d')
+    assert.equal(d.actual.seguidores, 1)
+    assert.deepEqual(d.recientes, { videos: 2, vistas: 360, interacciones: 21 })
+    assert.equal(d.posts.length, 2)
+  } finally { globalThis.fetch = antes }
+})
+
+test('YouTube muestra contadores actuales de videos aunque Analytics todavía no los procese', async () => {
+  reset()
+  const antesCanal = process.env.YOUTUBE_CHANNEL_ID
+  process.env.YOUTUBE_CHANNEL_ID = 'canal-test'
+  tablas.publicacion_docs.push({ coleccion: 'conexiones', id: 'google', version: 1, datos: {
+    estado: 'conectada', sobre: cifrarConexion('google', { access_token: 'youtube', expira_el: Date.now() + 3600000 })
+  } })
+  const antes = globalThis.fetch
+  globalThis.fetch = async (url, opciones) => {
+    const u = new URL(url)
+    if (u.hostname === 'unit.supabase.co') return antes(url, opciones)
+    if (u.hostname === 'youtubeanalytics.googleapis.com') return Response.json({ columnHeaders: [{ name: 'views' }], rows: [] })
+    if (u.pathname.endsWith('/channels')) return Response.json({ items: [{ id: 'canal-test', statistics: { subscriberCount: '0', viewCount: '917' }, contentDetails: { relatedPlaylists: { uploads: 'lista' } } }] })
+    if (u.pathname.endsWith('/playlistItems')) return Response.json({ items: [{ contentDetails: { videoId: 'video1' } }] })
+    if (u.pathname.endsWith('/videos')) return Response.json({ items: [{ id: 'video1', snippet: { title: 'Short reciente', publishedAt: new Date(Date.now() - 3600000).toISOString() }, statistics: { viewCount: '838', likeCount: '4' } }] })
+    throw new Error('Ruta inesperada: ' + u.pathname)
+  }
+  try {
+    const d = await obtenerMetricas('youtube', '7d')
+    assert.equal(d.actual.vistas, undefined)
+    assert.equal(d.vistas_canal, 917)
+    assert.deepEqual(d.recientes, { videos: 1, vistas: 838 })
+    assert.equal(d.posts[0].vistas, 838)
+  } finally {
+    globalThis.fetch = antes
+    if (antesCanal === undefined) delete process.env.YOUTUBE_CHANNEL_ID
+    else process.env.YOUTUBE_CHANNEL_ID = antesCanal
+  }
 })
 
 test('descartar oculta la propuesta, bloquea su aprobación y habilita otra desde el mismo enlace', async () => {

@@ -358,7 +358,7 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
       if (esCarruselYouTube && (!['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname) || !/^\/post\/[\w-]+\/?$/.test(url.pathname))) throw errorPublicacion('Pegá el enlace de la Publicación de YouTube (/post/…).')
       if (url.protocol !== 'https:' || url.username || url.password || (!esCarruselYouTube && !hosts.includes(url.hostname))) throw errorPublicacion(esManualX ? 'Pegá el link público del posteo en X.' : 'Pegá el link público de YouTube o TikTok.')
       await guardarPub('cola', d.id, { ...d.datos, estado: 'publicado', enlace: url.href, confirmado_por: yo, publicado_el: Date.now() }, d.version)
-      await eventoPub('publicacion_manual_confirmada', yo, { item_id: d.id, enlace: url.href })
+      await eventoPub('publicado', yo, { item_id: d.id, plataforma: d.datos.plataforma, enlace: url.href, manual: true })
       try { await actualizarClipPublicado(d.datos.clip_id, yo) } catch {}
     } else if (b.op === 'cadencia_guardar') {
       const actual = await leerPub('cadencia', 'global')

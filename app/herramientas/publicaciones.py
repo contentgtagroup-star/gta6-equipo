@@ -9,17 +9,42 @@ import time
 import equipo
 
 
+# El mismo motor devuelve una propuesta, material preparado o un error de la fuente.
+ESQUEMA_EDITORIAL = {
+    'type': 'object',
+    'properties': {
+        **{campo: {'type': 'string'} for campo in (
+            'titulo', 'descripcion', 'media', 'video_path', 'motivo', 'recorte',
+            'instrucciones_media', 'fuente_url', 'error',
+        )},
+        **{campo: {'type': 'array', 'items': {'type': 'string'}}
+           for campo in ('hashtags', 'plataformas', 'imagenes')},
+    },
+    'additionalProperties': False,
+}
+
+
+def leer_json(texto, mensaje):
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError:
+        raise ValueError(mensaje) from None
+
+
 def extraer_resultado(texto, con):
     if con == 'claude':
-        envoltorio = json.loads(texto)
-        if envoltorio.get('is_error'):
-            raise ValueError('La IA no completó el trabajo editorial.')
+        envoltorio = leer_json(texto, 'Claude no devolvió una respuesta JSON. Volvé a intentar la generación.')
+        if not isinstance(envoltorio, dict) or envoltorio.get('is_error'):
+            raise ValueError('Claude no completó el trabajo editorial.')
+        estructurado = envoltorio.get('structured_output')
+        if isinstance(estructurado, dict) and estructurado:
+            return estructurado
         texto = envoltorio.get('result') or ''
     texto = texto.strip()
-    if texto.startswith('```'):
+    if texto.startswith('```') and '\n' in texto:
         texto = texto.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-    datos = json.loads(texto)
-    if not isinstance(datos, dict):
+    datos = leer_json(texto, 'La IA devolvió una propuesta sin JSON válido. Volvé a intentar la generación.')
+    if not isinstance(datos, dict) or not datos:
         raise ValueError('La IA no devolvió una propuesta válida.')
     return datos
 
@@ -35,6 +60,11 @@ def ejecutar(yo, con, exe):
         with tempfile.TemporaryDirectory(prefix='gta6_editorial_') as carpeta, tempfile.TemporaryFile(mode='w+t', encoding='utf-8') as log:
             prompt = 'GTA6_TOOLS = ' + equipo.AQUI + '\n' + t['prompt'].replace('GTA6_TOOLS/', equipo.AQUI + os.sep)
             comando = equipo.comando_claude(exe, prompt) if con == 'claude' else equipo.comando_codex(exe, prompt)
+            ruta_resultado = os.path.join(carpeta, 'resultado.json')
+            if con == 'claude':
+                comando += ['--json-schema', json.dumps(ESQUEMA_EDITORIAL)]
+            else:
+                comando += ['--output-last-message', ruta_resultado]
             ruta_avance = os.path.join(carpeta, '.avance-editorial.json')
             entorno = {**os.environ, 'GTA6_AVANCE_EDITORIAL': ruta_avance, 'GTA6_TIPO_EDITORIAL': t.get('tipo', '')}
             p = subprocess.Popen(comando, cwd=carpeta, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.DEVNULL,
@@ -77,9 +107,15 @@ def ejecutar(yo, con, exe):
                 if p.poll() is None:
                     equipo.cortar_todo(p)
             if p.returncode:
-                raise ValueError('El motor editorial no pudo terminar. Revisá el acceso de la CLI y de la fuente.')
-            log.seek(0)
-            datos = extraer_resultado(log.read(200000), con)
+                raise ValueError(f'La CLI de {con} terminó con código {p.returncode}. Revisá si puede iniciar sesión y usar el modelo editorial.')
+            if con == 'claude':
+                log.seek(0)
+                datos = extraer_resultado(log.read(), con)
+            else:
+                if not os.path.isfile(ruta_resultado):
+                    raise ValueError('Codex no devolvió el resultado editorial. Volvé a intentar la generación.')
+                with open(ruta_resultado, encoding='utf-8') as archivo:
+                    datos = extraer_resultado(archivo.read(), con)
             if datos.get('error'):
                 cierre['error'] = str(datos['error'])[:1000]
             else:

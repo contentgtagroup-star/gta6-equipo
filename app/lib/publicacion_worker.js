@@ -26,12 +26,12 @@ export async function procesarPublicaciones (yo) {
   // entre aprobar y completar todos los destinos, sin duplicar los ya encolados.
   const aprobadas = (await listarPub('sugerencias')).filter(s => s.datos.estado === 'aprobada' && !s.datos.encolado && s.datos.aprobado_por === yo)
   for (const s of aprobadas.slice(0, 1)) {
-    await encolarPub('sug-' + s.id, s.datos, s.datos.aprobado_por)
+    await encolarPub('sug-' + s.id, s.datos, s.datos.aprobado_por, s.datos.publicar_ahora === true)
     try { await guardarPub('sugerencias', s.id, { ...s.datos, encolado: true }, s.version) } catch (e) { if (e.status !== 409) throw e }
   }
   const { data: clips, error: errorClips } = await db().from('docs').select('id,datos,version').eq('coleccion', 'clips').eq('datos->>publicacion_cola', 'true').in('datos->>estado', ['aprobado', 'publicado']).limit(100)
   if (!errorClips) for (const c of (clips || []).filter(c => c.datos.aprobado_por === yo && !c.datos.publicacion_encolada && c.datos.publicacion_snapshot).slice(0, 1)) {
-    await encolarPub('clip-' + c.id, c.datos.publicacion_snapshot, c.datos.aprobado_por)
+    await encolarPub('clip-' + c.id, c.datos.publicacion_snapshot, c.datos.aprobado_por, c.datos.publicacion_snapshot.publicar_ahora === true)
     await db().from('docs').update({ datos: { ...c.datos, publicacion_encolada: true }, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version)
   }
   const agendaActiva = await mantenerAgendaCola()

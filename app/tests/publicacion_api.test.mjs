@@ -71,6 +71,31 @@ test('dos aprobaciones simultáneas toman franjas distintas y el cupo diario se 
   assert.equal(cola.filter(x => dia(x.programado_el) === dia(cola[0].programado_el)).length, 2)
 })
 
+test('«publicar ahora» saltea la franja y no toma reserva de la agenda', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 2, horarios: ['23:50'] }, youtube: { por_dia: 2, horarios: ['23:50'] } } } })
+  await encolarPub('ya', { plataformas: ['x', 'youtube'], video_path: 'Eze/clip.mp4', titulo: 'Sale ya', descripcion: 'Prueba' }, 'Eze', true)
+  const cola = tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => x.datos)
+  assert.equal(cola.length, 2)
+  for (const item of cola) {
+    assert.ok(item.programado_el > 0 && item.programado_el <= Date.now(), 'queda listo para el próximo envío, no en una franja futura')
+    assert.equal(item.proximo_el, item.programado_el)
+    assert.equal(item.zona_horaria, 'America/Argentina/Buenos_Aires')
+  }
+  assert.equal(tablas.publicacion_docs.find(x => x.coleccion === 'programacion'), undefined, 'no ocupa una franja de la agenda compartida')
+  assert.ok(tablas.publicacion_docs.some(x => x.coleccion === 'eventos' && x.datos.accion === 'encolado_ahora'))
+})
+
+test('«en su turno» sigue tomando franja aunque otra pieza haya salido ya', async () => {
+  reset()
+  tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 2, horarios: [] } } } })
+  await encolarPub('ya', { plataformas: ['x'], titulo: 'Sale ya', descripcion: 'Prueba' }, 'Eze', true)
+  await encolarPub('turno', { plataformas: ['x'], titulo: 'Espera', descripcion: 'Prueba' }, 'Eze')
+  const cola = Object.fromEntries(tablas.publicacion_docs.filter(x => x.coleccion === 'cola').map(x => [x.datos.origen_id, x.datos]))
+  assert.ok(cola.ya.programado_el <= Date.now())
+  assert.ok(cola.turno.programado_el >= Date.now() + 14 * 60000, 'la pieza en turno conserva su franja')
+})
+
 test('shorts simultáneos comparten horario entre redes y seis turnos para el equipo', async () => {
   reset()
   tablas.publicacion_docs.push({ coleccion: 'cadencia', id: 'global', version: 1, datos: { activo: true, zona_horaria: 'America/Argentina/Buenos_Aires', por_red: { x: { por_dia: 20, horarios: [] }, youtube: { por_dia: 20, horarios: [] } } } })

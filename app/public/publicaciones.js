@@ -94,7 +94,7 @@
   }
   function trazabilidad (box) {
     const red = selector([['', 'Todas las redes'], ...Object.entries(redes)], '')
-    const accion = selector([['', 'Todas las acciones'], ['publicado', 'Publicado'], ['borrador', 'Borrador'], ['revisar', 'A revisar'], ['error', 'Error'], ['encolado', 'Encolado'], ['trabajo_creado', 'Trabajo creado'], ['sugerencia_generada', 'Sugerencia generada'], ['sugerencia_error', 'Sugerencia con error'], ['preparacion_media', 'Preparación de material'], ['cola_desestimada', 'Subida detenida'], ['cola_reintentar', 'Reintento'], ['cola_prioridad', 'Prioridad cambiada'], ['metricas_sincronizadas', 'Métricas sincronizadas'], ['cadencia_guardada', 'Cadencia guardada']], '')
+    const accion = selector([['', 'Todas las acciones'], ['publicado', 'Publicado'], ['borrador', 'Borrador'], ['revisar', 'A revisar'], ['error', 'Error'], ['encolado', 'Encolado'], ['encolado_ahora', 'Encolado para salir ya'],['trabajo_creado', 'Trabajo creado'], ['sugerencia_generada', 'Sugerencia generada'], ['sugerencia_error', 'Sugerencia con error'], ['preparacion_media', 'Preparación de material'], ['cola_desestimada', 'Subida detenida'], ['cola_reintentar', 'Reintento'], ['cola_prioridad', 'Prioridad cambiada'], ['metricas_sincronizadas', 'Métricas sincronizadas'], ['cadencia_guardada', 'Cadencia guardada']], '')
     const desde = entrada('', { type: 'date' }), hasta = entrada('', { type: 'date' })
     const estado = el('p', { class: 'small muted', role: 'status' })
     const cuerpo = el('tbody')
@@ -372,6 +372,16 @@
     }
     for (const campoTexto of [titulo, descripcion, hashtags]) campoTexto.addEventListener('input', actualizarTexto)
     actualizarTexto()
+    // Cuándo sale: la cola respeta la franja de la cadencia; «ahora» la saltea y lo deja listo para el próximo envío.
+    const grupoCuando = 'pub-cuando-' + Math.random().toString(36).slice(2)
+    const agendaActiva = !!P.datos.cadencia?.activo
+    const cuandoCola = entrada('', { type: 'radio', name: grupoCuando }); cuandoCola.checked = true
+    const cuandoAhora = entrada('', { type: 'radio', name: grupoCuando })
+    const cuando = el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Cuándo sale'),
+      el('label', { class: 'pub-check' }, cuandoCola, el('span', {}, el('strong', {}, 'En su turno de la cola'),
+        el('small', {}, agendaActiva ? 'Toma la próxima franja libre de cada red, según la cadencia.' : 'La agenda está apagada: va a salir en el próximo envío igual.'))),
+      el('label', { class: 'pub-check' }, cuandoAhora, el('span', {}, el('strong', {}, 'Publicar ahora'),
+        el('small', {}, 'Saltea la franja y lo manda en el próximo envío, sin esperar turno.'))))
     let vistaLista = !tieneMedia
     const modal = dialogo('Revisar y publicar', el('div', { class: 'pub-review-layout' },
       el('div', { class: 'pub-review-main' },
@@ -381,15 +391,21 @@
       el('div', { class: 'pub-review-routing' },
       el('fieldset', { class: 'pub-destinos' }, el('legend', {}, 'Destinos de publicación'), opciones.map(c => c.label),
         !opciones.length && el('p', {}, 'No hay cuentas disponibles para este formato.')),
+      cuando,
       el('label', { class: 'pub-check pub-check-confirm' }, revisado, 'Revisé la publicación y el material'))), async () => {
       if (!vistaLista || !revisado.checked) throw new Error('Revisá la vista previa y confirmá que está lista.')
       const plataformas = opciones.filter(c => !c.input.disabled && c.input.checked).map(c => c.id)
       if (!plataformas.length) throw new Error('Elegí al menos una cuenta.')
       if (!titulo.value.trim() || !descripcion.value.trim()) throw new Error('Completá el título y la descripción.')
+      const ahora = cuandoAhora.checked
       await post({ op: clip ? 'aprobar_clip' : 'aprobar', id: item.id, version: item._version, revisado: true, plataformas,
-        titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value })
+        titulo: titulo.value, descripcion: descripcion.value, hashtags: hashtags.value, cuando: ahora ? 'ahora' : 'cola' })
       if (clip) await window.cargar?.()
-      P.tab = 'cola'; toast('En cola para las cuentas seleccionadas')
+      P.tab = 'cola'
+      if (!ahora) { toast('En cola para las cuentas seleccionadas'); return }
+      // Con «ahora» no tiene sentido esperar al próximo barrido: se empuja el envío en el momento.
+      const d = await post({ op: 'procesar' }).catch(() => null)
+      toast(d?.activo === false ? 'Listo para salir: los envíos automáticos todavía están en espera.' : 'Enviando ahora a las cuentas seleccionadas')
     }, 'Confirmar publicación')
     modal.classList.add('pub-review-dialog')
     if (tieneMedia) vista(item, preview, () => { vistaLista = false }).then(lista => { vistaLista = lista })

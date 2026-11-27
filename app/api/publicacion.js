@@ -267,9 +267,9 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         await destinosPublicacion(plataformas, d.datos)
         const { titulo, descripcion, hashtags } = contenidoValido({ ...d.datos, plataformas,
           titulo: b.titulo ?? d.datos.titulo, descripcion: b.descripcion ?? d.datos.descripcion, hashtags: b.hashtags ?? d.datos.hashtags })
-        d = await guardarPub('sugerencias', d.id, { ...d.datos, titulo, descripcion, hashtags, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now() }, d.version)
+        d = await guardarPub('sugerencias', d.id, { ...d.datos, titulo, descripcion, hashtags, plataformas, media_lista: true, estado: 'aprobada', aprobado_por: yo, aprobado_el: Date.now(), publicar_ahora: b.cuando === 'ahora' }, d.version)
       }
-      salida.ids = await encolar('sug-' + d.id, d.datos, d.datos.aprobado_por)
+      salida.ids = await encolar('sug-' + d.id, d.datos, d.datos.aprobado_por, d.datos.publicar_ahora === true)
       try { await guardarPub('sugerencias', d.id, { ...d.datos, encolado: true }, d.version) } catch (e) { if (e.status !== 409) throw e }
     } else if (b.op === 'aprobar_clip') {
       const { data: c, error } = await db().from('docs').select('id,datos,version').eq('coleccion', 'clips').eq('id', b.id).maybeSingle()
@@ -280,11 +280,11 @@ Subí SOLAMENTE el material que acabás de preparar con python3 GTA6_TOOLS/equip
         descripcion: b.descripcion ?? (c.datos.descripcion || 'Un momento de GTA 6.'), hashtags: b.hashtags ?? c.datos.hashtags,
         plataformas: await destinosPublicacion(b.plataformas), media: 'reusar' })
       if (!datos.video_path) throw errorPublicacion('El clip todavía no tiene video.', 422)
-      const snapshot = { ...datos, clip_id: c.id, fuente_url: c.datos.url || '', aprobado_el: Date.now() }
+      const snapshot = { ...datos, clip_id: c.id, fuente_url: c.datos.url || '', aprobado_el: Date.now(), publicar_ahora: b.cuando === 'ahora' }
       const aprobacion = { ...c.datos, titulo: datos.titulo, descripcion: datos.descripcion, hashtags: datos.hashtags, estado: 'aprobado', aprobado_por: yo, publicacion_cola: true, publicacion_encolada: false, publicacion_snapshot: snapshot }
       const { data, error: e } = await db().from('docs').update({ datos: aprobacion, version: c.version + 1 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version).select('version')
       if (e || !data?.length) throw errorPublicacion('El clip cambió. Actualizá antes de aprobar.', 409)
-      salida.ids = await encolar('clip-' + c.id, snapshot, yo)
+      salida.ids = await encolar('clip-' + c.id, snapshot, yo, snapshot.publicar_ahora === true)
       await db().from('docs').update({ datos: { ...aprobacion, publicacion_encolada: true }, version: c.version + 2 }).eq('coleccion', 'clips').eq('id', c.id).eq('version', c.version + 1)
     } else if (b.op === 'cola_editar' || b.op === 'cola_cancelar' || b.op === 'cola_preparar') {
       const d = await exigirItem('cola', b.id, b.version)

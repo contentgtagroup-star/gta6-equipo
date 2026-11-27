@@ -180,18 +180,23 @@ export async function mantenerAgendaCola () {
   }
   return true
 }
-export async function encolarPub (origen, d, por) {
+// `ahora` saltea la reserva de franja: la pieza queda lista para el próximo
+// procesamiento en vez de esperar su turno en la agenda.
+export async function encolarPub (origen, d, por, ahora = false) {
   const creado = Date.now(), ids = []
   const plataformas = redesValidas(d.plataformas)
-  const turnoShort = d.video_path ? await reservarShort(origen, plataformas, creado) : null
+  const zonaAhora = ahora ? ((await leerPub('cadencia', 'global'))?.datos?.zona_horaria || 'America/Argentina/Cordoba') : ''
+  const turnoShort = !ahora && d.video_path ? await reservarShort(origen, plataformas, creado) : null
   for (const plataforma of plataformas) {
     const id = origen + '-' + plataforma
     if (!await leerPub('cola', id)) {
-      const { fecha, zona, programado } = turnoShort || await reservarHorario(id, plataforma, creado)
+      const { fecha, zona, programado } = ahora
+        ? { fecha: creado, zona: zonaAhora, programado: true }
+        : (turnoShort || await reservarHorario(id, plataforma, creado))
       try { await guardarPub('cola', id, { ...d, plataforma, origen_id: origen, estado: estadoInicialEnvio(plataforma, d), creado, aprobado_por: por, aprobado_el: d.aprobado_el || creado, programado_el: programado === false ? 0 : fecha, zona_horaria: zona, proximo_el: fecha }) }
       catch (e) { if (e.status !== 409) throw e }
     }
-    try { await guardarPub('eventos', 'encolado-' + id, { accion: 'encolado', por, el: creado, item_id: id, plataforma, fuente_url: d.fuente_url || '', aprobado_por: por }) }
+    try { await guardarPub('eventos', 'encolado-' + id, { accion: ahora ? 'encolado_ahora' : 'encolado', por, el: creado, item_id: id, plataforma, fuente_url: d.fuente_url || '', aprobado_por: por }) }
     catch (e) { if (e.status !== 409) throw e }
     ids.push(id)
   }
